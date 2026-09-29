@@ -242,6 +242,16 @@ and timer, workout matching, shoe mileage, cue-tone generation, settings persist
 Activity timeline and staleness rules. Run it for the current count rather than trusting a number
 here — the previously quoted figure had been wrong for two sessions.
 
+**End-to-end smoke test** — `scripts/smoke-test.sh`. Drives the real app in the simulator
+(`RunExporterUITests/SmokeTests.swift`, its own `RunExporterUITests` scheme so the unit loop stays
+fast): every tab, a plan from a preset and an open-interval plan, Settings, the export screen, and a
+run from Start Workout to End Workout. It checks that removed controls are **absent**, not only that
+the rest are present. Each run starts from a clean install and writes the result bundle and one
+screenshot per step to `build/smoke-test/<timestamp>/` (git-ignored). The simulator has no Watch,
+so the run screen is expected to report that the run continues on the phone only; the Watch path
+needs the device. The test declines the Health sheet, which is hosted by
+`com.apple.HealthPrivacyService` and arrives a few seconds after the request.
+
 The export tests drive `ExportBuilder.writeFiles` directly with a prepared dataset rather than going
 through `build`, which reads HealthKit — an unauthorized store in the test environment would
 otherwise fail every one of them for a reason unrelated to what they check.

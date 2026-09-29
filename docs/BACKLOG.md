@@ -159,6 +159,18 @@ removed label; update them in the same change.
 
 ### Found by the sweep (2026-09-29), outside the keep-or-go list
 
+- **The run screen's Watch problem line is cut off.** Seen in the smoke test's screenshot on an
+  iPhone 17 Pro simulator: "The Watch did not respond within 15 s. This run…" on one line, so the
+  part that matters — the run continues on the phone only — is not visible. The accessibility
+  label carries the full sentence, which is why the test passed. `ActiveWorkoutView.watchStatus`,
+  not touched by the clean-out. Not yet decided.
+- **One unit test can stall the suite for minutes.** `ExportPipelineTests.testBuildSurfacesHealthKitFailure`
+  calls the real `builder.build`, which reads the simulator's HealthKit — unlike the other export
+  tests, which README says avoid that. Measured on 2026-09-29 across five runs: 0.4 s, 41 s, 87 s,
+  under 1 s, and 466 s, with no change to its code path. Cause not established; the slowest run came
+  straight after the smoke test had declined Health access on the same simulator. It also passes
+  whether `build` throws or not, so it asserts little. Worth rewriting against a fake store.
+
 - **A walking plan records a running workout on the Watch.** `WatchLink.launchWatchWorkout` always
   sets `activityType = .running` and never reads the plan's `PlannedActivityType`, so a Walking
   plan's Start saves an Outdoor Run to Health and nothing says so. **Owner, 2026-09-29: fix after the
