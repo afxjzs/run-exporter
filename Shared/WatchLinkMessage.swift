@@ -107,6 +107,16 @@ enum WatchLinkError: Error, Equatable, LocalizedError {
     }
 }
 
+/// Custom HealthKit metadata keys this app writes into the watch's workouts. Shared so the watch
+/// (writer) and the phone (reader) cannot spell them differently. Custom keys must not start "HK".
+enum WorkoutMetadataKeys {
+    /// On the workout: the phone execution it was recorded for, as a UUID string. The phone joins on
+    /// it instead of on start time (watch plan step 3).
+    static let executionID = "RunExporterExecutionID"
+    /// On each `.segment` workout event: the phase that segment was.
+    static let phase = "RunExporterPhase"
+}
+
 /// The watch's event log travelling to the phone. Separate from `WatchLinkMessage` because it rides
 /// a different channel: `WCSession.transferUserInfo`, which the system queues and delivers even with
 /// no workout session running — the mirrored session's channel only exists while one is.

@@ -223,6 +223,9 @@ final class HealthKitManager {
         /// `activityType` above reports what the *user* asserted; `recordedActivityType` keeps
         /// what Apple stored.
         let isReclassifiedAsRunning: Bool
+        /// The phone execution this workout was recorded for, when our watch app saved it (watch
+        /// plan step 3). Read from `WorkoutMetadataKeys.executionID`; nil for any other workout.
+        let executionID: UUID?
 
         var id: UUID { uuid }
 
@@ -360,7 +363,8 @@ final class HealthKitManager {
             hasWeatherMetadata: weather.hasAnyWeather,
             isIndoor: weather.isIndoor,
             metadataKeys: (workout.metadata ?? [:]).keys.sorted(),
-            isReclassifiedAsRunning: reclassified)
+            isReclassifiedAsRunning: reclassified,
+            executionID: (workout.metadata?[WorkoutMetadataKeys.executionID] as? String).flatMap(UUID.init(uuidString:)))
     }
 
     // MARK: - Quantity records

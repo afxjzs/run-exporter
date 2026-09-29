@@ -78,6 +78,8 @@ what was actually confirmed and what was not.
 
 | 2026-09-29 | `91cb17d` | `main` | Release, clean, **build `202609291316`** | iPhone 16 Pro, iOS 27.2 | Fixes from that test: Watch countdown rounds up like the phone's; latency is the minimum of three connect-time pings, with the phase re-sent as it improves; no `finishRoute` call, and an honest route line; the phone shows a Watch error reported during a launch at once | **Phone: yes.** `BUILD SUCCEEDED`; 370 tests, 0 failures; nested `codesign --verify --strict` valid; `App installed`. **Watch: installed** (owner). |
 
+| 2026-09-29 | (see commit) | `main` | Release, clean, **build `202609291331`** | iPhone 16 Pro, iOS 27.2 | Watch plan step 3: the phone joins a run to the Watch's workout by the execution id saved in the workout's metadata, before any time window; the metadata key moves to shared code | **Phone: pending.** `BUILD SUCCEEDED`; 374 tests, 0 failures; nested `codesign --verify --strict` valid. |
+
 ### Why the watch app never installed (2026-09-25)
 
 From 2026-08-08 until this row, every build's watch app was signed with Xcode-managed profile

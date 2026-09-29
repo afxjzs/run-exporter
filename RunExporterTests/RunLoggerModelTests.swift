@@ -60,7 +60,8 @@ final class RunLoggerModelTests: XCTestCase {
             hasWeatherMetadata: true,
             isIndoor: false,
             metadataKeys: [],
-            isReclassifiedAsRunning: false)
+            isReclassifiedAsRunning: false,
+            executionID: nil)
     }
 
     /// Inserts an execution, and `intervalCount` interval records belonging to it.

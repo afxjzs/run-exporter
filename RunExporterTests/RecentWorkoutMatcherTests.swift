@@ -12,7 +12,8 @@ final class RecentWorkoutMatcherTests: XCTestCase {
     private func workout(offsetMinutes: Double,
                          duration: TimeInterval = 1_500,
                          activity: PlannedActivityType = .running,
-                         uuid: UUID = UUID()) -> HealthKitManager.WorkoutSummary {
+                         uuid: UUID = UUID(),
+                         executionID: UUID? = nil) -> HealthKitManager.WorkoutSummary {
         let start = base.addingTimeInterval(offsetMinutes * 60)
         return HealthKitManager.WorkoutSummary(
             uuid: uuid,
@@ -29,7 +30,54 @@ final class RecentWorkoutMatcherTests: XCTestCase {
             hasWeatherMetadata: true,
             isIndoor: false,
             metadataKeys: ["HKWeatherTemperature"],
-            isReclassifiedAsRunning: false)
+            isReclassifiedAsRunning: false,
+            executionID: executionID)
+    }
+
+    // MARK: - Joining by the execution id the Watch saved (watch plan step 3)
+
+    /// A workout saved by our watch app carries the run's execution id. That is proof, not a guess,
+    /// so it matches however far its start is from the timer — and among any number of others.
+    func testATaggedWorkoutMatchesItsRunOutsideTheWindow() {
+        let execution = candidate()
+        let tagged = workout(offsetMinutes: 30, executionID: execution.executionID)
+        let decoy = workout(offsetMinutes: 0)
+
+        let outcome = RecentWorkoutMatcher.match(workouts: [decoy, tagged], execution: execution)
+
+        XCTAssertEqual(outcome, .matched(workoutUUID: tagged.uuid, executionID: execution.executionID))
+    }
+
+    /// A workout tagged for a different run belongs to that run, however well its time fits this one.
+    func testAWorkoutTaggedForAnotherRunIsNeverTimeMatched() {
+        let execution = candidate()
+        let othersRun = workout(offsetMinutes: 0.5, executionID: UUID())
+
+        let outcome = RecentWorkoutMatcher.match(workouts: [othersRun], execution: execution)
+
+        XCTAssertNotEqual(outcome, .matched(workoutUUID: othersRun.uuid, executionID: execution.executionID))
+    }
+
+    /// Reverse direction: the tag names the run, even when another run's timer fits better in time.
+    func testReverseATaggedWorkoutFindsItsRunOverACloserOne() {
+        let tagged = candidate(createdOffsetMinutes: 1.5)
+        let closer = candidate(createdOffsetMinutes: 0)
+        let workoutSummary = workout(offsetMinutes: 0, executionID: tagged.executionID)
+
+        let outcome = RecentWorkoutMatcher.execution(forWorkout: workoutSummary, candidates: [closer, tagged])
+
+        XCTAssertEqual(outcome, .matched(executionID: tagged.executionID))
+    }
+
+    /// A tag naming no eligible run means its run is already matched or gone. Guessing by time would
+    /// stamp it onto a different run, which is the one outcome that cannot be noticed later.
+    func testReverseATagNamingNoCandidateIsNotGuessed() {
+        let nearby = candidate(createdOffsetMinutes: 0)
+        let workoutSummary = workout(offsetMinutes: 0, executionID: UUID())
+
+        let outcome = RecentWorkoutMatcher.execution(forWorkout: workoutSummary, candidates: [nearby])
+
+        XCTAssertEqual(outcome, .none)
     }
 
     private func candidate(duration: Int = 1_500,

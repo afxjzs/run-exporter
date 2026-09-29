@@ -23,10 +23,6 @@ final class WatchWorkoutController: NSObject {
 
     private static let statusInterval: TimeInterval = 5
 
-    /// Workout metadata key holding the phone's execution id. Custom keys must not start with "HK".
-    static let executionIDMetadataKey = "RunExporterExecutionID"
-    /// Segment-event metadata key holding the phase the segment was.
-    static let phaseMetadataKey = "RunExporterPhase"
 
     // MARK: - Observable state, all of it shown on the watch
 
@@ -319,7 +315,7 @@ final class WatchWorkoutController: NSObject {
         guard end > segment.start else { return }
         let event = HKWorkoutEvent(type: .segment,
                                    dateInterval: DateInterval(start: segment.start, end: end),
-                                   metadata: [Self.phaseMetadataKey: segment.phase.rawValue])
+                                   metadata: [WorkoutMetadataKeys.phase: segment.phase.rawValue])
         Task {
             do {
                 try await builder.addWorkoutEvents([event])
@@ -373,7 +369,7 @@ final class WatchWorkoutController: NSObject {
         Task {
             do {
                 try await builder.endCollection(at: now)
-                try await builder.addMetadata([Self.executionIDMetadataKey: executionID.uuidString])
+                try await builder.addMetadata([WorkoutMetadataKeys.executionID: executionID.uuidString])
                 guard let workout = try await builder.finishWorkout() else {
                     // HKWorkoutBuilder.h: nil with no error means it saved but cannot be read while
                     // the device is locked — and the route needs the workout object to attach to.

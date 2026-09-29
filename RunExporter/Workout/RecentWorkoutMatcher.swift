@@ -133,6 +133,16 @@ enum RecentWorkoutMatcher {
             return .ambiguous(workoutUUIDs: workouts.map(\.uuid).sorted { $0.uuidString < $1.uuidString })
         }
 
+        // Priority 0 (watch plan step 3): a workout our watch app saved carries the execution id.
+        // That is proof rather than a guess, so it wins outright — whatever its start time — and a
+        // workout tagged for a *different* run is never time-matched to this one. Untagged workouts
+        // (older runs, Apple's Workout app) go on through the window below.
+        if let tagged = workouts.first(where: { $0.executionID == execution.executionID }) {
+            return .matched(workoutUUID: tagged.uuid, executionID: execution.executionID)
+        }
+        let workouts = workouts.filter { $0.executionID == nil }
+        guard !workouts.isEmpty else { return .noCandidates }
+
         // Priority 1: the activity type must agree. A walk is never automatically accepted as the
         // run that was planned — the mismatch is offered to the user instead.
         let sameActivity = workouts.filter { $0.activityType == execution.expectedActivityType }
@@ -206,6 +216,12 @@ enum RecentWorkoutMatcher {
     ///   matched is the caller's job — see `PendingWorkoutExecution.isMatchCandidate(now:window:)`.
     static func execution(forWorkout workout: HealthKitManager.WorkoutSummary,
                           candidates: [Candidate]) -> ExecutionMatch {
+        // Priority 0, as in the forward direction: the tag names the run. A tag naming no eligible
+        // candidate means its run is already matched or gone — guessing by time would stamp the
+        // workout onto a different run, which is the one error nobody could notice later.
+        if let tag = workout.executionID {
+            return candidates.contains { $0.executionID == tag } ? .matched(executionID: tag) : .none
+        }
         let sameActivity = candidates.filter { $0.expectedActivityType == workout.activityType }
         let inWindow = sameActivity.filter { candidate in
             // The timer has to have been running *during* the workout. A timer that had already
