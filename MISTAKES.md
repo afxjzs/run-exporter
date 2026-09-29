@@ -96,7 +96,8 @@ before recommending it.
 *(That button existed under that name at the time. `8d145b9` renamed it to "Clear this iPhone's
 queue" on 2026-09-07, because it only ever cleared the phone's queue and never reached the Watch —
 so the advice was also describing a power the button did not have. Noted here because a reader today
-would otherwise go looking for a control that is not there.)*
+would otherwise go looking for a control that is not there. The renamed button went too, with the
+rest of the WorkoutKit screen, in the 2026-09-29 clean-out.)*
 
 ---
 

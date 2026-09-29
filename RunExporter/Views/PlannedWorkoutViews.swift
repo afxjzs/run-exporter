@@ -90,15 +90,14 @@ struct PlannedWorkoutListView: View {
                                     set: { if !$0 { errorMessage = nil } }),
                actions: { Button("OK", role: .cancel) { errorMessage = nil } },
                message: { Text(errorMessage ?? "") })
-        // A swipe is a deliberate gesture, but this delete is irreversible and can reach the Watch,
-        // where there is no way to delete a synced workout by hand. So it confirms, matching the
-        // detail screen rather than differing from it by which gesture happened to start it.
+        // A swipe is a deliberate gesture, but this delete is irreversible. So it confirms, matching
+        // the detail screen rather than differing from it by which gesture happened to start it.
         .alert("Delete this plan?",
                isPresented: Binding(get: { planPendingDeletion != nil },
                                     set: { if !$0 { planPendingDeletion = nil } })) {
             Button("Delete plan", role: .destructive) {
                 if let plan = planPendingDeletion {
-                    Task { await delete(plan) }
+                    delete(plan)
                 }
                 planPendingDeletion = nil
             }
@@ -167,19 +166,9 @@ struct PlannedWorkoutListView: View {
         saveChanges()
     }
 
-    /// Deletes a plan, first clearing its entry from this iPhone's workout queue if it was ever
-    /// sent — otherwise the entry is stranded with nothing left able to name it.
-    ///
-    /// This does not reach the Watch. Anything already delivered stays there and is deleted on the
-    /// Watch by hand, which is what `deleteConsequenceMessage` tells the user.
-    private func delete(_ plan: PlannedWorkout) async {
-        if let identifier = plan.workoutKitIdentifier, let uuid = UUID(uuidString: identifier) {
-            let removed = await WorkoutKitService().remove(identifier: uuid)
-            if !removed {
-                errorMessage = PlannedWorkout.stuckQueueMessage
-                return
-            }
-        }
+    /// Deletes a plan. Like the detail screen's delete, it no longer touches this iPhone's
+    /// WorkoutKit queue, which the 2026-09-29 clean-out removed (docs/BACKLOG.md).
+    private func delete(_ plan: PlannedWorkout) {
         context.delete(plan)
         saveChanges()
     }

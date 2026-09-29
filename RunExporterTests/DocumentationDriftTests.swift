@@ -30,12 +30,6 @@ final class DocumentationDriftTests: XCTestCase {
 
     /// Verified against the source on 2026-09-25. Every entry existed in both places when added.
     private static let labels: [QuotedLabel] = [
-        .init(text: "Add to Apple Watch",
-              citedBy: ["README.md", "LEARNINGS.md", "docs/CUE_FEASIBILITY_TEST.md"]),
-        .init(text: "Clear this iPhone's queue",
-              citedBy: ["docs/CUE_FEASIBILITY_TEST.md"]),
-        .init(text: "Schedule for a time",
-              citedBy: ["docs/CUE_FEASIBILITY_TEST.md"]),
         .init(text: "Start Audio Timer",
               citedBy: ["README.md", "docs/CUE_FEASIBILITY_TEST.md", "RUNNING_APP_V1_1_SPEC.md",
                         "docs/BACKLOG.md"]),
@@ -62,8 +56,6 @@ final class DocumentationDriftTests: XCTestCase {
               citedBy: ["docs/WATCH_DEVELOPMENT.md", "docs/BACKLOG.md"]),
         // Added 2026-09-29 with the clean-out backlog entry.
         .init(text: "Cue test",
-              citedBy: ["docs/BACKLOG.md"]),
-        .init(text: "Send to Apple Watch",
               citedBy: ["docs/BACKLOG.md"]),
         .init(text: "Export Data",
               citedBy: ["docs/BACKLOG.md"]),
@@ -182,16 +174,26 @@ final class DocumentationDriftTests: XCTestCase {
     /// A label that was real and is not any more.
     private struct RetiredLabel {
         let text: String
-        /// The commit that retired it. Any document still mentioning the label must cite this, so a
-        /// reader who goes looking for the control is told where it went.
+        /// What retired it: a commit, or `cleanOut` for the labels the 2026-09-29 clean-out removed.
+        /// Any document still mentioning the label must cite this, so a reader who goes looking for
+        /// the control is told where it went. The clean-out is cited by name rather than hash
+        /// because its decisions are recorded, with reasons, in docs/BACKLOG.md.
         let retiredIn: String
         let replacement: String?
     }
 
+    private static let cleanOut = "2026-09-29 clean-out"
+
     private static let retiredLabels: [RetiredLabel] = [
-        .init(text: "Remove all workouts from Watch", retiredIn: "8d145b9",
-              replacement: "Clear this iPhone's queue"),
+        // Its replacement, "Clear this iPhone's queue", was itself removed by the clean-out.
+        .init(text: "Remove all workouts from Watch", retiredIn: "8d145b9", replacement: nil),
         .init(text: "Workout sent to Apple Watch", retiredIn: "8d145b9", replacement: nil),
+        // The WorkoutKit route to the Watch, superseded by Start launching this app's own watch
+        // workout.
+        .init(text: "Send to Apple Watch", retiredIn: cleanOut, replacement: nil),
+        .init(text: "Add to Apple Watch", retiredIn: cleanOut, replacement: nil),
+        .init(text: "Schedule for a time", retiredIn: cleanOut, replacement: nil),
+        .init(text: "Clear this iPhone's queue", retiredIn: cleanOut, replacement: nil),
     ]
 
     /// Every document that names a retired control also says where it went.
@@ -203,7 +205,8 @@ final class DocumentationDriftTests: XCTestCase {
     func testDocumentsNamingARetiredControlSayWhereItWent() throws {
         let documents = ["README.md", "CLAUDE.md", "LEARNINGS.md", "MISTAKES.md",
                          "docs/BACKLOG.md", "docs/CUE_FEASIBILITY_TEST.md", "docs/INSTALLS.md",
-                         "docs/WATCHOS_RECORDER_PLAN.md"]
+                         "docs/WATCHOS_RECORDER_PLAN.md", "docs/WATCH_DEVELOPMENT.md",
+                         "RUNNING_APP_V1_1_SPEC.md"]
 
         for path in documents {
             let text = try Self.document(path)

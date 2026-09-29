@@ -39,7 +39,7 @@ that 67 `spec §…` citations across 39 Swift files point at (counted 2026-09-2
 | [MISTAKES.md](MISTAKES.md) | How past investigations went wrong | Before diagnosing anything |
 | [docs/BACKLOG.md](docs/BACKLOG.md) | Wanted but not built, and things deliberately **not** to build, with reasoning | Before building anything that sounds new |
 | [docs/INSTALLS.md](docs/INSTALLS.md) | Every install; the single home for hardware and OS versions | Before installing, or quoting any version |
-| [docs/CUE_FEASIBILITY_TEST.md](docs/CUE_FEASIBILITY_TEST.md) | Cue test procedures and their dated results | Before changing cues or the Send to Watch screen |
+| [docs/CUE_FEASIBILITY_TEST.md](docs/CUE_FEASIBILITY_TEST.md) | Cue test procedures and their dated results | Before changing cues or the Lock Screen card |
 | [docs/WATCHOS_RECORDER_PLAN.md](docs/WATCHOS_RECORDER_PLAN.md) | The watch plan of record: phone decides, watch records; its steps and what ends each | Before any watch app work |
 | [docs/WATCH_DEVELOPMENT.md](docs/WATCH_DEVELOPMENT.md) | **How** to get the watch app installed, launched from the phone, and its logs read — Developer Mode, the profile, error codes, `WKBackgroundModes` | Before installing on, launching, or diagnosing the Watch |
 | [docs/Native-iOS-Health-Running-Export.md](docs/Native-iOS-Health-Running-Export.md) | The **historical** v1.0 spec | Rarely. It is superseded, and says so at the top |
@@ -58,22 +58,24 @@ and are not in this repository.
 when written: `8d145b9` (2026-09-07) renamed **"Remove all workouts from Watch"** to **"Clear this
 iPhone's queue"** — named for what it actually does, since it never could reach the Watch — and
 dropped the **"Workout sent to Apple Watch."** confirmation. The documents quoting them were not
-touched, so for eighteen days they told readers to press buttons that were no longer there.
+touched, so for eighteen days they told readers to press buttons that were no longer there. (The
+whole WorkoutKit screen, "Clear this iPhone's queue" included, was later removed in the 2026-09-29
+clean-out — see docs/BACKLOG.md.)
 
 Nobody invented anything, and that is the point: ordinary renaming is enough.
 `RunExporterTests/DocumentationDriftTests.swift` now fails when a quoted UI string is gone from the
 source, and names every document that quotes it. Add an entry there when a doc starts quoting a new
-label — that test is the enforcement, not a formality.
+label — that test is the enforcement, not a formality. **When you remove a control**, move its
+entry to `retiredLabels`; any document that still names it must then say where it went.
 
 ## Read before you touch these areas
 
-- **`WorkoutKitService`, `SendToWatchView`, or anything about getting workouts onto the Watch** →
-  read [LEARNINGS.md](LEARNINGS.md) first. It records what has been **measured** on the owner's
-  actual hardware (iPhone 16 Pro ↔ Apple Watch Series 5), including the
-  fact that `WorkoutScheduler.schedule(_:at:)` does not deliver at all and Apple's preview sheet
-  does. The button order on that screen is a deliberate consequence of two days of measurement — do
-  not "tidy" it back without re-running Test 5 in
-  [docs/CUE_FEASIBILITY_TEST.md](docs/CUE_FEASIBILITY_TEST.md).
+- **Anything about getting a workout onto the Watch** → the phone's Start launches this app's own
+  watch workout (`WatchLink`); see [docs/WATCHOS_RECORDER_PLAN.md](docs/WATCHOS_RECORDER_PLAN.md).
+  The older WorkoutKit route (`WorkoutKitService`, `SendToWatchView`) was removed in the 2026-09-29
+  clean-out. **Before bringing WorkoutKit back**, read [LEARNINGS.md](LEARNINGS.md): on the owner's
+  hardware `WorkoutScheduler.schedule(_:at:)` never delivered, Apple's preview sheet did, and a
+  watchOS 11 field in the payload once crashed and rebooted the Watch.
 
 - **The run-logging join** (`RunLoggerModel`, `RunLogFormView`, `ActiveWorkoutView`) → read
   [LEARNINGS.md](LEARNINGS.md#run-logging). A log written during cooldown carries no
@@ -125,7 +127,11 @@ watch sends, and the watch's forwarded event log. It still cannot see the Watch 
 
 ## Non-negotiable constraint
 
-**The Watch payload must never use API newer than watchOS 10.** The paired Series 5 caps there,
-`#available` describes the *phone* and cannot express this, and setting a watchOS 11 field once
-crashed and rebooted the Watch. `WorkoutKitServiceTests` fails if `WorkoutStep.displayName` is ever
-set again — that test is the enforcement, not a formality.
+**Nothing that runs on the Watch may use API newer than watchOS 10.** The paired Series 5 caps
+there, and a watchOS 11 field once crashed and rebooted the Watch. That field was in a WorkoutKit
+payload the phone built, where `#available` describes the *phone* and could not guard it; that
+route was removed in the 2026-09-29 clean-out, along with `WorkoutKitServiceTests`, which enforced
+it. The watch app's own code is now guarded by the compiler: its target's
+`WATCHOS_DEPLOYMENT_TARGET` is `10.0`, so newer API fails the build unless wrapped in `#available`.
+**Do not raise that setting.** Anything the phone sends the Watch is this app's own
+`WatchLinkMessage`, not an Apple payload.

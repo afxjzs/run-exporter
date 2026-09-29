@@ -699,7 +699,10 @@ struct ExportBuilder {
         runner ends them, not on a clock, so it has no interval lengths and no round count and \
         those columns are BLANK. openIntervalWalkFloorSeconds is the shortest recovery walk it \
         allows. Such a plan's totalRunSeconds is its target, which is the one duration it fixes in \
-        advance; the readings taken at the end of each leg are in workout_intervals.csv.
+        advance; the readings taken at the end of each leg are in workout_intervals.csv. \
+        workoutKitIdentifier is set only on plans that were queued for Apple Watch through \
+        WorkoutKit. The app no longer does that, so it is no longer written: BLANK means either \
+        never queued or created after that route was removed, not proof of either.
         planned_workout_blocks.csv the shape of every plan, one row per segment, in the order the \
         plan runs them. A plan can run segments of differing length — 5/1 x 1, then 8/1 x 2, then \
         5/1 x 1 — which one run length and one repetition count cannot describe. EVERY plan appears \

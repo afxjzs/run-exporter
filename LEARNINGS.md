@@ -10,6 +10,12 @@ Companion file: [MISTAKES.md](MISTAKES.md) — process errors worth not repeatin
 
 ## WorkoutKit
 
+**The app no longer uses WorkoutKit.** Its "Send to Apple Watch" screen (`SendToWatchView`,
+`WorkoutKitService`) was removed in the 2026-09-29 clean-out, because the phone's Start now
+launches this app's own watch workout and using both records two workouts
+([docs/BACKLOG.md](docs/BACKLOG.md)). The measurements below stay as the record of why, and as the
+starting point if WorkoutKit is ever brought back.
+
 ### `WorkoutScheduler` does not deliver on iOS 26.6 ↔ watchOS 10.6.1 (2026-08-13)
 
 Measured on iPhone 16 Pro (iOS 26.6) paired to Apple Watch Series 5 (watchOS 10.6.1):

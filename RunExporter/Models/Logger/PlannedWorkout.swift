@@ -33,6 +33,10 @@ final class PlannedWorkout {
     var updatedAt: Date
 
     var isNextWorkout: Bool
+    /// The WorkoutKit plan id from when this plan was last queued for the Watch. **No longer
+    /// written:** that route was removed in the 2026-09-29 clean-out (docs/BACKLOG.md). Kept, not
+    /// dropped, because removing a stored attribute is a schema change against a store of real
+    /// runs; old values stay as history and still reach the export's `planned_workouts` file.
     var workoutKitIdentifier: String?
 
     /// The segments this plan runs, when its intervals are not all the same shape.
@@ -361,10 +365,9 @@ final class PlannedWorkout {
     /// `?? .running` would silently rewrite a corrupted plan into a valid-looking one, which is
     /// exactly the repair-without-saying-so this model's own comment refuses.
     ///
-    /// Two things are deliberately **not** copied. `workoutKitIdentifier` names an entry in this
-    /// iPhone's workout queue and deleting a plan removes whatever it names — a copy carrying the
-    /// original's identifier would mean deleting the copy clears the original's queue entry. And
-    /// `isNextWorkout`, because duplicating a plan says nothing about what to run next.
+    /// Two things are deliberately **not** copied. `workoutKitIdentifier` records that the original
+    /// was once queued through WorkoutKit, and the copy never was. And `isNextWorkout`, because
+    /// duplicating a plan says nothing about what to run next.
     func duplicate() -> PlannedWorkout {
         let copy = PlannedWorkout(name: "\(name) copy",
                                   runIntervalSeconds: runIntervalSeconds,
@@ -393,40 +396,14 @@ final class PlannedWorkout {
 
     // MARK: - Deletion
 
-    /// What to tell the user when clearing this plan's queue entry did not work.
-    ///
-    /// One string, on the model, because two screens delete a plan and both handle the failure. The
-    /// list view used to say "try again, or clear the queue from Send to Watch" while the detail
-    /// view said restarting the iPhone is the only known remedy — and `LEARNINGS.md` records
-    /// `removeAllWorkouts()` leaving a queue of four untouched across repeated taps, so the list's
-    /// advice pointed at a fix that was measured not to work.
-    static let stuckQueueMessage =
-        "This workout is still in this iPhone's queue, so it was not deleted here. If it stays "
-        + "stuck, restarting the iPhone is the only known way to clear it — WorkoutKit's own "
-        + "removal can wedge."
-
     /// What deleting this plan will actually do, in the user's terms.
     ///
     /// Lives on the model because two screens delete a plan — the list's swipe action and the detail
     /// screen's button — and a second copy of this wording would be free to drift from the first.
-    /// This project already has one bug of exactly that shape, where two copies of a mapping
-    /// disagreed about which timestamp to use.
-    ///
-    /// Built in steps as an annotated `String` rather than inline in a `Text(...)`. A ternary mixing
-    /// interpolation with `+` concatenation inside a `Text` initialiser is what has made this
-    /// project's type-checker give up three times, and it fails the Release build rather than
-    /// warning.
+    /// It deletes the plan only: never a workout in Apple Health, and since the 2026-09-29 clean-out
+    /// nothing in the WorkoutKit queue either.
     var deleteConsequenceMessage: String {
-        let removed: String = "\"\(name)\" will be removed"
-        guard workoutKitIdentifier != nil else {
-            return removed + ". This cannot be undone."
-        }
-        // Says "queue on this iPhone", not "Watch". Deleting a plan removes its entry from
-        // `WorkoutScheduler`, which lives on the phone — it cannot touch a workout that is already
-        // on the Watch, and on the owner's hardware nothing scheduled has ever got there anyway.
-        // The previous wording promised the delete reached a second device, which it does not.
-        return removed + ", along with its entry in this iPhone's workout queue. Anything already "
-            + "on your Watch stays there and must be deleted on the Watch. This cannot be undone."
+        "\"\(name)\" will be removed. This cannot be undone."
     }
 }
 

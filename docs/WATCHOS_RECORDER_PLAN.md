@@ -267,8 +267,9 @@ xcrun devicectl device copy from --device <PHONE_COREDEVICE_ID> \
 
 3. **`#available` describes *this* device, not the paired Watch.** `WorkoutStep.displayName` is
    watchOS 11+; guarding it with `#available(iOS 18.0, *)` compiled cleanly and **crashed and
-   rebooted the Watch**. `WorkoutKitServiceTests` enforces this. **This is the single most dangerous
-   trap for this project** — see §5.
+   rebooted the Watch**. That WorkoutKit payload was removed in the 2026-09-29 clean-out, with
+   `WorkoutKitServiceTests`; the watch app's own code is guarded by its watchOS 10.0 deployment
+   target. **This is the single most dangerous trap for this project** — see §5.
 
 4. **`Task { }` is not a sequential statement.** A detached cleanup `Task` scheduled before creating
    a Live Activity ran *after* it and destroyed the new activity.
@@ -661,7 +662,8 @@ Keep that behaviour — it is deliberate, and silently substituting a default wo
 - `IntervalTimerEngine.start(...)` takes `spec: WorkoutPlanSpec, settings: IntervalAudioSettings`.
   `LoggerDefaults` already exposes an `IntervalAudioSettings` — find the existing conversion and
   reuse it rather than writing a second one.
-- Call sites to update: `ActiveWorkoutModel.start(plan:)`, `WorkoutKitService`, and the tests.
+- Call sites to update: `ActiveWorkoutModel.start(plan:)` and the tests. (`WorkoutKitService` was
+  one too, until the 2026-09-29 clean-out removed it.)
 
 ### 7.3 Move files to `Shared/`
 
@@ -848,8 +850,9 @@ that reduction is the main reason to prefer it.
    before building anything on top; fall back to `transferUserInfo` and measure the added latency,
    which changes what the feature is.*
 1. **watchOS 10 compatibility.** Most current sample code targets watchOS 11+. The failure mode is a
-   Watch reboot, not a compile error. *Mitigation: a test asserting the API surface, as
-   `WorkoutKitServiceTests` already does for WorkoutKit.*
+   Watch reboot, not a compile error. *Mitigation: for code on the Watch, the watch target's
+   watchOS 10.0 deployment target makes newer API a compile error. (For the removed WorkoutKit
+   payload, built on the phone, `WorkoutKitServiceTests` did this job.)*
 2. **HealthKit write access.** Reverses a standing privacy decision. *Mitigation: §6, decided
    explicitly, documented in the README.*
 3. **Two HealthKit workouts for one run.** If the user also starts Apple's Workout app out of habit,

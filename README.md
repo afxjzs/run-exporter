@@ -344,9 +344,6 @@ Workout/WorkoutPhaseSchedule pure run/walk/cooldown sequencing (no clock, no I/O
 Workout/OpenIntervalSequencer  the open-interval rules and schedule: each leg capped by what is
                          left of the target, phases computed from accumulated running not stored
 Workout/IntervalTimerEngine  absolute-timestamp timer; emits cues and interval records
-Workout/WorkoutKitService    PlannedWorkout -> CustomWorkout. The *scheduling* path does not
-                         deliver on this hardware; Apple's preview sheet does. Kept and labelled
-                         rather than deleted — see Known limitations and docs/BACKLOG.md
 Workout/RecentWorkoutMatcher matches a finished HealthKit workout to a planned execution: by the
                          execution id the watch app saved, else inside a two-minute start window;
                          a near miss is offered, never linked silently
@@ -424,38 +421,30 @@ reasoning first.
    A third kind, **open intervals**, has no fixed leg length at all: you run until you decide to
    stop, walk until you decide to go, and the plan ends when the running adds up to a target. See
    [Open-interval runs](#open-interval-runs).
-2. **Add to Apple Watch** — the primary action opens Apple's own preview sheet, which puts the
-   workout in the Watch's library. That is the route that works. The separate **Schedule for a
-   time** action calls `WorkoutScheduler.schedule(_:at:)`, which on this pairing has **never
-   delivered** — four scheduled, none arrived, over 26+ hours. It is kept and labelled rather than
-   deleted, because it worked in early August and may work on other hardware.
-
-   Nothing here observes the Watch. `WorkoutScheduler.shared.scheduledWorkouts` is **this iPhone's
-   queue**, and the screen says so; reading it back proves the phone accepted the workout and
-   nothing more. Any sentence describing that list as Watch state is wrong — three shipped that way
-   before, which is why `MISTAKES.md` leads with it.
-3. **Start Audio Timer** on the phone. The screen opens *armed* and records nothing — no timer
-   session, no audio session, no Live Activity. **Start** also launches the workout on the Watch
+2. **Start Audio Timer** on the phone. There is no separate send-to-Watch step: the WorkoutKit
+   "Send to Apple Watch" screen was removed in the 2026-09-29 clean-out (see
+   [LEARNINGS.md](LEARNINGS.md#workoutkit) for why it was unreliable on this hardware). The screen
+   opens *armed* and records nothing — no timer session, no audio session, no Live Activity. **Start** also launches the workout on the Watch
    (watch plan step 2, from 2026-09-29): one tap, both devices. Do not start a workout on the Watch
    yourself as well, or two are recorded. The run screen says whether the Watch is recording and
    offers **Try again** if it is not; a Watch that fails never stops the run, which carries on
    phone-only. Before this, the Watch's workout was started by hand and matched to the timer by
    start time, which is why there is no countdown by default.
-4. **Cues play through AirPods** — run, walk, cooldown and completion, plus the five-second warning
+3. **Cues play through AirPods** — run, walk, cooldown and completion, plus the five-second warning
    and the 3-2-1 into each transition (both on by default), the final-round call (on) and the
    halfway call (off). Pause, resume, skip and end are confirmed aloud in every cue mode, because a
    tap with no audible answer is indistinguishable from a missed one. The **start** countdown is
-   `0` by default, for the reason in step 3. An open-interval run adds two more: the running still
+   `0` by default, for the reason in step 2. An open-interval run adds two more: the running still
    to do, announced as each leg begins, and the recovery walk reaching its floor — the latter
    counted into with the same 3-2-1, and never announcing a run, because the floor does not start
    the next leg.
-5. **Add a note whenever something is worth saying** — the workout screen carries an **Add note**
+4. **Add a note whenever something is worth saying** — the workout screen carries an **Add note**
    button in every phase. Each note is stored on its own, stamped with the phase and round it was
    written in, so a walk-break observation stays attached to that walk. The timer and the audio
    session are untouched while the sheet is open.
-6. **Open the app afterwards** — the new workout is detected, matched to the plan, and offered for
+5. **Open the app afterwards** — the new workout is detected, matched to the plan, and offered for
    logging.
-7. **Log it** — RPE, personal heat rating, body signals, shoe, notes. About 20 seconds.
+6. **Log it** — RPE, personal heat rating, body signals, shoe, notes. About 20 seconds.
 
 ### Open-interval runs
 
@@ -665,19 +654,17 @@ the old wording fails exactly three of its six tests.
 
 Three companion files, kept separate because they answer different questions:
 
-- [LEARNINGS.md](LEARNINGS.md) — measured facts that cost real time to establish. **Read this before
-  changing anything in `WorkoutKitService` or the Send to Watch screen.**
+- [LEARNINGS.md](LEARNINGS.md) — measured facts that cost real time to establish. **Read it before
+  changing anything that touches the Watch.**
 - [MISTAKES.md](MISTAKES.md) — how past investigations went wrong, so they go wrong differently next time.
 - [docs/BACKLOG.md](docs/BACKLOG.md) — wanted but not built, with the reasoning recorded.
 
-- **Sending workouts to the Watch uses Apple's sheet, not `WorkoutScheduler`.** Measured 2026-08-13
-  on iOS 26.6 ↔ watchOS 10.6.1: four workouts scheduled through `WorkoutScheduler.schedule(_:at:)`
-  never reached the Watch, one sitting undelivered for 26 hours, and `removeAllWorkouts()` could not
-  clear them either. The same workout added through `.workoutPreview` arrived within minutes.
-  **Add to Apple Watch is therefore the primary action and scheduling is demoted** — do not reverse
-  that without re-running the table in [docs/CUE_FEASIBILITY_TEST.md](docs/CUE_FEASIBILITY_TEST.md)
-  (Test 5). The cost is that Apple's sheet reports nothing back, so the app cannot confirm the
-  outcome, and says so.
+- **No WorkoutKit.** The app no longer sends plans to Apple's Workout app; the phone's Start
+  launches this app's own watch workout. The WorkoutKit screen was removed in the 2026-09-29
+  clean-out after `WorkoutScheduler` never delivered on this pairing
+  ([LEARNINGS.md](LEARNINGS.md#workoutkit)). Plans that were queued before then keep their
+  `workoutKitIdentifier`, which is no longer written; any entry still in this iPhone's WorkoutKit
+  queue stays there, unreachable.
 - **Cue mode defaults to Voice, not Voice + beeps (spec §9.2 deviation).** The combined mode plays a
   tone *and* an utterance per cue and delays the speech 0.14s so the tone lands first, on a timeline
   that already packs five cues into the last five seconds of every interval. `AVSpeechSynthesizer`
@@ -808,10 +795,6 @@ Three companion files, kept separate because they answer different questions:
   run screen's **Start** does so for every run (plan step 2). The plan of record — phone decides,
   watch records — and its remaining steps are in the plan document; how to install, launch and read
   the watch's logs is [docs/WATCH_DEVELOPMENT.md](docs/WATCH_DEVELOPMENT.md).
-- **Watch pairing problems cannot be diagnosed precisely.** WorkoutKit's `StateError`
-  (`watchNotPaired`, `workoutApplicationNotInstalled`) is not thrown by any API reachable from iOS,
-  so a failed send reports that it was not confirmed and names the likely causes rather than
-  inventing a specific diagnosis.
 - **The phone drives the Watch's workout, and a failed Watch never stops the run.** **Start**
   launches the watch app's workout (`ActiveWorkoutModel.start` → `WatchLink.beginRun`); each phase
   change is sent to it; finishing the run asks the Watch to save its workout, tagged with the
@@ -825,19 +808,12 @@ Three companion files, kept separate because they answer different questions:
   (`statistics(for:)`) is not guaranteed to return a value for workouts saved by older HealthKit
   versions. Changing that could silently blank an already-exported column, so the target was left
   alone.
-- **Interval steps are unnamed on the Watch.** The Watch shows Apple's generic step labels rather
-  than "Run"/"Walk". `WorkoutStep.displayName` would fix that but is `watchOS 11.0+`, and the
-  paired Apple Watch Series 5 caps out at watchOS 10. `IntervalStep.Purpose` still marks steps as
-  work and recovery, which is what the Watch cues from — **confirmed by Test 1**, where Apple's
-  voiceover did speak at every transition using its own labels.
-
-  **The payload must never use API newer than watchOS 10.** A workout built on the phone is parsed
-  by the Watch, which can be years older — this phone is on iOS 26 while the Watch is on
-  watchOS 10.6. `#available` cannot express this: it describes *this* device and says nothing about
-  the one receiving the payload, so it compiles clean and ships a field the Watch cannot read.
-  Setting `displayName` behind `#available(iOS 18.0, *)` crashed and rebooted the Watch.
-  `WorkoutKitServiceTests` asserts no step carries a `displayName`; that test fails if the field
-  is ever reintroduced.
+- **Nothing that runs on the Watch may use API newer than watchOS 10.** The paired Series 5 caps
+  there. When the app still sent WorkoutKit workouts, a payload built on the phone was parsed by the
+  Watch, and `#available` — which describes *this* device — could not stop a watchOS 11 field:
+  setting `WorkoutStep.displayName` crashed and rebooted the Watch. That route is gone (2026-09-29
+  clean-out). The watch app's own code is guarded by the compiler instead: its deployment target is
+  watchOS 10.0, so newer API fails the build unless wrapped in `#available`.
 
 ## Privacy
 

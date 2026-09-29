@@ -5,51 +5,25 @@ can tell whether a design still serves the intent behind it.
 
 ---
 
-## Kept but known-broken
+## WorkoutKit — removed in the 2026-09-29 clean-out
 
-Capabilities the app still exposes because they may work elsewhere or later, deliberately **not**
-deleted. Every one of them is labelled honestly in the UI — no control may imply a power it does not
-have. See [../MISTAKES.md](../MISTAKES.md): a lying button is a silent failure with a tap target.
+This section used to list WorkoutKit capabilities kept on purpose although they did not work on the
+owner's hardware. The clean-out removed the whole route instead (see *Decisions* in "Clean out the
+leftovers" below): the phone's Start now launches this app's own watch workout, and using both
+records two workouts. The measurements are in [../LEARNINGS.md](../LEARNINGS.md#workoutkit).
 
-### Scheduling a workout for a time (`WorkoutScheduler`)
+What was learned, for whoever brings WorkoutKit back:
 
-**Status:** kept, labelled, does not deliver on the owner's hardware.
-
-Four workouts scheduled, none delivered, over 26+ hours and both radio states
-([../LEARNINGS.md](../LEARNINGS.md)). It demonstrably worked in early August, so this is a state or
-OS-version failure rather than a broken design, and it may work on another pairing or a later
-watchOS. The button therefore stays, with a caveat line driven by **live state** — the count of
-overdue entries — rather than a hardcoded claim that would itself go stale if delivery started
-working again.
-
-**Revisit when:** the Watch is replaced, or watchOS/iOS move. Re-run Test 5 in
-`CUE_FEASIBILITY_TEST.md` before changing anything on that screen.
-
-### Clearing a stuck queue
-
-`removeAllWorkouts()` left a queue of 4 untouched across repeated taps. The only known remedy is
-restarting the iPhone, which the UI now says instead of advising a retry that does nothing.
-
-**Revisit when:** there is any way to detect the wedged state programmatically. Right now the app
-cannot distinguish "removal worked" from "removal was ignored" except by reading the count back,
-which it already does.
-
-### Removing an app-added workout from the Watch — no API exists
-
-The route that works (Apple's preview sheet) puts the workout in the **Watch's own library**, which
-WorkoutKit cannot address. `removeAllWorkouts()` and `remove(_:at:)` only reach entries this app
-*scheduled*. So there is no programmatic undo for the only add path that functions.
-
-**Do not build a "remove what I added" button for this route.** There is nothing behind it. The UI
-tells the user to delete on the Watch, which is the truth.
-
-### Getting a workout onto the Watch's main workout list
-
-Delivered workouts land under **Outdoor Run**, behind the three-dot menu. The only workout observed
-on the main list was one *created on the Watch itself*. WorkoutKit exposes nothing about placement —
-the whole surface is `schedule`, `markComplete`, `remove`, `removeAllWorkouts`.
-
-Most likely **not achievable by any app**. Recorded so the next session does not spend a day on it.
+- **`WorkoutScheduler.schedule(_:at:)` did not deliver** — four workouts over 26+ hours, both radio
+  states — though it worked in early August. Apple's preview sheet (`.workoutPreview`) did deliver.
+- **A stuck queue could not be cleared.** `removeAllWorkouts()` left four entries untouched;
+  restarting the iPhone was the only known remedy.
+- **A workout added through the preview sheet cannot be removed by any API.** It lands in the
+  Watch's own library, which WorkoutKit cannot address. Do not build a "remove what I added" button.
+- **Placement on the Watch's main workout list is not controllable.** Delivered workouts landed under
+  Outdoor Run, behind the three-dot menu; WorkoutKit exposes nothing about placement.
+- **Nothing in the payload may be newer than watchOS 10** while the Series 5 is paired —
+  `WorkoutStep.displayName` rebooted the Watch.
 
 ---
 
@@ -84,27 +58,11 @@ reasoning lives next to the code; only the parts that are *not* visible from the
 
 ### Still wanted here
 
-- **Send an open-interval workout to the Watch.** Not attempted, and the appeal is not the payload.
-  `WorkoutStep(goal: .open)` already reaches the Watch — `WorkoutKitService.goal(seconds:)` uses it
-  for open warmups and cooldowns today — so an open bout is expressible under the watchOS 10
-  ceiling. What cannot be expressed is the bout *count*: `IntervalBlock(steps:iterations:)` takes a
-  concrete `Int`, and the count is the measurement. A send would therefore mean picking a generous
-  number of rounds and ending the workout early, leaving the rest unused.
-
-  **The question that decides whether that is worth doing is unmeasured:** does advancing an open
-  step on the Watch create the lap or segment in HealthKit that the runner is currently making by
-  hand? If it does, the send replaces the manual Lap button and is worth the guessed iteration
-  count. If it does not, it buys nothing. That is a twenty-minute measurement, not a deduction —
-  and `../MISTAKES.md` is largely a record of confident claims about Watch behaviour that were
-  wrong. Measure before building.
-
-  *Likely moot since watch plan step 2:* the phone's Start now launches this app's own watch
-  workout, which writes each phase into the workout as a `.segment` event with no button press.
-  Whether those events land in the saved workout is not yet measured on device.
-
-  Deliberately left out of v1 because it is purely additive: nothing about the plan model, the bout
-  records or the export changes if a send is added later, and v1 does not get blocked on Watch
-  behaviour, which is historically where this project loses days.
+- ~~**Send an open-interval workout to the Watch.**~~ **Withdrawn 2026-09-29.** The idea was a
+  WorkoutKit send, and the 2026-09-29 clean-out removed WorkoutKit. The need behind it — the
+  Watch's data lined up with each leg — is what watch plan step 2 does instead: the phone's Start
+  launches this app's own watch workout, which writes each phase as a `.segment` event. Whether
+  those events land in the saved workout is not yet measured on device.
 
 - **History does not show an open-interval run's shape.** Same omission, and the same reason, as a
   multi-block run: the shape lives on the execution's `blockShape` (written as `open:1800/180`), and
@@ -187,7 +145,8 @@ effect… making the app easier to use."*
 - **Two ways to use the Watch on the Today screen:** "Send to Apple Watch" (WorkoutKit) alongside
   "Start Audio Timer". Now that the phone starts the Watch's workout itself (watch plan step 2), the
   WorkoutKit route may be redundant.
-- **The "Kept but known-broken" section above** — scheduling, clearing a stuck queue. Those were kept
+- **The "Kept but known-broken" section** (now "WorkoutKit — removed", at the top) — scheduling,
+  clearing a stuck queue. Those were kept
   *deliberately*, with reasons; removing them means reversing that decision on purpose, not tidying.
 - **Export Data appears twice** — on Today and in Settings.
 - **The watch app's probe screen** (`BackgroundExecutionProbe`) — stage 2 passed; it is kept only as
@@ -222,20 +181,23 @@ removed label; update them in the same change.
 Nothing is removed until every decision below is made. Afterwards, the owner asked for `/simplify`
 on the removal diff and `/code-review` once on the watch-flow diff (`610fdd2..HEAD`).
 
-1. **The open-interval line on the plan screen** ("Start a workout on your Watch and use Lap…",
+1. **[Done]** **The open-interval line on the plan screen** ("Start a workout on your Watch and use Lap…",
    `PlannedWorkoutDetailView`) — **delete it.** It only explained the missing Send button, and the
    run screen's READY hint already says Start launches the Watch.
-2. **The WorkoutKit "Send to Apple Watch" route** — `SendToWatchView`, `WorkoutKitService`, the
+2. **[Done]** **The WorkoutKit "Send to Apple Watch" route** — `SendToWatchView`, `WorkoutKitService`, the
    links on Today and the plan screen, "Add to Apple Watch", "Schedule for a time", "Clear this
    iPhone's queue" — **remove it.** Start launches this app's own Watch workout, and using both on
-   one run records two workouts. This reverses the "Kept but known-broken" section above on
-   purpose; that section goes with it, and CLAUDE.md's watchOS 10 payload rule becomes moot for the
-   phone (the watch app's own API ceiling still applies).
-3. **`PlannedWorkout.workoutKitIdentifier`** — **keep the stored field and the `planned_workouts`
+   one run records two workouts. This reverses the "Kept but known-broken" section on purpose; that
+   section is replaced by "WorkoutKit — removed" at the top, and CLAUDE.md's watchOS 10 payload
+   rule becomes moot for the phone (the watch app's own API ceiling still applies).
+3. **[Done]** **`PlannedWorkout.workoutKitIdentifier`** — **keep the stored field and the `planned_workouts`
    export column; stop writing them.** Dropping a stored attribute is a schema change against a
    store of real runs, for no gain. Old values stay as true history; the export's README.txt gains
    a line saying the column is no longer written. The plan-delete code that clears a queue entry
    (`PlannedWorkoutDetailView`, `PlannedWorkoutViews`) and the Delete plan footer go with item 2.
+   **Owner, during the removal:** deleting a plan now just deletes it. An entry a plan once queued
+   stays in this iPhone's WorkoutKit queue, unreachable; those entries never delivered, and a
+   restart already clears a wedged queue.
 4. **Cue source** — **remove "Apple Workout app" and "Watch companion"; replace the picker with a
    "Play cues" toggle** (on = iPhone audio engine, off = No cues). The first only made sense with
    item 2; the second was never built and its footer was false. The export's `cue_source` keeps its
@@ -315,8 +277,14 @@ records go; whether "on demand" means a button, the export, or both; and whether
 
 **Status:** builds clean today, with warnings that become errors on the move.
 
-`WorkoutKitService.swift:207` and `:340` both read `WorkoutScheduler.authorizationState` from a
-main-actor-isolated context:
+**Update, 2026-09-29 clean-out:** the two warnings below were in `WorkoutKitService`, which is now
+deleted, so they are gone. An incremental build afterwards still showed one in test code —
+`AbandonedTimerTests` reads the main-actor `RunLoggerModel.abandonedTimerThreshold` from a
+nonisolated context. An incremental build does not re-emit warnings for unchanged files, so a
+**clean** build is needed for a complete list before starting the move.
+
+The original two: `WorkoutKitService.swift:207` and `:340` both read
+`WorkoutScheduler.authorizationState` from a main-actor-isolated context:
 
 ```
 warning: non-Sendable type 'WorkoutScheduler.AuthorizationState' of nonisolated property
@@ -328,10 +296,9 @@ Not urgent and not a defect in the current language mode — recorded because it
 discovered at the worst moment, part-way through an unrelated toolchain upgrade. Whoever moves this
 project to Swift 6 should expect these two first.
 
-**Note the location.** Both are in the `WorkoutScheduler` path, which
-[../LEARNINGS.md](../LEARNINGS.md) records as not delivering on this hardware and which is kept
-deliberately rather than deleted. Fixing the warnings and fixing the delivery are separate jobs, and
-neither implies the other.
+**Note the location.** Both were in the `WorkoutScheduler` path, which
+[../LEARNINGS.md](../LEARNINGS.md) records as not delivering on this hardware. If WorkoutKit comes
+back, expect them back with it.
 
 ---
 

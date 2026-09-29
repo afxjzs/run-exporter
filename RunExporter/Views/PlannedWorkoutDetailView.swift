@@ -1,12 +1,12 @@
 import SwiftUI
 import SwiftData
 
-/// One plan, with every action the spec's workout card calls for (§5.2): start, send to Watch,
-/// mark as next, edit, duplicate, delete.
+/// One plan, with the actions the spec's workout card calls for (§5.2): start, mark as next, edit,
+/// duplicate, delete. The spec's "send to Watch" was removed in the 2026-09-29 clean-out — Start
+/// launches the watch workout itself.
 ///
-/// This screen exists because sending used to be reachable **only** from Today, which sends
-/// whatever it considers the next workout. That left no way to send any other plan — including no
-/// way to replace a test workout already sitting on the Watch.
+/// Start is here as well as on Today because Today only offers whatever it considers the next
+/// workout, and this is where any other plan can be run.
 struct PlannedWorkoutDetailView: View {
     @Environment(LoggerStore.self) private var store
     @Environment(\.modelContext) private var context
@@ -39,29 +39,6 @@ struct PlannedWorkoutDetailView: View {
                 } label: {
                     Label("Start Audio Timer", systemImage: "play.circle.fill")
                         .font(.headline)
-                }
-
-                if isOpenIntervals {
-                    // No send action, because there is nothing this plan could send. A watchOS 10
-                    // CustomWorkout is a fixed list of blocks, and this plan is an unknown number of
-                    // legs that end when you end them — the count is the measurement. A button
-                    // that cannot deliver what it promises is a bug in this app, not a nit, so the
-                    // space says what to do instead.
-                    Label {
-                        Text("Runs on this iPhone. Start a workout on your Watch and use Lap to "
-                             + "keep its data lined up with these legs.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    } icon: {
-                        Image(systemName: "applewatch.slash")
-                            .foregroundStyle(.secondary)
-                    }
-                } else {
-                    NavigationLink {
-                        SendToWatchView(plan: plan)
-                    } label: {
-                        Label("Send to Apple Watch", systemImage: "applewatch")
-                    }
                 }
             }
 
@@ -107,11 +84,6 @@ struct PlannedWorkoutDetailView: View {
                 } label: {
                     Label("Delete plan", systemImage: "trash")
                 }
-            } footer: {
-                Text(plan.workoutKitIdentifier == nil
-                     ? "This plan has never been queued for the Watch."
-                     : "Deleting also clears its entry from this iPhone's workout queue. It does "
-                       + "not remove anything from the Watch — delete those on the Watch.")
             }
         }
         .navigationTitle(plan.name)
@@ -120,11 +92,10 @@ struct PlannedWorkoutDetailView: View {
             ActiveWorkoutView(plan: plan, logger: logger)
         }
         // `role: .destructive` only colors the button; it prompts for nothing. This delete is
-        // irreversible and also clears this iPhone's queue entry, so it gets a real confirmation —
-        // the same treatment "End this workout?" already gets for a far more recoverable action.
-        // It does not reach the Watch; `deleteConsequenceMessage` is what says so to the user.
+        // irreversible, so it gets a real confirmation — the same treatment "End this workout?"
+        // already gets for a far more recoverable action.
         .alert("Delete this plan?", isPresented: $showDeleteConfirmation) {
-            Button("Delete plan", role: .destructive) { Task { await delete() } }
+            Button("Delete plan", role: .destructive) { delete() }
             Button("Keep it", role: .cancel) { }
         } message: {
             Text(plan.deleteConsequenceMessage)
@@ -151,23 +122,11 @@ struct PlannedWorkoutDetailView: View {
         if let error = store.save() { errorMessage = error }
     }
 
-    /// Deletes the plan, and first clears its entry from this iPhone's workout queue if it was
-    /// ever sent.
-    ///
-    /// Order matters: clearing the entry needs `workoutKitIdentifier`, which disappears with the
-    /// plan. Deleting locally first would strand the queue entry with nothing left able to name it.
-    /// Nothing here touches the Watch — a workout already delivered there is deleted on the Watch.
-    private func delete() async {
+    /// Deletes the plan. It no longer touches this iPhone's WorkoutKit queue: sending to the Watch
+    /// through WorkoutKit was removed in the 2026-09-29 clean-out (docs/BACKLOG.md), and an entry
+    /// a plan once queued stays in that queue, unreachable — accepted by the owner.
+    private func delete() {
         guard !didDelete else { return }
-
-        if let identifier = plan.workoutKitIdentifier, let uuid = UUID(uuidString: identifier) {
-            let removed = await WorkoutKitService().remove(identifier: uuid)
-            if !removed {
-                errorMessage = PlannedWorkout.stuckQueueMessage
-                return
-            }
-        }
-
         didDelete = true
         context.delete(plan)
         if let error = store.save() {

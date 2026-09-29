@@ -336,6 +336,12 @@ Presets should be editable after selection.
 
 # **8. WorkoutKit integration**
 
+> **Implementation note, not part of the original spec:** this section was built, and then removed
+> in the 2026-09-29 clean-out (`docs/BACKLOG.md`). The phone's Start now launches the app's own
+> watch workout instead (`docs/WATCHOS_RECORDER_PLAN.md`). Kept as written, since this file records
+> the v1.1 requirements. The §8.1 confirmation "Workout sent to Apple Watch." had already been
+> dropped in `8d145b9`.
+
 Create a `WorkoutKitService`.
 
 Responsibilities:

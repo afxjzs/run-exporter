@@ -82,12 +82,6 @@ struct HomeView: View {
                     Label("Start Audio Timer", systemImage: "play.circle.fill")
                         .font(.headline)
                 }
-
-                NavigationLink {
-                    SendToWatchView(plan: plan)
-                } label: {
-                    Label("Send to Apple Watch", systemImage: "applewatch")
-                }
             } else {
                 Text("No workouts yet.")
                     .foregroundStyle(.secondary)
