@@ -224,11 +224,11 @@ on the removal diff and `/code-review` once on the watch-flow diff (`610fdd2..HE
    line, which is empty when no run uses the Watch), cleared by `WatchLink.clearFileError`; the
    next failed write sets it again. Also removed, read only by that screen: `sessionState`,
    `latestStatusReceivedAt`, `watchLogLinesReceived`.
-7. **Export Data** — **Today only, removed from Settings, and made one of the more prominent
+7. **[Done]** **Export Data** — **Today only, removed from Settings, and made one of the more prominent
    buttons on Today** (owner's words). Placement: its own section directly below Next Workout, a
    full-width headline button styled like Start, above Needs a log and Recent Workouts. Shoes stays
    at the bottom of Today.
-8. **"Start Audio Timer"** (Today, plan screen) — **rename to "Start Workout".** Start now launches
+8. **[Done]** **"Start Audio Timer"** (Today, plan screen) — **rename to "Start Workout".** Start now launches
    the Watch workout too, and the name matches "End Workout". Move the `DocumentationDriftTests`
    entry to the new label; update README and `CUE_FEASIBILITY_TEST.md`; the v1.1 spec gets a note
    rather than a rewrite, since it records requirements as written.

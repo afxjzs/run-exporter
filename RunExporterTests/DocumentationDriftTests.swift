@@ -30,9 +30,8 @@ final class DocumentationDriftTests: XCTestCase {
 
     /// Verified against the source on 2026-09-25. Every entry existed in both places when added.
     private static let labels: [QuotedLabel] = [
-        .init(text: "Start Audio Timer",
-              citedBy: ["README.md", "docs/CUE_FEASIBILITY_TEST.md", "RUNNING_APP_V1_1_SPEC.md",
-                        "docs/BACKLOG.md"]),
+        .init(text: "Start Workout",
+              citedBy: ["README.md", "docs/BACKLOG.md"]),
         .init(text: "Start next leg",
               citedBy: ["README.md", "docs/BACKLOG.md"]),
         .init(text: "End this leg",
@@ -191,6 +190,8 @@ final class DocumentationDriftTests: XCTestCase {
         .init(text: "Watch link test", retiredIn: cleanOut, replacement: nil),
         .init(text: "Start watch workout", retiredIn: cleanOut, replacement: nil),
         .init(text: "Reset this screen", retiredIn: cleanOut, replacement: nil),
+        // Renamed: Start now launches the Watch workout too, not only the phone's timer.
+        .init(text: "Start Audio Timer", retiredIn: cleanOut, replacement: "Start Workout"),
     ]
 
     /// Every document that names a retired control also says where it went.

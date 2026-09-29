@@ -2,8 +2,8 @@ import SwiftUI
 
 /// Root of the app.
 ///
-/// v1.0's single export form now lives in `ExportView`, unchanged, reachable from Today and from
-/// Settings. The tabs around it are the v1.1 planner and logger.
+/// v1.0's single export form now lives in `ExportView`, unchanged, reachable from Today. The tabs
+/// around it are the v1.1 planner and logger.
 struct ContentView: View {
     @Environment(LoggerStore.self) private var store
     @Environment(LoggerDefaults.self) private var defaults

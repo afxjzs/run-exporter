@@ -26,9 +26,10 @@ struct HomeView: View {
         List {
             maintenanceSection
             nextWorkoutSection
+            exportSection
             unloggedSection
             recentSection
-            exportSection
+            shoesSection
         }
         .navigationTitle("Running")
         .refreshable { await logger.refresh() }
@@ -79,7 +80,7 @@ struct HomeView: View {
                 Button {
                     activePlan = plan
                 } label: {
-                    Label("Start Audio Timer", systemImage: "play.circle.fill")
+                    Label("Start Workout", systemImage: "play.circle.fill")
                         .font(.headline)
                 }
             } else {
@@ -142,13 +143,23 @@ struct HomeView: View {
         }
     }
 
+    // MARK: - Export and shoes
+
+    /// Directly under Next Workout, styled like Start: running and exporting are what this app is
+    /// for (owner, 2026-09-29 clean-out). Its only entry point — Settings no longer has one.
     private var exportSection: some View {
         Section {
             NavigationLink {
                 ExportView()
             } label: {
                 Label("Export Data", systemImage: "square.and.arrow.up")
+                    .font(.headline)
             }
+        }
+    }
+
+    private var shoesSection: some View {
+        Section {
             NavigationLink {
                 ShoesView(logger: logger)
             } label: {

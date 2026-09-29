@@ -27,12 +27,6 @@ struct SettingsView: View {
             loggingSection($defaults)
 
             Section {
-                NavigationLink { ExportView() } label: {
-                    Label("Export Data", systemImage: "square.and.arrow.up")
-                }
-            }
-
-            Section {
                 Text("Everything this app records stays on this device. There is no account, no "
                      + "analytics and no server. Data leaves only through the share sheet, when "
                      + "you send an export yourself.")

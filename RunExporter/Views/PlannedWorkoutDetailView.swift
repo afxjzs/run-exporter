@@ -37,7 +37,7 @@ struct PlannedWorkoutDetailView: View {
                 Button {
                     showingTimer = true
                 } label: {
-                    Label("Start Audio Timer", systemImage: "play.circle.fill")
+                    Label("Start Workout", systemImage: "play.circle.fill")
                         .font(.headline)
                 }
             }

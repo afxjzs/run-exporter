@@ -420,7 +420,7 @@ reasoning first.
    A third kind, **open intervals**, has no fixed leg length at all: you run until you decide to
    stop, walk until you decide to go, and the plan ends when the running adds up to a target. See
    [Open-interval runs](#open-interval-runs).
-2. **Start Audio Timer** on the phone. There is no separate send-to-Watch step: the WorkoutKit
+2. **Start Workout** on the phone (named "Start Audio Timer" until the 2026-09-29 clean-out). There is no separate send-to-Watch step: the WorkoutKit
    "Send to Apple Watch" screen was removed in the 2026-09-29 clean-out (see
    [LEARNINGS.md](LEARNINGS.md#workoutkit) for why it was unreliable on this hardware). The screen
    opens *armed* and records nothing — no timer session, no audio session, no Live Activity. **Start** also launches the workout on the Watch
