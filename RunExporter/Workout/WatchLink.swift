@@ -69,10 +69,143 @@ final class WatchLink: NSObject {
 
     var isConnected: Bool { mirroredSession != nil }
 
+    // MARK: - A real run (watch plan step 2)
+
+    /// The watch as the run screen sees it.
+    enum RunConnection: Equatable {
+        /// No run is using the watch.
+        case off
+        case connecting
+        case connected
+        /// The launch failed or timed out. The run carries on phone-only; the screen offers Try again.
+        case failed(String)
+        /// Was connected, and the link dropped.
+        case disconnected(String)
+    }
+
+    private(set) var runConnection: RunConnection = .off
+
+    /// True when the last run ended by asking the watch to save its workout. A request, not a
+    /// confirmation — the phone cannot see the watch save — and false for a run the watch was not
+    /// connected to at the finish, so the finish screen never implies a watch workout that is not there.
+    private(set) var lastRunAskedWatchToSave = false
+
+    /// How long a launch may take before it is reported as failed. Measured 2026-09-29: the watch
+    /// was running and mirrored 1.71 s after the tap, from a killed app. Before this, a launch that
+    /// never answered left the test screen stuck with every button disabled.
+    static let launchTimeoutSeconds: TimeInterval = 15
+
+    /// Builds the anchor for the phase in progress *at the moment it is called*, given the current
+    /// latency estimate — so a watch that connects 1.7 s into a phase is sent where the phase is
+    /// now, not where it was at the tap. Nil when no run is using the watch.
+    @ObservationIgnored private var anchorProvider: ((TimeInterval) -> PhaseAnchor?)?
+    @ObservationIgnored private var launchTimeout: Task<Void, Never>?
+
+    /// Half the median measured round trip: the one-way delay `PhaseClock` subtracts. Zero until a
+    /// ping has been answered, which errs by that delay — about 0.07 s — rather than by a guess.
+    var oneWayLatencyEstimate: TimeInterval {
+        guard !roundTrips.isEmpty else { return 0 }
+        let sorted = roundTrips.sorted()
+        return sorted[sorted.count / 2] / 2
+    }
+
+    /// Starts the watch's workout for a run. Called from the run screen's Start.
+    func beginRun(anchor: @escaping (TimeInterval) -> PhaseAnchor?) {
+        anchorProvider = anchor
+        lastRunAskedWatchToSave = false
+        log("Run started; connecting to the watch")
+        connectForRun()
+    }
+
+    /// The run screen's Try again.
+    func retryRun() {
+        guard anchorProvider != nil else { return }
+        log("Try again")
+        connectForRun()
+    }
+
+    /// The engine's phase changed: send the watch where the run is now.
+    func phaseChanged() {
+        guard anchorProvider != nil, isConnected else { return }
+        sendCurrentPhase()
+    }
+
+    /// The run ended normally: the watch saves its workout, tagged with the phone's execution id.
+    func finishRun(executionID: UUID?) {
+        guard anchorProvider != nil else { return }
+        endRun()
+        guard isConnected else {
+            // Said, not assumed: no watch workout exists to save, so the run has no watch data.
+            log("Run finished with the watch not connected; the watch saved nothing", isError: true)
+            return
+        }
+        if let executionID {
+            send(.finishWorkout(executionID: executionID), describe: "Asked the watch to save the workout")
+            lastRunAskedWatchToSave = true
+        } else {
+            // Without an id the phone could never join to the saved workout, so it is not saved.
+            send(.endWorkout, describe: "No execution id to tag it with; asked the watch to discard the workout")
+        }
+    }
+
+    /// The run was abandoned: the watch discards its workout.
+    func abandonRun() {
+        guard anchorProvider != nil else { return }
+        endRun()
+        if isConnected {
+            send(.endWorkout, describe: "Run abandoned; asked the watch to discard the workout")
+        }
+    }
+
+    private func endRun() {
+        anchorProvider = nil
+        launchTimeout?.cancel()
+        launchTimeout = nil
+        runConnection = .off
+    }
+
+    private func connectForRun() {
+        if isConnected {
+            runConnection = .connected
+            sendCurrentPhase()
+            return
+        }
+        runConnection = .connecting
+        launchTimeout?.cancel()
+        launchTimeout = Task { [weak self] in
+            // Cancellation — the link connected, or the run ended — is the normal way this ends;
+            // it is signalled by `isCancelled`, so the sleep's own CancellationError carries nothing.
+            try? await Task.sleep(for: .seconds(Self.launchTimeoutSeconds))
+            guard !Task.isCancelled, let self, self.runConnection == .connecting else { return }
+            let reason = "The Watch did not respond within \(Int(Self.launchTimeoutSeconds)) s."
+            self.runConnection = .failed(reason)
+            self.log(reason, isError: true)
+        }
+        Task { [weak self] in
+            guard let self else { return }
+            if let error = await self.launchWatchWorkout(), self.runConnection == .connecting {
+                self.launchTimeout?.cancel()
+                self.runConnection = .failed(error)
+            }
+        }
+    }
+
+    private func sendCurrentPhase() {
+        guard let anchor = anchorProvider?(oneWayLatencyEstimate) else {
+            log("No phase to send to the watch at this moment")
+            return
+        }
+        send(.phaseBegan(anchor), describe: "Phase sent: \(anchor.phase.rawValue)"
+             + (anchor.isPaused ? " (paused)" : ""))
+    }
+
     // MARK: - Actions
 
-    func launchWatchWorkout() async {
-        guard !isLaunching else { return }
+    /// Asks the watch to start its workout. Returns why it failed, or nil once the request has been
+    /// **sent** — `startWatchApp` succeeding says nothing about the watch (docs/WATCH_DEVELOPMENT.md).
+    @discardableResult
+    func launchWatchWorkout() async -> String? {
+        guard !isLaunching else { return nil }
         isLaunching = true
         defer { isLaunching = false }
 
@@ -83,8 +216,9 @@ final class WatchLink: NSObject {
             try await store.requestAuthorization(toShare: [HKObjectType.workoutType()],
                                                  read: [HKObjectType.workoutType(), HKQuantityType(.heartRate)])
         } catch {
-            log("HealthKit authorization failed: \(error.localizedDescription)", isError: true)
-            return
+            let message = "HealthKit authorization failed: \(error.localizedDescription)"
+            log(message, isError: true)
+            return message
         }
 
         let configuration = HKWorkoutConfiguration()
@@ -97,8 +231,11 @@ final class WatchLink: NSObject {
         do {
             try await store.startWatchApp(toHandle: configuration)
             log("startWatchApp returned success after \(Self.seconds(Date().timeIntervalSince(tapped)))")
+            return nil
         } catch {
-            log("startWatchApp failed: \(error.localizedDescription)", isError: true)
+            let message = "Could not start the Watch: \(error.localizedDescription)"
+            log(message, isError: true)
+            return message
         }
     }
 
@@ -143,6 +280,13 @@ final class WatchLink: NSObject {
         } else {
             log("Watch session mirrored here (not started from this screen)")
         }
+        guard anchorProvider != nil else { return }
+        launchTimeout?.cancel()
+        launchTimeout = nil
+        runConnection = .connected
+        // Measure the delay the watch's clock must allow for, then tell it where the run is now.
+        ping()
+        sendCurrentPhase()
     }
 
     private func send(_ message: WatchLinkMessage, describe: String) {
@@ -203,6 +347,9 @@ final class WatchLink: NSObject {
         log("Watch session is now \(Self.name(for: state))")
         if state == .ended {
             mirroredSession = nil
+            if anchorProvider != nil {
+                runConnection = .disconnected("The Watch's workout ended.")
+            }
         }
     }
 
@@ -213,10 +360,14 @@ final class WatchLink: NSObject {
     fileprivate func disconnected(_ error: Error?) {
         mirroredSession = nil
         sessionState = "disconnected"
-        if let error {
-            log("Disconnected from the watch: \(error.localizedDescription)", isError: true)
+        let reason = error.map { "Lost the Watch: \($0.localizedDescription)" } ?? "Lost the Watch."
+        if error != nil {
+            log(reason, isError: true)
         } else {
             log("Disconnected from the watch")
+        }
+        if anchorProvider != nil {
+            runConnection = .disconnected(reason)
         }
     }
 

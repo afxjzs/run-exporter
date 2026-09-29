@@ -51,11 +51,16 @@ final class ActiveWorkoutModel {
     private let store: LoggerStore
     private let defaults: LoggerDefaults
     private let audio: AudioCueEngine
+    /// Starts, updates and finishes the Watch's workout for this run (watch plan step 2). Nil only
+    /// in tests of the timer and logging, which do not involve a Watch. Required rather than
+    /// defaulted, so no caller can leave the Watch out by forgetting it.
+    let watchLink: WatchLink?
 
-    init(store: LoggerStore, defaults: LoggerDefaults, audio: AudioCueEngine) {
+    init(store: LoggerStore, defaults: LoggerDefaults, audio: AudioCueEngine, watchLink: WatchLink?) {
         self.store = store
         self.defaults = defaults
         self.audio = audio
+        self.watchLink = watchLink
 
         engine.onCue = { [weak self] cue in
             self?.audio.play(cue)
@@ -67,10 +72,28 @@ final class ActiveWorkoutModel {
             self?.finishUp()
         }
         // A phase change is exactly when the Lock Screen card needs new state — and the only time
-        // it does, since the widget ticks its own clock between transitions.
+        // it does, since the widget ticks its own clock between transitions. The same is true of the
+        // Watch: this one hook covers entering a phase, pause, resume, skip, a leg's end and the
+        // finish, so nothing that moves the run can leave the Watch behind.
         engine.onPhaseChanged = { [weak self] in
             self?.refreshLiveActivity()
+            self?.watchLink?.phaseChanged()
         }
+    }
+
+    /// Where the run is right now, in the shape the Watch is sent (`WatchPhaseMapping`).
+    private func watchAnchor(oneWayLatency: TimeInterval) -> PhaseAnchor? {
+        let snapshot = WatchPhaseMapping.EngineSnapshot(
+            phase: engine.phase,
+            plannedPhase: engine.currentPlannedPhase?.phase,
+            isPaused: engine.isPaused,
+            repetition: engine.currentRepetition,
+            totalRepetitions: engine.totalRepetitions,
+            phaseStart: engine.phaseStartDate,
+            phaseEnd: engine.phaseEndDate,
+            frozenElapsed: engine.phaseElapsedSeconds,
+            frozenRemaining: engine.phaseRemainingSeconds)
+        return WatchPhaseMapping.anchor(from: snapshot, now: Date(), oneWayLatency: oneWayLatency)
     }
 
     /// Current engine state, in the shape the Live Activity needs.
@@ -152,6 +175,12 @@ final class ActiveWorkoutModel {
             liveActivity.start(workoutName: plan.name,
                                activityName: activityType.displayName,
                                state: liveActivityState)
+            // After the engine, so the Watch is sent a real phase. The run does not wait for it: a
+            // Watch that fails to connect leaves the run exactly as it was before the Watch app
+            // existed, and the screen says so, with Try again.
+            watchLink?.beginRun { [weak self] latency in
+                self?.watchAnchor(oneWayLatency: latency)
+            }
         } catch {
             // The plan itself is unusable — stop cleanly rather than showing a dead timer.
             errorMessage = error.localizedDescription
@@ -345,6 +374,8 @@ final class ActiveWorkoutModel {
     private func finishUp() {
         audio.endWorkoutAudio()
         liveActivity.end(finalState: liveActivityState)
+        // The Watch saves its workout tagged with this execution — the id the phone will join on.
+        watchLink?.finishRun(executionID: executionID)
         didFinish = true
 
         // No execution means there is nothing to mark finished, and `start()` already said why.
@@ -383,6 +414,9 @@ final class ActiveWorkoutModel {
     /// Abandons the session without finishing it — used when the user backs out of the screen.
     func cancel() {
         guard isRunning else { return }
+        // Before `engine.end()`, whose finish callback would otherwise tell the Watch to *save* a
+        // run the user has just abandoned.
+        watchLink?.abandonRun()
         engine.end()
         audio.endWorkoutAudio()
         liveActivity.end(finalState: nil)

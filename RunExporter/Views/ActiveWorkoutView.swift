@@ -8,6 +8,7 @@ struct ActiveWorkoutView: View {
     @Environment(LoggerStore.self) private var store
     @Environment(LoggerDefaults.self) private var defaults
     @Environment(AudioCueEngine.self) private var audio
+    @Environment(WatchLink.self) private var watchLink
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
@@ -65,7 +66,7 @@ struct ActiveWorkoutView: View {
             // Created, deliberately not started. The timer session, the audio session and the Live
             // Activity all begin at the Start button, so their clock agrees with the Watch's rather
             // than with whenever this screen happened to appear.
-            model = ActiveWorkoutModel(store: store, defaults: defaults, audio: audio)
+            model = ActiveWorkoutModel(store: store, defaults: defaults, audio: audio, watchLink: watchLink)
         }
         .onChange(of: scenePhase) { _, phase in
             // Coming back from the lock screen: re-derive from the clock immediately rather than
@@ -114,7 +115,7 @@ struct ActiveWorkoutView: View {
             Button("Log it now") { Task { await findWorkoutToLog() } }
             Button("Later", role: .cancel) { dismiss() }
         } message: {
-            Text("End the workout on your Apple Watch too, then log how it felt.")
+            Text(completionMessage)
         }
         .alert("You already logged this run", isPresented: $showAlreadyLogged) {
             Button("Edit log") { Task { await editExistingLog() } }
@@ -306,9 +307,11 @@ struct ActiveWorkoutView: View {
         plan.intervalSummary
     }
 
+    /// Changed with watch plan step 2. The old text told the runner to start the Watch's workout
+    /// first; now Start does that itself, and doing both would record **two** workouts.
     private var startOrderHint: String {
-        "Start the workout on your Watch first, then tap Start the moment it begins. Nothing is "
-            + "recorded until you do."
+        "Start also starts the workout on your Apple Watch. Don't start one on the Watch yourself. "
+            + "Nothing is recorded until you tap Start."
     }
 
     // MARK: - Content
@@ -346,6 +349,8 @@ struct ActiveWorkoutView: View {
                     audio.clearRouteNotice()
                 }
             }
+
+            watchStatus
 
             Spacer(minLength: 0)
 
@@ -405,6 +410,58 @@ struct ActiveWorkoutView: View {
         }
         .foregroundStyle(.white)
         .padding()
+    }
+
+    // MARK: - The Watch
+
+    /// Shown when the run finishes. The Watch's workout ends by itself only if this run was
+    /// connected to it; otherwise there may be one the runner started by hand, which they must end.
+    /// Worded as a request, because that is all the phone knows: it asked; the Watch saves.
+    private var completionMessage: String {
+        if watchLink.lastRunAskedWatchToSave {
+            return "Your Watch was asked to save the workout. Log how it felt."
+        }
+        return "If you recorded on your Apple Watch yourself, end that workout too, then log how it felt."
+    }
+
+    /// Whether the Watch is recording this run, in words, with Try again when it is not.
+    ///
+    /// A Watch that fails never stops the run — the timer and cues carry on exactly as they did
+    /// before the Watch app existed — but the runner must know the run has no Watch data rather than
+    /// discover it afterwards. Try again stays until the connection has a measured track record.
+    @ViewBuilder
+    private var watchStatus: some View {
+        switch watchLink.runConnection {
+        case .off:
+            EmptyView()
+        case .connecting:
+            watchLine("Connecting to your Watch…", systemImage: "applewatch")
+        case .connected:
+            watchLine(watchConnectedText, systemImage: "applewatch.radiowaves.left.and.right")
+        case .failed(let reason), .disconnected(let reason):
+            VStack(spacing: 8) {
+                watchLine(watchProblemText(reason), systemImage: "applewatch.slash")
+                Button("Try again") { watchLink.retryRun() }
+                    .buttonStyle(.bordered)
+                    .tint(.white)
+            }
+        }
+    }
+
+    private var watchConnectedText: String {
+        guard let bpm = watchLink.latestStatus?.heartRate else { return "Watch recording" }
+        return "Watch recording · \(Int(bpm.rounded())) bpm"
+    }
+
+    private func watchProblemText(_ reason: String) -> String {
+        reason + " This run continues on the phone only."
+    }
+
+    private func watchLine(_ text: String, systemImage: String) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(.white.opacity(0.85))
+            .multilineTextAlignment(.center)
     }
 
     /// One dismissible banner.

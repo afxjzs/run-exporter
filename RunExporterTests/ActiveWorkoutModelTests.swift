@@ -74,7 +74,7 @@ final class ActiveWorkoutModelTests: XCTestCase {
     /// Opening the screen must record nothing. The workout begins when the user says so, which is
     /// the whole point of arming: they start the Watch first, then tap here.
     func testAFreshModelHasNotStartedAndHasRecordedNothing() {
-        let model = ActiveWorkoutModel(store: store, defaults: defaults, audio: audio)
+        let model = ActiveWorkoutModel(store: store, defaults: defaults, audio: audio, watchLink: nil)
 
         XCTAssertFalse(model.hasStarted)
         XCTAssertNil(model.executionID)
@@ -87,7 +87,7 @@ final class ActiveWorkoutModelTests: XCTestCase {
     /// This is the timestamp the matcher compares against the Watch workout's start.
     func testStartingRecordsOneSessionStampedAtThatMoment() {
         let plan = makePlan()
-        let model = ActiveWorkoutModel(store: store, defaults: defaults, audio: audio)
+        let model = ActiveWorkoutModel(store: store, defaults: defaults, audio: audio, watchLink: nil)
         let before = Date()
 
         model.start(plan: plan)
@@ -107,7 +107,7 @@ final class ActiveWorkoutModelTests: XCTestCase {
     /// overlapping executions are what made one of the owner's real runs permanently ambiguous.
     func testStartingIsNotRepeatedOnceUnderway() {
         let plan = makePlan()
-        let model = ActiveWorkoutModel(store: store, defaults: defaults, audio: audio)
+        let model = ActiveWorkoutModel(store: store, defaults: defaults, audio: audio, watchLink: nil)
 
         model.start(plan: plan)
         model.start(plan: plan)
@@ -126,7 +126,7 @@ final class ActiveWorkoutModelTests: XCTestCase {
     func testASessionKnowsOnceItHasBeenLogged() throws {
         let plan = makePlan()
         let logger = RunLoggerModel(store: store, defaults: defaults)
-        let model = ActiveWorkoutModel(store: store, defaults: defaults, audio: audio)
+        let model = ActiveWorkoutModel(store: store, defaults: defaults, audio: audio, watchLink: nil)
 
         model.start(plan: plan)
         model.refreshPendingLog(using: logger)
@@ -152,7 +152,7 @@ final class ActiveWorkoutModelTests: XCTestCase {
     func testDismissingTheLogSheetWithoutSavingLeavesTheSessionUnlogged() {
         let plan = makePlan()
         let logger = RunLoggerModel(store: store, defaults: defaults)
-        let model = ActiveWorkoutModel(store: store, defaults: defaults, audio: audio)
+        let model = ActiveWorkoutModel(store: store, defaults: defaults, audio: audio, watchLink: nil)
 
         model.start(plan: plan)
         model.refreshPendingLog(using: logger)
@@ -170,7 +170,7 @@ final class ActiveWorkoutModelTests: XCTestCase {
     /// that shape, and the whole of it has to be recorded or the run becomes undescribable later.
     func testAMultiBlockSessionRecordsTheWholeShape() throws {
         let plan = makeBlockPlan()
-        let model = ActiveWorkoutModel(store: store, defaults: defaults, audio: audio)
+        let model = ActiveWorkoutModel(store: store, defaults: defaults, audio: audio, watchLink: nil)
 
         model.start(plan: plan)
 
@@ -187,7 +187,7 @@ final class ActiveWorkoutModelTests: XCTestCase {
     /// obviously broken value instead of a plausible and wrong one.
     func testAMultiBlockSessionClaimsNoSingleIntervalShape() throws {
         let plan = makeBlockPlan()
-        let model = ActiveWorkoutModel(store: store, defaults: defaults, audio: audio)
+        let model = ActiveWorkoutModel(store: store, defaults: defaults, audio: audio, watchLink: nil)
 
         model.start(plan: plan)
 
@@ -205,7 +205,7 @@ final class ActiveWorkoutModelTests: XCTestCase {
     /// An ordinary plan still records exactly what it always did, and says so in one segment.
     func testASingleShapeSessionIsUnchanged() throws {
         let plan = makePlan()
-        let model = ActiveWorkoutModel(store: store, defaults: defaults, audio: audio)
+        let model = ActiveWorkoutModel(store: store, defaults: defaults, audio: audio, watchLink: nil)
 
         model.start(plan: plan)
 
@@ -223,7 +223,7 @@ final class ActiveWorkoutModelTests: XCTestCase {
     /// multi-block run — a blank field asks the user, a wrong one does not.
     func testTheLogFormIsOfferedNoIntervalShapeForAMultiBlockRun() {
         let plan = makeBlockPlan()
-        let model = ActiveWorkoutModel(store: store, defaults: defaults, audio: audio)
+        let model = ActiveWorkoutModel(store: store, defaults: defaults, audio: audio, watchLink: nil)
 
         model.start(plan: plan)
 

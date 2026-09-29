@@ -409,10 +409,12 @@ reasoning first.
    nothing more. Any sentence describing that list as Watch state is wrong — three shipped that way
    before, which is why `MISTAKES.md` leads with it.
 3. **Start Audio Timer** on the phone. The screen opens *armed* and records nothing — no timer
-   session, no audio session, no Live Activity. Start the workout on the Watch, then tap **Start**
-   the instant it begins, so the two recordings share a start time. There is no countdown by
-   default, for the same reason: three seconds between the tap and the first interval is the exact
-   offset this is trying to close.
+   session, no audio session, no Live Activity. **Start** also launches the workout on the Watch
+   (watch plan step 2, from 2026-09-29): one tap, both devices. Do not start a workout on the Watch
+   yourself as well, or two are recorded. The run screen says whether the Watch is recording and
+   offers **Try again** if it is not; a Watch that fails never stops the run, which carries on
+   phone-only. Before this, the Watch's workout was started by hand and matched to the timer by
+   start time, which is why there is no countdown by default.
 4. **Cues play through AirPods** — run, walk, cooldown and completion, plus the five-second warning
    and the 3-2-1 into each transition (both on by default), the final-round call (on) and the
    halfway call (off). Pause, resume, skip and end are confirmed aloud in every cue mode, because a
