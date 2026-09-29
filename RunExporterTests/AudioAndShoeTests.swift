@@ -149,30 +149,14 @@ final class AudioCueTests: XCTestCase {
 
     /// **"No cues" must mean no cues.**
     ///
-    /// Regression test. The gate let control confirmations through for every source that was not
-    /// the iPhone engine — right for the Watch sources, where this app still acknowledges a tap on
-    /// this phone, but wrong for `.none`, whose Settings footer promises "No cues will play from
-    /// this app at all." Choosing silence produced four cues, with nothing to indicate it.
+    /// Regression test. The gate once let control confirmations through for every source that was
+    /// not the iPhone engine — right for the Watch sources (removed 2026-09-29), but wrong for
+    /// `.none`, whose Settings footer promises "No cues will play from this app at all." Choosing
+    /// silence produced four cues, with nothing to indicate it.
     func testNoCuesSourceIsCompletelySilent() {
         for cue in Self.transitionCues + Self.confirmationCues {
             XCTAssertFalse(AudioCueEngine.shouldPlay(cue, source: .none),
                            "\(cue.identifier) must not play when the cue source is \"No cues\"")
-        }
-    }
-
-    /// The Watch sources own the transitions but not this app's own buttons: a tap here is still
-    /// this app's to acknowledge, which is the difference between a pause you notice and one you
-    /// don't.
-    func testWatchSourcesConfirmTapsButLeaveTransitionsAlone() {
-        for source in [CueSource.appleWorkout, .watchCompanion] {
-            for cue in Self.confirmationCues {
-                XCTAssertTrue(AudioCueEngine.shouldPlay(cue, source: source),
-                              "\(cue.identifier) acknowledges a tap in this app, so \(source.rawValue) must play it")
-            }
-            for cue in Self.transitionCues {
-                XCTAssertFalse(AudioCueEngine.shouldPlay(cue, source: source),
-                               "\(cue.identifier) belongs to the other device under \(source.rawValue)")
-            }
         }
     }
 
@@ -316,6 +300,37 @@ final class LoggerDefaultsTests: XCTestCase {
         XCTAssertTrue(LoggerDefaults(defaults: suite).includeWalkingWorkouts)
     }
 
+    /// The two Watch cue sources were removed in the 2026-09-29 clean-out. A phone that had one
+    /// selected must not be quietly moved to the iPhone engine — its transition cues would start
+    /// playing mid-run with nothing on screen saying why. It is reported, and the phone plays cues.
+    func testRetiredWatchCueSourcesAreReportedAndFallBackToThePhone() {
+        for retired in ["apple_workout", "watch_companion"] {
+            suite.set(retired, forKey: "cue.source")
+            let defaults = LoggerDefaults(defaults: suite)
+
+            XCTAssertEqual(defaults.cueSource, .iphoneAudioEngine, retired)
+            XCTAssertTrue(defaults.configurationIssues.contains { $0.contains(retired) },
+                          "\(retired) must be reported, got \(defaults.configurationIssues)")
+        }
+    }
+
+    /// Settings' "Play cues" toggle is `playsCues`, a view onto `cueSource` rather than a second
+    /// stored setting, so the two can never disagree — and the export's `cue_source` keeps its
+    /// existing values.
+    func testPlaysCuesIsTheCueSourceAndPersists() {
+        let defaults = LoggerDefaults(defaults: suite)
+        XCTAssertTrue(defaults.playsCues, "Cues are on by default")
+
+        defaults.playsCues = false
+        XCTAssertEqual(defaults.cueSource, CueSource.none)
+        XCTAssertEqual(suite.string(forKey: "cue.source"), "none")
+        XCTAssertFalse(LoggerDefaults(defaults: suite).playsCues, "Off must survive a relaunch")
+
+        defaults.playsCues = true
+        XCTAssertEqual(defaults.cueSource, .iphoneAudioEngine)
+        XCTAssertEqual(suite.string(forKey: "cue.source"), "iphone_audio_engine")
+    }
+
     /// An unrecognized stored value must be reported, not silently swapped for a default.
     func testUnknownStoredEnumIsReported() {
         suite.set("telepathy", forKey: "cue.source")
@@ -411,7 +426,7 @@ final class LoggerDefaultsTests: XCTestCase {
         XCTAssertEqual(defaults.cueVolume, LoggerDefaults.minimumCueVolume, accuracy: 0.0001)
         XCTAssertTrue(defaults.configurationIssues.contains { $0.contains("Cue volume") },
                       "Raising a muted setting must be surfaced, got \(defaults.configurationIssues)")
-        XCTAssertTrue(defaults.configurationIssues.contains { $0.contains("No cues") },
+        XCTAssertTrue(defaults.configurationIssues.contains { $0.contains("Play cues") },
                       "The report must point at the control that actually silences cues")
     }
 
@@ -432,11 +447,11 @@ final class LoggerDefaultsTests: XCTestCase {
 
     func testIntervalAudioSettingsMirrorConfiguration() {
         let defaults = LoggerDefaults(defaults: suite)
-        defaults.cueSource = .appleWorkout
+        defaults.cueSource = .none
         defaults.cueMode = .voice
 
         let json = defaults.intervalAudioSettings.json
-        XCTAssertEqual(json["cue_source"] as? String, "apple_workout")
+        XCTAssertEqual(json["cue_source"] as? String, "none")
         XCTAssertEqual(json["cue_mode"] as? String, "voice")
     }
 }

@@ -59,7 +59,8 @@ final class LoggerDefaults {
         var issues: [String] = []
 
         self.cueSource = Self.readEnum(defaults, Key.cueSource, default: CueSource.iphoneAudioEngine,
-                                       label: "Cue source", issues: &issues)
+                                       label: "Cue source (now the Play cues setting)",
+                                       issues: &issues)
         // Voice, not voice+beeps. Every cue in the combined mode plays a tone *and* an utterance,
         // and the utterance carries a 0.14s `preUtteranceDelay` to let the tone through first — so
         // the mode doubles the audio events and lengthens each one, on a cue timeline that already
@@ -125,6 +126,13 @@ final class LoggerDefaults {
     // MARK: - Cues
 
     var cueSource: CueSource { didSet { defaults.set(cueSource.rawValue, forKey: Key.cueSource) } }
+
+    /// Settings' "Play cues" toggle. A view onto `cueSource`, not a second stored setting, so the
+    /// two cannot disagree and the export's `cue_source` keeps its existing values.
+    var playsCues: Bool {
+        get { cueSource == .iphoneAudioEngine }
+        set { cueSource = newValue ? .iphoneAudioEngine : .none }
+    }
     var cueMode: CueMode { didSet { defaults.set(cueMode.rawValue, forKey: Key.cueMode) } }
     var cueVoiceIdentifier: String? {
         didSet { defaults.set(cueVoiceIdentifier, forKey: Key.cueVoiceIdentifier) }
@@ -321,7 +329,8 @@ final class LoggerDefaults {
     ///
     /// Volume 0 used to be selectable. Raising it makes cues audible again, which a user who had
     /// deliberately muted them would otherwise discover mid-run — so the change is surfaced in
-    /// Settings, and points at `CueSource.none`, the control that actually silences cues.
+    /// Settings, and points at "Play cues" (`CueSource.none` when off), the control that actually
+    /// silences cues.
     private static func readCueVolume(_ defaults: UserDefaults, issues: inout [String]) -> Double {
         guard let stored = defaults.object(forKey: Key.cueVolume) as? Double,
               stored.isFinite else { return 1.0 }
@@ -329,8 +338,8 @@ final class LoggerDefaults {
             let percent = { (value: Double) in Int((value * 100).rounded()) }
             issues.append("Cue volume was stored at \(percent(stored))%, below the "
                           + "\(percent(minimumCueVolume))% minimum, and is now "
-                          + "\(percent(minimumCueVolume))%. To silence cues entirely, set the cue "
-                          + "source to \"No cues\".")
+                          + "\(percent(minimumCueVolume))%. To silence cues entirely, turn off "
+                          + "\"Play cues\".")
             return minimumCueVolume
         }
         return min(stored, 1)

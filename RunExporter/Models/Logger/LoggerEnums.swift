@@ -128,20 +128,22 @@ enum WorkoutPhase: String, CaseIterable {
     }
 }
 
-/// Where the run/walk transition cues come from. Mirrors `cue_source` in manifest.json.
+/// Whether this iPhone plays the workout's cues. Mirrors `cue_source` in manifest.json.
+///
+/// Settings shows it as the "Play cues" toggle (`LoggerDefaults.playsCues`). Two Watch sources —
+/// `apple_workout` and `watch_companion` — were removed in the 2026-09-29 clean-out: the first only
+/// made sense alongside the removed WorkoutKit route, and the second was never built. A phone that
+/// still has one stored gets it reported by `LoggerDefaults` rather than silently replaced, and
+/// exports made before then keep those values.
 enum CueSource: String, CaseIterable, Identifiable {
-    case appleWorkout = "apple_workout"
     case iphoneAudioEngine = "iphone_audio_engine"
-    case watchCompanion = "watch_companion"
     case none
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .appleWorkout: return "Apple Workout app"
         case .iphoneAudioEngine: return "iPhone audio engine"
-        case .watchCompanion: return "Watch companion"
         case .none: return "No cues"
         }
     }

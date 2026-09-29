@@ -1398,6 +1398,10 @@ watch_companion
 none
 ```
 
+> **Implementation note, not part of the original spec:** since the 2026-09-29 clean-out the app
+> writes only `iphone_audio_engine` and `none` (Settings' "Play cues" toggle). `apple_workout` and
+> `watch_companion` appear only in exports made before then.
+
 ---
 
 # **21. Migration and existing workouts**

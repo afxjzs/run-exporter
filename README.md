@@ -633,22 +633,20 @@ media time and wall-clock time advanced in lockstep to the second.
 audible would be the worse failure: someone who deliberately muted them would discover it mid-run.
 One constant (`LoggerDefaults.minimumCueVolume`) drives both the slider and the stored-value read.
 
-**"No cues" means no cues.** `CueSource.none` suppresses the control confirmations — paused, resumed,
-skipped, ended — as well as the interval cues. Those four used to play regardless, because one
-condition was doing the work of two separate rules; `AudioCueEngine.shouldPlay(_:source:)` now
-separates them.
+**"Play cues" off means no cues.** Settings has one switch, **Play cues**. Off (`CueSource.none`)
+suppresses the control confirmations — paused, resumed, skipped, ended — as well as the interval
+cues. Those four once played regardless, because one condition was doing the work of two rules.
 
-**The Watch cue sources are deliberately different: they suppress the transition cues but still
-confirm your taps.** Apple's Workout app owns the run/walk announcements, and staying quiet for those
-stops the two talking over each other — but a pause you tap in *this* app is this app's to
-acknowledge. Settings used to say "This app plays NO cues" for both Watch sources and disable the
-Cues picker, which was false twice over: those four confirmations always played, and `cueMode`,
-voice and volume all still govern how they sound. The footer now says what actually happens, and the
-picker is disabled only for "No cues", where nothing plays at all.
+**There used to be two Watch cue sources**, "Apple Workout app" and "Watch companion", which
+silenced the phone's transition cues but still confirmed taps. They were removed in the 2026-09-29
+clean-out: the first only made sense alongside the removed WorkoutKit route, and the second was
+never built. A phone that still has one stored reports it under "Settings that could not be read"
+and plays cues from the iPhone. Exports made before then may carry `apple_workout` or
+`watch_companion` in `cue_source`.
 
-`CueSourceExplanationTests` asserts each footer against `AudioCueEngine.shouldPlay` directly, because
-that promise and its implementation had drifted apart with neither side able to notice. Reinstating
-the old wording fails exactly three of its six tests.
+`CueSourceExplanationTests` asserts each Settings footer against `AudioCueEngine.shouldPlay`
+directly, because that promise and its implementation once drifted apart with neither side able to
+notice.
 
 ## Known limitations
 
@@ -743,8 +741,8 @@ Three companion files, kept separate because they answer different questions:
   - **Test 3 — locked screen and backgrounded: passed.** Every cue fired on schedule; phase and
     elapsed time were correct on return.
 
-  The iPhone engine is the default cue source, and that is now a measured decision rather than a
-  precaution.
+  The iPhone engine is the app's only cue source (the Watch sources were removed on 2026-09-29),
+  and that is a measured decision rather than a precaution.
 - **Live Activity** (spec §12.1). The **Lock Screen card** shows the activity name, the workout
   name, an elapsed clock, a whole-workout timeline bar and a one-line plan summary. The **Dynamic
   Island** carries a subset — expanded, it shows the activity name, the elapsed clock and the

@@ -74,17 +74,6 @@ enum AudioCue: Equatable {
         }
     }
 
-    /// Confirmations of a button press. These always sound, in every cue mode — the whole point
-    /// is knowing the tap registered, which a silent mode would defeat.
-    var isControlConfirmation: Bool {
-        switch self {
-        case .paused, .resumed, .skipped, .ended: return true
-        case .countdown, .run, .walk, .cooldown, .complete,
-             .finalRound, .halfway, .nextPhase, .runningRemaining,
-             .recoveryFloorReached: return false
-        }
-    }
-
     /// Cues that are announcements rather than transitions. In beeps-only mode they are skipped
     /// entirely: a tick that means "final round" and a tick that means "3" are indistinguishable,
     /// and an ambiguous cue is worse than no cue.

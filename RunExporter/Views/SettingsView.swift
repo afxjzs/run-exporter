@@ -72,19 +72,13 @@ struct SettingsView: View {
     @ViewBuilder
     private func cueSection(_ defaults: Bindable<LoggerDefaults>) -> some View {
         Section {
-            Picker("Cue source", selection: defaults.cueSource) {
-                ForEach(CueSource.allCases) { Text($0.displayName).tag($0) }
-            }
+            Toggle("Play cues", isOn: defaults.playsCues)
             Picker("Cues", selection: defaults.cueMode) {
                 ForEach(CueMode.allCases) { Text($0.displayName).tag($0) }
             }
-            // Disabled only for "No cues", where nothing plays so the choice genuinely has no
-            // effect. It used to be disabled for the Watch sources too, via `usesAppOwnedEngine`,
-            // which is false for those — but `cueMode` decides whether the pause/resume/skip/end
-            // confirmations are spoken or beeped, and those do play under the Watch sources. A
-            // setting that demonstrably changes what you hear was unreachable from the one screen
-            // meant to control it.
-            .disabled(defaults.wrappedValue.cueSource == .none)
+            // Disabled only when cues are off, where nothing plays so the choice genuinely has no
+            // effect.
+            .disabled(!defaults.wrappedValue.playsCues)
 
             Stepper("Countdown: \(countdownLabel)",
                     value: defaults.countdownSeconds,
@@ -98,7 +92,7 @@ struct SettingsView: View {
 
             VStack(alignment: .leading) {
                 Text("Cue volume")
-                // Floors at 10%, not 0 — silencing cues is "Cue source: No cues", which skips the
+                // Floors at 10%, not 0 — silencing cues is "Play cues" off, which skips the
                 // work rather than doing it inaudibly. See `LoggerDefaults.minimumCueVolume`.
                 Slider(value: defaults.cueVolume, in: LoggerDefaults.minimumCueVolume...1)
             }
@@ -123,28 +117,14 @@ struct SettingsView: View {
     /// `nonisolated static`. This text is a promise about audible behavior, and the engine is what
     /// keeps or breaks it; nothing but a test can keep the two in step.
     ///
-    /// Two of these used to say "This app plays NO cues" for the Watch sources, which was false.
-    /// `shouldPlay` returns `source.usesAppOwnedEngine || cue.isControlConfirmation`, so pause,
-    /// resume, skip and end have always played under those sources — deliberately, because a tap in
-    /// *this* app is this app's to acknowledge. The footer promised silence the engine never
-    /// delivered, and Settings is the screen the engine's own comment cites as authoritative.
+    /// The Watch cue sources' footers once said "This app plays NO cues" while pause, resume, skip
+    /// and end still played under them — a promise of silence the engine never kept, on the screen
+    /// the engine's own comment cites as authoritative. Those sources were removed on 2026-09-29.
     static func cueSourceExplanation(for source: CueSource) -> String {
         switch source {
         case .iphoneAudioEngine:
             return "This iPhone plays the run, walk and cooldown cues through your current audio "
                 + "route. The settings above apply."
-        case .appleWorkout:
-            return "Apple's Workout app on the Watch provides the run, walk and cooldown cues, and "
-                + "this app stays quiet for those so the two never talk over each other. It does "
-                + "still confirm taps you make here — pause, resume, skip and end — and the Cues, "
-                + "voice and volume settings above apply to those confirmations. Choose \"No cues\" "
-                + "for complete silence from this app."
-        case .watchCompanion:
-            return "A Watch companion app is not part of this version, so nothing will announce the "
-                + "run and walk transitions. This app does still confirm taps you make here — "
-                + "pause, resume, skip and end — and the Cues, voice and volume settings above "
-                + "apply to those confirmations. Choose \"No cues\" for complete silence from this "
-                + "app."
         case .none:
             return "No cues will play from this app at all, including confirmations of taps."
         }

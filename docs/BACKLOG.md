@@ -198,7 +198,7 @@ on the removal diff and `/code-review` once on the watch-flow diff (`610fdd2..HE
    **Owner, during the removal:** deleting a plan now just deletes it. An entry a plan once queued
    stays in this iPhone's WorkoutKit queue, unreachable; those entries never delivered, and a
    restart already clears a wedged queue.
-4. **Cue source** — **remove "Apple Workout app" and "Watch companion"; replace the picker with a
+4. **[Done]** **Cue source** — **remove "Apple Workout app" and "Watch companion"; replace the picker with a
    "Play cues" toggle** (on = iPhone audio engine, off = No cues). The first only made sense with
    item 2; the second was never built and its footer was false. The export's `cue_source` keeps its
    existing values. A phone with a removed value stored reports it once under "Settings that could

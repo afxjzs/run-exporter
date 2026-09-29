@@ -248,24 +248,18 @@ final class AudioCueEngine {
 
     /// Whether `cue` may be played at all under `source`.
     ///
-    /// Two separate rules, and conflating them was a bug:
+    /// **`.none` means silence, full stop.** The Settings footer promises "No cues will play from
+    /// this app at all", so nothing gets through — not even a button confirmation. With cues on,
+    /// everything plays.
     ///
-    /// * **`.none` means silence, full stop.** The Settings footer promises "No cues will play from
-    ///   this app at all", so nothing gets through — not even a button confirmation.
-    /// * **The Watch sources delegate only the *transition* cues.** Apple's Workout app owns those,
-    ///   and suppressing ours stops the two talking over each other. A tap in *this* app is still
-    ///   this app's to acknowledge, and is the difference between a pause you notice and one you
-    ///   don't.
-    ///
-    /// The gate used to be a single `usesAppOwnedEngine || isControlConfirmation`, which let the
-    /// four confirmation cues through under `.none` — so choosing "No cues" produced four cues,
-    /// with no error and nothing on screen to contradict the footer.
+    /// The gate once let the four confirmation cues through under `.none`, so choosing "No cues"
+    /// produced four cues, with no error and nothing on screen to contradict the footer. (That rule
+    /// existed for the Watch cue sources, which were removed on 2026-09-29.)
     ///
     /// `nonisolated static` for the same reason as `sessionOptions`: it makes the rule assertable
     /// without an audio device.
     nonisolated static func shouldPlay(_ cue: AudioCue, source: CueSource) -> Bool {
-        guard source != .none else { return false }
-        return source.usesAppOwnedEngine || cue.isControlConfirmation
+        source == .iphoneAudioEngine
     }
 
     func clearPlaybackLog() { playbackLog.removeAll() }

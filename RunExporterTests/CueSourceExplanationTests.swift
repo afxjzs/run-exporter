@@ -4,10 +4,11 @@ import XCTest
 /// Ties the Settings footer to what the engine actually does.
 ///
 /// Settings is the screen `AudioCueEngine.shouldPlay`'s own doc comment cites as the authority on
-/// what the user was promised, and two of its four footers promised silence the engine never
-/// delivered: "This app plays NO cues" for both Watch sources, while pause, resume, skip and end
-/// have always played under them. Nothing but a test can keep a promise and its implementation in
-/// step — the code was correct, the sentence was wrong, and neither one knew about the other.
+/// what the user was promised, and two of its footers once promised silence the engine never
+/// delivered: "This app plays NO cues" for the two Watch sources (removed 2026-09-29), while pause,
+/// resume, skip and end always played under them. Nothing but a test can keep a promise and its
+/// implementation in step — the code was correct, the sentence was wrong, and neither one knew
+/// about the other.
 @MainActor
 final class CueSourceExplanationTests: XCTestCase {
 
@@ -47,41 +48,6 @@ final class CueSourceExplanationTests: XCTestCase {
 
         let text = SettingsView.cueSourceExplanation(for: CueSource.none).lowercased()
         XCTAssertTrue(silenceClaims.contains { text.contains($0) }, text)
-    }
-
-    // MARK: - What the Watch sources actually do
-
-    func testWatchSourcesSuppressTransitionsButKeepConfirmations() {
-        for source in [CueSource.appleWorkout, .watchCompanion] {
-            XCTAssertTrue(AudioCueEngine.shouldPlay(.paused, source: source),
-                          "\(source.rawValue) should still confirm a tap in this app")
-            XCTAssertTrue(AudioCueEngine.shouldPlay(.ended, source: source))
-            XCTAssertFalse(AudioCueEngine.shouldPlay(.run, source: source),
-                           "\(source.rawValue) must not talk over the Watch's own transition cues")
-            XCTAssertFalse(AudioCueEngine.shouldPlay(.countdown(3), source: source))
-        }
-    }
-
-    func testASourceThatConfirmsTapsSaysWhichOnes() {
-        // Naming them matters: "some confirmations still play" would leave the user unable to tell
-        // whether the cue they just heard was expected.
-        for source in [CueSource.appleWorkout, .watchCompanion] {
-            let text = SettingsView.cueSourceExplanation(for: source).lowercased()
-            for confirmation in ["pause", "resume", "skip", "end"] {
-                XCTAssertTrue(text.contains(confirmation),
-                              "\(source.rawValue) footer should name \(confirmation): \(text)")
-            }
-        }
-    }
-
-    func testASourceThatPlaysConfirmationsDoesNotClaimTheSettingsAreIgnored() {
-        // cueMode, voice and volume all still apply to the confirmations, so "the cue settings above
-        // are ignored" was false — and it was next to a picker that had been disabled on the
-        // strength of it.
-        for source in [CueSource.appleWorkout, .watchCompanion] {
-            let text = SettingsView.cueSourceExplanation(for: source).lowercased()
-            XCTAssertFalse(text.contains("are ignored"), text)
-        }
     }
 
     // MARK: - Nothing left unexplained
