@@ -167,7 +167,9 @@ A short test on foot, read from the phone's `watch-events.log` and `watch-link-p
   screen rounded down — up to a second apart on their own. Both round up now.
 - **A route builder from `seriesBuilder(for:)` is finished by the workout builder.** Calling
   `finishRoute` on it fails with "This route builder is attached to a workout builder and will be
-  finished with the workout builder". The header says as much; the call was ours to drop.
+  finished with the workout builder". The header says as much; the call was ours to drop. **The
+  route reached Health regardless** — the owner saw it on the workout in the Health app — so the
+  error was about our call, not the route.
 - **A new Health type means a new permission, in the foreground.** Adding route sharing made the
   Watch's launch-time check report "would prompt"; it stopped and said so, as designed. The phone
   still waited out its 15 s timeout, although the Watch's error reached it 2.5 s after the tap —
