@@ -53,6 +53,14 @@ final class DocumentationDriftTests: XCTestCase {
         // Added 2026-09-29 with the clean-out backlog entry.
         .init(text: "Export Data",
               citedBy: ["docs/BACKLOG.md"]),
+        // Added in the 2026-09-29 clean-out: run-screen controls the documents quote.
+        .init(text: "Try again",
+              citedBy: ["README.md", "docs/BACKLOG.md", "docs/WATCHOS_RECORDER_PLAN.md",
+                        "docs/WATCH_DEVELOPMENT.md"]),
+        .init(text: "Slide to pause",
+              citedBy: ["docs/BACKLOG.md"]),
+        .init(text: "Slide to skip",
+              citedBy: ["docs/BACKLOG.md"]),
     ]
 
     // MARK: - Locating the repository

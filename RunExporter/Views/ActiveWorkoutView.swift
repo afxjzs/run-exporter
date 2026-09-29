@@ -230,13 +230,12 @@ struct ActiveWorkoutView: View {
 
     /// The screen before the timer is running.
     ///
-    /// Exists because the run begins on two devices and this app cannot see the other one. Starting
-    /// the Watch and starting this timer are separate taps, and the gap between them is the error
-    /// the whole matching path has to absorb. Arming lets the user do the Watch first and tap here
-    /// the instant it goes — which is also what keeps the two recorded starts inside
-    /// `RecentWorkoutMatcher.startToleranceSeconds`.
+    /// Nothing is recorded until Start: no timer session, no audio session, no Live Activity, and
+    /// no Watch workout. Backing out leaves no trace. Start then launches the Watch's workout as
+    /// well as the timer, so the two begin from one tap.
     ///
-    /// Nothing has been recorded at this point. Backing out leaves no trace.
+    /// Arming was introduced when the run began as two taps — the Watch, then this timer — and
+    /// the gap between them had to stay inside `RecentWorkoutMatcher.startToleranceSeconds`.
     @ViewBuilder
     private func armed(model: ActiveWorkoutModel) -> some View {
         VStack(spacing: 24) {

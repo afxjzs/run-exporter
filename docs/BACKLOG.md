@@ -252,13 +252,15 @@ on the removal diff and `/code-review` once on the watch-flow diff (`610fdd2..HE
     LEARNINGS "Run logging".
 13. **The watch's `audio` background mode** — **leave it.** Unused but invisible, and changing
     background-mode keys on this Watch has cost a day before (`WKBackgroundModes`).
-14. **Corrections, all approved:** the watch's `NSHealthUpdateUsageDescription` and the export's
+14. **[Phone side done; the watch permission string and `.watch` go in the Watch build]**
+    **Corrections, all approved:** the watch's `NSHealthUpdateUsageDescription` and the export's
     README.txt say "only workouts" — make them say workouts and their GPS routes; correct every
     comment still describing the two-tap start (`LoggerDefaults` countdown, `AudioAndShoeTests`,
     `ActiveWorkoutModelTests` header, `ActiveWorkoutView.armed`, `WatchLinkTestView` and `WatchLink`
     headers — some go away with items 6 and 12); remove `WatchWorkoutOrigin.watch` and the
     controller's "local start" comment; register "Try again", "Slide to pause" and "Slide to skip"
-    in `DocumentationDriftTests`, which README quotes.
+    in `DocumentationDriftTests`. (As registered: README quotes "Try again" but not the two slide
+    labels, which only this file quotes.)
 
 **All decisions made 2026-09-29.** Removal order: phone-only changes first with the full suite
 after each; the watch changes (items 9, 10, 14's `.watch` case, and the untagged-save fix above)

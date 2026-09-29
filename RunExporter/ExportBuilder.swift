@@ -652,7 +652,8 @@ struct ExportBuilder {
 
         The iPhone app reads from HealthKit and never writes to it, so nothing in your Health \
         record was created or modified to produce this export. The companion Apple Watch app is \
-        the one exception: it is permitted to save workouts it records, and only workouts. That \
+        the one exception: it is permitted to save the workouts it records, with their GPS \
+        routes, and nothing else. That \
         is a separate action from this export and does not alter any data exported here.
         """
     }

@@ -7,8 +7,10 @@ import SwiftData
 /// The property under test is when a timer session comes into existence. Opening the workout screen
 /// used to create one immediately, which mattered more than it looked: `RecentWorkoutMatcher` links
 /// a HealthKit workout to a session only when their starts are within
-/// `startToleranceSeconds` (120), and the run is started as two separate taps — the Watch, then the
-/// phone. A session recorded when the screen opened spent that window on the walk between devices.
+/// `startToleranceSeconds` (120), and the run was then started as two separate taps — the Watch,
+/// then the phone. A session recorded when the screen opened spent that window on the walk between
+/// devices. (Since 2026-09-29 Start launches the Watch itself and a tagged workout joins by
+/// execution id; the window is the fallback for untagged workouts, and this property still holds.)
 @MainActor
 final class ActiveWorkoutModelTests: XCTestCase {
 
