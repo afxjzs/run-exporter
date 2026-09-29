@@ -92,8 +92,11 @@ only in the phone's log (§4). Codes seen so far:
 `WatchAppDelegate.handle(_:)`, which starts the workout session and mirrors it back. Finishing the
 run asks the Watch to save its workout; abandoning it asks the Watch to discard.
 
-Settings → **Watch link test** → **Start watch workout** makes the same launch as a diagnostic:
-a test session, discarded, with ping and end buttons and the link's log on screen.
+**To test a launch without a real run**, start any plan, read the Watch status line on the run
+screen, then **End Workout**: an abandoned run asks the Watch to discard its session, and both logs
+(§4) record the launch. Settings' **Watch link test** — **Start watch workout**, ping and end
+buttons, the link's log on screen — did this as a separate diagnostic until the 2026-09-29
+clean-out removed it.
 
 **What it needs, measured:**
 
@@ -106,8 +109,10 @@ a test session, discarded, with ping and end buttons and the link's log on scree
 **What the phone's "success" means: sent, nothing more.** `startWatchApp` returned before the Watch's
 reply arrived. Whether the app launched is visible only on the Watch, or in its event log (§4).
 
-If the test screen gets stuck with every button disabled, tap **Reset this screen**. It frees the
-phone's buttons; it does not end a session still running on the Watch — restarting the Watch does.
+A launch that never answers is reported as failed after `WatchLink.launchTimeoutSeconds` (15 s),
+and the run screen offers **Try again**. (The link test's **Reset this screen**, for a screen stuck
+with every button disabled, went with it in the 2026-09-29 clean-out.) A session left running on
+the Watch is ended by restarting the Watch.
 
 **Open, found 2026-09-29, and not tracked by any plan step:**
 
@@ -133,7 +138,8 @@ xcrun devicectl device copy from --device <PHONE_COREDEVICE_ID> \
   --source Documents/watch-events.log --destination ./watch-events.log
 ```
 
-`Documents/watch-link-phone.log` holds the phone's side, for real runs and link tests alike. Forwarded lines are queued
+`Documents/watch-link-phone.log` holds the phone's side of every run. If either file cannot be
+written, the run screen says so. Forwarded lines are queued
 by the system, so they can arrive late; an empty file right after a test is not yet evidence.
 
 ### The phone's system log — install errors and the launch handoff

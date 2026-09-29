@@ -349,6 +349,14 @@ struct ActiveWorkoutView: View {
                     audio.clearRouteNotice()
                 }
             }
+            // The diagnostic files are how a failed Watch run gets diagnosed afterwards. This was
+            // shown only on Settings' link diagnostic screen until the 2026-09-29 clean-out removed
+            // that screen, so it moved here rather than going silent.
+            if let message = watchLink.fileError {
+                notice(message, systemImage: "doc.badge.ellipsis") {
+                    watchLink.clearFileError()
+                }
+            }
 
             watchStatus
 
@@ -466,7 +474,7 @@ struct ActiveWorkoutView: View {
 
     /// One dismissible banner.
     ///
-    /// Extracted so the four call sites cannot drift apart, and kept deliberately plain: this screen
+    /// Extracted so its call sites cannot drift apart, and kept deliberately plain: this screen
     /// is read at arm's length in sunlight, and this project's type-checker has given up on smaller
     /// view expressions than this one.
     ///

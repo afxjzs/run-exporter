@@ -47,6 +47,10 @@ what was actually confirmed and what was not.
 
 ## Log
 
+Rows describe each build as it was installed. Controls they name may since have been removed — the
+2026-09-29 clean-out took out Settings' **Watch link test** (and its **Reset this screen**), the
+cue test screen, and the WorkoutKit send screen; see [BACKLOG.md](BACKLOG.md).
+
 | Date | Commit | Branch | Config | Device | What it carries | Verified |
 |---|---|---|---|---|---|---|
 | 2026-09-07 | `673106f` | `mid-workout-notes` | Release | iPhone 16 Pro | Block plan editor; mid-workout notes; armed start; no default countdown | Installed and launched per the 2026-09-23 handoff. Not verified by the session that wrote this row. |

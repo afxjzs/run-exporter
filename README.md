@@ -212,8 +212,8 @@ with `git config core.hooksPath .githooks` and list your own values in `private/
   **Used since 2026-09-29.** A run started with the phone's **Start** is saved by the watch app when
   the phone finishes it (`WatchWorkoutController.finish(executionID:)`): the workout, its GPS route,
   and the phone's execution id in the workout's metadata (`WorkoutMetadataKeys.executionID`), which
-  is what the phone joins on. A run abandoned on the phone, and the link test's sessions, are
-  discarded (`WatchWorkoutController.end`). The background probe (`87eeca9`) requests write access
+  is what the phone joins on. A run abandoned on the phone is discarded
+  (`WatchWorkoutController.end`). The background probe (`87eeca9`) requests write access
   and never saves.
 
 - **Background modes** — `Config/RunExporterWatch-Info.plist` declares
@@ -348,8 +348,8 @@ Workout/RecentWorkoutMatcher matches a finished HealthKit workout to a planned e
                          execution id the watch app saved, else inside a two-minute start window;
                          a near miss is offered, never linked silently
 Workout/WatchLink        the phone's end of the watch link: launches the watch app, receives its
-                         mirrored session, sends phases, asks it to save or discard; also drives
-                         the link test screen
+                         mirrored session, sends phases, asks it to save or discard; writes the
+                         two diagnostic logs
 Workout/WatchPhaseMapping    interval-engine state -> the PhaseAnchor sent to the watch
 Workout/LatencyEstimate  one-way phone->watch delay: half the smallest ping round trip
 Workout/DiagnosticLogFile    append-only log file in Documents, pulled with devicectl
@@ -361,7 +361,6 @@ Views/*                  Today, Plans (list + detail + editor), OpenIntervalPlan
                          active workout, LegEndSheet (annotates a leg that has already ended),
                          SlideToConfirm (the drag behind Pause and Skip), post-run logger,
                          history, shoes, settings
-Views/WatchLinkTestView  Settings' watch link test: launch, ping and end a test session (diagnostic)
 
 — shared / other targets —
 Shared/RunWorkoutActivityAttributes  Live Activity state + whole-workout timeline (app + widget)
@@ -682,13 +681,11 @@ Three companion files, kept separate because they answer different questions:
   not been revisited since. Still selectable per plan and in Settings.
   Changing this default does **not** change plans that already store a countdown: `readInt` returns
   a stored `UserDefaults` value whenever one exists, and each `PlannedWorkout` carries its own.
-- **The WorkoutKit queue is not Watch state.** `WorkoutScheduler.shared.scheduledWorkouts` is the
-  *phone's* list of workouts scheduled by this app. No screen may describe it as Watch state; three
-  sentences did, and each one misdirected a real diagnosis. What the phone *can* see of the Watch
-  comes through this app's own watch link, during a run or the link test: the mirrored session's
-  state, the heart rate the watch sends, and the watch's forwarded event log.
-- **A delivered workout appears under Outdoor Run, never the Watch's main list.** WorkoutKit exposes
-  no API for placement, and the only workout on that main list was one created on the Watch itself.
+- **The phone sees only part of the Watch.** What it can see comes through this app's own watch
+  link, during a run: the mirrored session's state, the heart rate the watch sends, and the watch's
+  forwarded event log. It cannot see the Watch save a workout. (When the app used WorkoutKit, three
+  sentences described `WorkoutScheduler`'s list — the *phone's* queue — as Watch state, and each
+  misdirected a real diagnosis; see MISTAKES.md.)
 
 - **HealthKit read permission is opaque.** iOS does not tell an app whether read access was
   granted for privacy reasons, so "Health Access Granted" means *requested*. Missing data can mean
@@ -832,7 +829,7 @@ read-only way to do that. The scope is as narrow as the API permits — workouts
 from the watch app only. **Since 2026-09-29 the watch app also uses location**: when-in-use only, and
 only while a workout runs, to save the run's route with it — what Apple's Workout app does. A run
 started from the phone is saved to Health when it finishes, tagged with the phone's execution id; a
-run abandoned on the phone, and the link test's sessions, are discarded. Nothing about how this app
+run abandoned on the phone is discarded. Nothing about how this app
 handles data moves without it being written down here first.
 
 v1.1 changes none of this. Planner, logger, shoe and interval data live in a local SwiftData store

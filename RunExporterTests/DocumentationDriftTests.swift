@@ -51,16 +51,9 @@ final class DocumentationDriftTests: XCTestCase {
               citedBy: ["docs/BACKLOG.md"]),
         .init(text: "No Apple Watch workout found",
               citedBy: ["README.md", "LEARNINGS.md", "docs/BACKLOG.md"]),
-        // Added 2026-09-29 with the watch development runbook.
-        .init(text: "Watch link test",
-              citedBy: ["docs/WATCH_DEVELOPMENT.md", "docs/BACKLOG.md"]),
         // Added 2026-09-29 with the clean-out backlog entry.
         .init(text: "Export Data",
               citedBy: ["docs/BACKLOG.md"]),
-        .init(text: "Start watch workout",
-              citedBy: ["docs/WATCH_DEVELOPMENT.md"]),
-        .init(text: "Reset this screen",
-              citedBy: ["docs/WATCH_DEVELOPMENT.md"]),
     ]
 
     // MARK: - Locating the repository
@@ -194,6 +187,10 @@ final class DocumentationDriftTests: XCTestCase {
         .init(text: "Clear this iPhone's queue", retiredIn: cleanOut, replacement: nil),
         // The on-device cue harness; its tests are done and recorded.
         .init(text: "Cue test", retiredIn: cleanOut, replacement: nil),
+        // The watch link test: a real Start and End Workout now exercise the same launch.
+        .init(text: "Watch link test", retiredIn: cleanOut, replacement: nil),
+        .init(text: "Start watch workout", retiredIn: cleanOut, replacement: nil),
+        .init(text: "Reset this screen", retiredIn: cleanOut, replacement: nil),
     ]
 
     /// Every document that names a retired control also says where it went.

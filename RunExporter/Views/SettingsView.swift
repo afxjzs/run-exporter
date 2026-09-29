@@ -27,9 +27,6 @@ struct SettingsView: View {
             loggingSection($defaults)
 
             Section {
-                NavigationLink { WatchLinkTestView() } label: {
-                    Label("Watch link test", systemImage: "applewatch")
-                }
                 NavigationLink { ExportView() } label: {
                     Label("Export Data", systemImage: "square.and.arrow.up")
                 }

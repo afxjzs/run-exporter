@@ -3,44 +3,28 @@ import HealthKit
 import Observation
 import WatchConnectivity
 
-/// The phone's end of the watch link (plan of record in `docs/WATCHOS_RECORDER_PLAN.md`), for real
-/// runs and for the link test screen.
+/// The phone's end of the watch link (plan of record in `docs/WATCHOS_RECORDER_PLAN.md`).
 ///
-/// For a run (step 2), the run screen's Start calls `beginRun`: this launches the watch app with
+/// For a run, the run screen's Start calls `beginRun`: this launches the watch app with
 /// `HKHealthStore.startWatchApp(toHandle:)`, receives its mirrored session, sends each phase as a
 /// `PhaseAnchor`, and at the end asks the watch to save (`finishRun`) or discard (`abandonRun`). A
 /// launch that fails or times out leaves the run phone-only, reported through `runConnection`.
+/// (The Settings link test screen that step 1 used was removed in the 2026-09-29 clean-out.)
 ///
-/// For the link test screen (`WatchLinkTestView`, step 1's measuring tool, now a diagnostic):
-/// `launchWatchWorkout`, `ping`, `endWatchWorkout`, `clearLog` and `reset`. The first two also
-/// serve runs; the rest serve only that screen.
-///
-/// Every step is timestamped on **this phone's clock** in `events`, and only phone timestamps are
-/// ever subtracted from each other. The watch's times are shown but never mixed in — two devices'
-/// clocks are not one clock, and a latency computed across them would be a guess.
+/// Every step is written to `watch-link-phone.log` timestamped on **this phone's clock**, and only
+/// phone timestamps are ever subtracted from each other. Two devices' clocks are not one clock,
+/// and a latency computed across them would be a guess.
 @MainActor
 @Observable
 final class WatchLink: NSObject {
 
-    struct Event: Identifiable {
-        let id = UUID()
-        let at: Date
-        let text: String
-        let isError: Bool
-    }
-
-    private(set) var events: [Event] = []
     private(set) var isLaunching = false
-    /// The watch's session as the phone sees it. Nil until the watch starts mirroring.
-    private(set) var sessionState: String?
     private(set) var latestStatus: WatchStatus?
-    private(set) var latestStatusReceivedAt: Date?
     private(set) var statusesReceived = 0
     /// Round trips measured on the phone's clock, most recent last.
     private(set) var roundTrips: [TimeInterval] = []
-    /// Lines of the watch's event log received this launch; each is also in `watch-events.log`.
-    private(set) var watchLogLinesReceived = 0
-    /// Set when a diagnostic file cannot be written. Shown on the test screen, never swallowed.
+    /// Set when a diagnostic file cannot be written. Shown on the run screen, never swallowed —
+    /// those files are how a failed Watch run gets diagnosed afterwards.
     private(set) var fileError: String?
 
     /// Both pulled with `devicectl device copy from … --source Documents/<name>`.
@@ -257,27 +241,9 @@ final class WatchLink: NSObject {
         send(.ping(id: id, sentAt: sentAt), describe: "Ping sent")
     }
 
-    func endWatchWorkout() {
-        send(.endWorkout, describe: "Asked the watch to end")
-    }
-
-    func clearLog() {
-        events.removeAll()
-        roundTrips.removeAll()
-    }
-
-    /// Forgets this screen's view of the link so every button works again. Added after a test left
-    /// all three disabled: `startWatchApp` never returned and the watch app had been killed, and the
-    /// only way out was force-quitting the phone app. Does not reach the watch — a watch session
-    /// that is still running stays running, which the log says.
-    func reset() {
-        let hadSession = mirroredSession != nil
-        mirroredSession = nil
-        isLaunching = false
-        launchTappedAt = nil
-        pendingPings.removeAll()
-        sessionState = nil
-        log("Reset this screen" + (hadSession ? "; a watch session may still be running on the watch" : ""))
+    /// Dismisses the file-write problem on the run screen. The next failed write sets it again.
+    func clearFileError() {
+        fileError = nil
     }
 
     // MARK: - Mirrored session
@@ -285,11 +251,10 @@ final class WatchLink: NSObject {
     private func attach(_ session: HKWorkoutSession) {
         mirroredSession = session
         session.delegate = bridge
-        sessionState = "running"
         if let launchTappedAt {
             log("Watch session mirrored here, \(Self.seconds(Date().timeIntervalSince(launchTappedAt))) after the tap")
         } else {
-            log("Watch session mirrored here (not started from this screen)")
+            log("Watch session mirrored here (not started by this launch of the app)")
         }
         guard anchorProvider != nil else { return }
         launchTimeout?.cancel()
@@ -358,7 +323,6 @@ final class WatchLink: NSObject {
                         log("First status from the watch")
                     }
                     latestStatus = status
-                    latestStatusReceivedAt = now
                     statusesReceived += 1
                 case .ping, .endWorkout, .phaseBegan, .finishWorkout:
                     log("The watch sent a message only the phone should send", isError: true)
@@ -370,7 +334,6 @@ final class WatchLink: NSObject {
     }
 
     fileprivate func sessionChanged(to state: HKWorkoutSessionState) {
-        sessionState = Self.name(for: state)
         log("Watch session is now \(Self.name(for: state))")
         if state == .ended {
             mirroredSession = nil
@@ -386,7 +349,6 @@ final class WatchLink: NSObject {
 
     fileprivate func disconnected(_ error: Error?) {
         mirroredSession = nil
-        sessionState = "disconnected"
         let reason = error.map { "Lost the Watch: \($0.localizedDescription)" } ?? "Lost the Watch."
         if error != nil {
             log(reason, isError: true)
@@ -407,7 +369,6 @@ final class WatchLink: NSObject {
         for line in lines {
             do {
                 try watchLogFile.append("received \(receivedAt) | watch \(line)")
-                watchLogLinesReceived += 1
             } catch {
                 fileError = "Could not save the watch's log: \(error.localizedDescription)"
             }
@@ -446,7 +407,6 @@ final class WatchLink: NSObject {
 
     private func log(_ text: String, isError: Bool = false) {
         let now = Date()
-        events.append(Event(at: now, text: text, isError: isError))
         guard let phoneLogFile else {
             fileError = "No Documents folder; phone link events are not being saved."
             return

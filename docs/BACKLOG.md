@@ -215,11 +215,15 @@ on the removal diff and `/code-review` once on the watch-flow diff (`610fdd2..HE
    the four tests that pinned it — resolving item 11's "goes with item 5 or gets a new home".
    Left for `/simplify`: `AudioCueEngine.isSessionActive` and `isInterrupted` are written but
    never read, which was already true before the clean-out.
-6. **Watch link test** (`WatchLinkTestView`) — **remove it, and move `WatchLink.fileError` to the run
+6. **[Done]** **Watch link test** (`WatchLinkTestView`) — **remove it, and move `WatchLink.fileError` to the run
    screen's Watch status.** A real Start and End Workout do the same and log to the same files.
    `fileError` (a diagnostic file could not be written) is shown nowhere else, so dropping the
    screen without moving it would make those failures silent. `reset`, `endWatchWorkout`,
-   `clearLog` and the in-memory `events` list serve only this screen and go with it.
+   `clearLog` and the in-memory `events` list serve only this screen and go with it. **As built:**
+   `fileError` is a dismissible banner among the run screen's notices (not inside the Watch status
+   line, which is empty when no run uses the Watch), cleared by `WatchLink.clearFileError`; the
+   next failed write sets it again. Also removed, read only by that screen: `sessionState`,
+   `latestStatusReceivedAt`, `watchLogLinesReceived`.
 7. **Export Data** — **Today only, removed from Settings, and made one of the more prominent
    buttons on Today** (owner's words). Placement: its own section directly below Next Workout, a
    full-width headline button styled like Start, above Needs a log and Recent Workouts. Shoes stays

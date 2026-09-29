@@ -118,7 +118,7 @@ reading the repo's own docs, and stating inferences with the confidence of measu
 The rule that would have saved the most time: **`WorkoutScheduler.shared.scheduledWorkouts` is the
 phone's list, not the Watch's.** Any sentence describing it as Watch state is wrong, and three
 shipped that way. Since 2026-09-29 the phone does see some Watch state, through this app's own watch
-link (`WatchLink`, during a run or the link test): the mirrored session's state, the heart rate the
+link (`WatchLink`, during a run): the mirrored session's state, the heart rate the
 watch sends, and the watch's forwarded event log. It still cannot see the Watch save a workout.
 
 ## Wanted but not built
