@@ -156,7 +156,8 @@ reasoning lives next to the code; only the parts that are *not* visible from the
 
 ## Clean out the leftovers, and simplify the UI
 
-**Asked for 2026-09-29.** Not started. The owner's words: the app is *"pretty cluttered"* with things
+**Asked for 2026-09-29.** Swept and decided the same day (see *Decisions* below); nothing removed
+yet. The owner's words: the app is *"pretty cluttered"* with things
 left over from trials and learnings; clean it out, and treat it as a UI update — *"it's all to the same
 effect… making the app easier to use."*
 
@@ -196,6 +197,99 @@ effect… making the app easier to use."*
 owner, and grep for readers before deleting anything — `LEARNINGS.md` records what happened the last
 time derived code was missed. `DocumentationDriftTests` will name every document that quotes a
 removed label; update them in the same change.
+
+### Found by the sweep (2026-09-29), outside the keep-or-go list
+
+- **A walking plan records a running workout on the Watch.** `WatchLink.launchWatchWorkout` always
+  sets `activityType = .running` and never reads the plan's `PlannedActivityType`, so a Walking
+  plan's Start saves an Outdoor Run to Health and nothing says so. **Owner, 2026-09-29: fix after the
+  interview, test-first.**
+- **A finished run with no execution id discards the Watch's workout.** When the logger database
+  is unavailable, `ActiveWorkoutModel.recordExecution` returns nil, and `WatchLink.finishRun` then
+  sends `.endWorkout`: the heart rate and GPS route are thrown away. Its comment says the phone
+  "could never join" an untagged workout, but the two-minute window is still the fallback for
+  exactly that. The finish alert then tells the runner to end a Watch workout they started
+  themselves, which is wrong here. **Owner, 2026-09-29: save it untagged instead** — the Watch
+  saves without the id and the phone joins by the two-minute window; the finish alert says the
+  Watch was asked to save. Test-first, in the batched Watch build.
+- **`WatchWorkoutOrigin.watch` is never produced.** The only start passes `.phone`; the controller's
+  comment on `shared` still mentions "a local start" from the screen.
+- **More text still describing the two-tap start:** the header comment of `ActiveWorkoutModelTests`
+  and the doc comment on `ActiveWorkoutView.armed`.
+
+### Decisions (interview started 2026-09-29)
+
+Nothing is removed until every decision below is made. Afterwards, the owner asked for `/simplify`
+on the removal diff and `/code-review` once on the watch-flow diff (`610fdd2..HEAD`).
+
+1. **The open-interval line on the plan screen** ("Start a workout on your Watch and use Lap…",
+   `PlannedWorkoutDetailView`) — **delete it.** It only explained the missing Send button, and the
+   run screen's READY hint already says Start launches the Watch.
+2. **The WorkoutKit "Send to Apple Watch" route** — `SendToWatchView`, `WorkoutKitService`, the
+   links on Today and the plan screen, "Add to Apple Watch", "Schedule for a time", "Clear this
+   iPhone's queue" — **remove it.** Start launches this app's own Watch workout, and using both on
+   one run records two workouts. This reverses the "Kept but known-broken" section above on
+   purpose; that section goes with it, and CLAUDE.md's watchOS 10 payload rule becomes moot for the
+   phone (the watch app's own API ceiling still applies).
+3. **`PlannedWorkout.workoutKitIdentifier`** — **keep the stored field and the `planned_workouts`
+   export column; stop writing them.** Dropping a stored attribute is a schema change against a
+   store of real runs, for no gain. Old values stay as true history; the export's README.txt gains
+   a line saying the column is no longer written. The plan-delete code that clears a queue entry
+   (`PlannedWorkoutDetailView`, `PlannedWorkoutViews`) and the Delete plan footer go with item 2.
+4. **Cue source** — **remove "Apple Workout app" and "Watch companion"; replace the picker with a
+   "Play cues" toggle** (on = iPhone audio engine, off = No cues). The first only made sense with
+   item 2; the second was never built and its footer was false. The export's `cue_source` keeps its
+   existing values. A phone with a removed value stored reports it once under "Settings that could
+   not be read" — by design, not a regression. `CueSourceExplanationTests` changes first.
+5. **Cue test** (`CueTestView`, including its Live Activity test buttons) — **remove it.** The
+   on-hardware tests it served are recorded in `CUE_FEASIBILITY_TEST.md`, its Test 1 needs the
+   route removed in item 2, and its create button writes a real plan into Plans. Goes with it:
+   `latencyDescription` and `CueLatencyTests`, and `AudioCueEngine.playbackLog`, which has no
+   other reader.
+6. **Watch link test** (`WatchLinkTestView`) — **remove it, and move `WatchLink.fileError` to the run
+   screen's Watch status.** A real Start and End Workout do the same and log to the same files.
+   `fileError` (a diagnostic file could not be written) is shown nowhere else, so dropping the
+   screen without moving it would make those failures silent. `reset`, `endWatchWorkout`,
+   `clearLog` and the in-memory `events` list serve only this screen and go with it.
+7. **Export Data** — **Today only, removed from Settings, and made one of the more prominent
+   buttons on Today** (owner's words). Placement: its own section directly below Next Workout, a
+   full-width headline button styled like Start, above Needs a log and Recent Workouts. Shoes stays
+   at the bottom of Today.
+8. **"Start Audio Timer"** (Today, plan screen) — **rename to "Start Workout".** Start now launches
+   the Watch workout too, and the name matches "End Workout". Move the `DocumentationDriftTests`
+   entry to the new label; update README and `CUE_FEASIBILITY_TEST.md`; the v1.1 spec gets a note
+   rather than a rewrite, since it records requirements as written.
+9. **The watch probe** (`ContentView`, `BackgroundExecutionProbe`) — **remove it; the root shows a
+   small idle screen instead:** "Start a workout from your iPhone" and the Health access status.
+   Must keep: `prepareHealthAccess` running when the app is opened by hand (a phone launch stops
+   until access is granted from the foreground), the build label, the event log page. Batched with
+   the other watch changes into one Watch install.
+10. **The watch's link screen** (`WatchLinkView`) — **keep it; delete "Test session: not saved to
+    Health."** It is the only place a failed Watch start explains itself, and its End is the way out
+    of a session the phone lost.
+11. **The Live Activity** (Lock Screen card) — **keep it.** Redesigned 2026-08-07 to show only what
+    stays true while locked; tapping it returns to the run. Unverified: the timeline stops at the
+    first open-ended phase, so an open-interval run's card may show little beyond the elapsed
+    clock. Removing the cue test (item 5) leaves `LiveActivityController.droppedUpdates` with no
+    reader — it was shown only there — so it goes with item 5 or gets a new home.
+12. **Countdown default** — **3 seconds, the spec §6 value, for new plans.** The reason for 0 (two
+    separate taps) is gone, and the Watch usually connects within the countdown. Existing plans and
+    a stored Settings value are unchanged. Change the assertion in `AudioAndShoeTests` first (it
+    pins 0 with the two-tap reasoning), then `LoggerDefaults`; update README's deviation note and
+    LEARNINGS "Run logging".
+13. **The watch's `audio` background mode** — **leave it.** Unused but invisible, and changing
+    background-mode keys on this Watch has cost a day before (`WKBackgroundModes`).
+14. **Corrections, all approved:** the watch's `NSHealthUpdateUsageDescription` and the export's
+    README.txt say "only workouts" — make them say workouts and their GPS routes; correct every
+    comment still describing the two-tap start (`LoggerDefaults` countdown, `AudioAndShoeTests`,
+    `ActiveWorkoutModelTests` header, `ActiveWorkoutView.armed`, `WatchLinkTestView` and `WatchLink`
+    headers — some go away with items 6 and 12); remove `WatchWorkoutOrigin.watch` and the
+    controller's "local start" comment; register "Try again", "Slide to pause" and "Slide to skip"
+    in `DocumentationDriftTests`, which README quotes.
+
+**All decisions made 2026-09-29.** Removal order: phone-only changes first with the full suite
+after each; the watch changes (items 9, 10, 14's `.watch` case, and the untagged-save fix above)
+batched into one Watch install at the end; never install while a run is in progress.
 
 ---
 
