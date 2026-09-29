@@ -14,10 +14,11 @@ All of it exports alongside the HealthKit data in the same ZIP. See
 
 ## What it produces
 
-A ZIP named `running_health_extract_<start>_to_now.zip` containing:
+A ZIP named `running_health_extract_<start>_to_<taken>.zip` — both dates `yyyy-MM-dd`, the second
+the day the export was taken — containing:
 
 ```
-running_health_extract_<start>_to_now/
+running_health_extract_<start>_to_<taken>/
   manifest.json             # window, timezone, counts, type availability, weather + route diagnostics
   workouts.csv              # one row per running/walking workout (incl. weather + route summary)
   records.csv               # one row per HealthKit quantity sample
@@ -189,7 +190,8 @@ with `git config core.hooksPath .githooks` and list your own values in `private/
 
   ```bash
   plutil -extract UIBackgroundModes json -o - \
-    build/Release-iphoneos/RunExporter.app/Info.plist   # must print ["audio"]
+    build/Build/Products/Release-iphoneos/RunExporter.app/Info.plist
+  # must print ["audio","workout-processing"]; the second was added for the watch link
   ```
 - **WorkoutKit** — needs no entitlement. Scheduling asks for permission at runtime through
   `WorkoutScheduler.requestAuthorization()`, which iOS presents itself.
@@ -204,21 +206,28 @@ with `git config core.hooksPath .githooks` and list your own values in `private/
 
   This is a deliberate, scoped change to a property the app has held since v1.0, so it is stated
   plainly rather than buried: **a watch recorder cannot be read-only.** Saving a workout means
-  `HKLiveWorkoutBuilder.finishWorkout()`, which writes an `HKWorkout`. Scope is workouts only.
+  `HKLiveWorkoutBuilder.finishWorkout()`, which writes an `HKWorkout`. Scope is workouts and their
+  GPS routes.
 
-  **Requested, not yet used.** The background probe (`87eeca9`) and the watch link
-  (`WatchWorkoutController`, 2026-09-25) both request workout write access, but neither saves: the
-  probe never finishes its workout and the link's test sessions are discarded. The first real save
-  arrives with the recorder, and this README changes with it.
+  **Used since 2026-09-29.** A run started with the phone's **Start** is saved by the watch app when
+  the phone finishes it (`WatchWorkoutController.finish(executionID:)`): the workout, its GPS route,
+  and the phone's execution id in the workout's metadata (`WorkoutMetadataKeys.executionID`), which
+  is what the phone joins on. A run abandoned on the phone, and the link test's sessions, are
+  discarded (`WatchWorkoutController.end`). The background probe (`87eeca9`) requests write access
+  and never saves.
 
 - **Background modes** — `Config/RunExporterWatch-Info.plist` declares
   `UIBackgroundModes = ["workout-processing", "audio"]`. `workout-processing` is what gives a
-  watchOS app real background execution during an `HKWorkoutSession`. Verify it survived the build
-  the same way as the phone's:
+  watchOS app real background execution during an `HKWorkoutSession`. It also declares
+  `WKBackgroundModes = ["workout-processing"]`, without which the phone's launch never starts the
+  watch app (see [LEARNINGS.md](LEARNINGS.md)). Verify both survived the build the same way as the
+  phone's:
 
   ```bash
   plutil -extract UIBackgroundModes json -o - \
-    "build-device/Build/Products/Release-iphoneos/RunExporter.app/Watch/RunExporterWatch Watch App.app/Info.plist"
+    "build/Build/Products/Release-iphoneos/RunExporter.app/Watch/RunExporterWatch Watch App.app/Info.plist"
+  plutil -extract WKBackgroundModes json -o - \
+    "build/Build/Products/Release-iphoneos/RunExporter.app/Watch/RunExporterWatch Watch App.app/Info.plist"
   ```
 
 ## Tests
@@ -338,8 +347,15 @@ Workout/IntervalTimerEngine  absolute-timestamp timer; emits cues and interval r
 Workout/WorkoutKitService    PlannedWorkout -> CustomWorkout. The *scheduling* path does not
                          deliver on this hardware; Apple's preview sheet does. Kept and labelled
                          rather than deleted — see Known limitations and docs/BACKLOG.md
-Workout/RecentWorkoutMatcher matches a finished HealthKit workout to a planned execution, inside a
-                         two-minute start window; a near miss is offered, never linked silently
+Workout/RecentWorkoutMatcher matches a finished HealthKit workout to a planned execution: by the
+                         execution id the watch app saved, else inside a two-minute start window;
+                         a near miss is offered, never linked silently
+Workout/WatchLink        the phone's end of the watch link: launches the watch app, receives its
+                         mirrored session, sends phases, asks it to save or discard; also drives
+                         the link test screen
+Workout/WatchPhaseMapping    interval-engine state -> the PhaseAnchor sent to the watch
+Workout/LatencyEstimate  one-way phone->watch delay: half the smallest ping round trip
+Workout/DiagnosticLogFile    append-only log file in Documents, pulled with devicectl
 Audio/AudioCueEngine     AVAudioSession + speech + tones, background audio, route/interruption
 Audio/CueDuckCounter     holds the ducking invariant: only un-duck what this cue ducked
 Audio/ToneGenerator      programmatically generated WAV cue tones (no bundled/licensed audio)
@@ -348,15 +364,25 @@ Views/*                  Today, Plans (list + detail + editor), OpenIntervalPlan
                          send-to-Watch, active workout, LegEndSheet (annotates a leg that has
                          already ended), SlideToConfirm (the drag behind Pause and Skip),
                          post-run logger, history, shoes, settings, cue test
+Views/WatchLinkTestView  Settings' watch link test: launch, ping and end a test session (diagnostic)
 
 — shared / other targets —
 Shared/RunWorkoutActivityAttributes  Live Activity state + whole-workout timeline (app + widget)
+Shared/WatchLinkMessage      the phone<->watch wire format, versioned; also PhaseAnchor and
+                             WorkoutMetadataKeys (phone + watch)
+Shared/PhaseClock            a PhaseAnchor turned into a countdown on the watch's own clock
+Shared/PaceTracker           the watch's leg pace, current mile split and total distance
 RunExporterLiveActivity/     widget extension: Lock Screen card and Dynamic Island
 RunExporterWatch Watch App/  watchOS companion; ships embedded at RunExporter.app/Watch/
+  RootView                   picks the screen: run, link diagnostics, or the probe
+  WatchRunView               the run screen: phase, time left, heart rate, pace, distance
+  WatchLinkView              the link's diagnostic readout: test sessions, and a run until its
+                             first phase arrives
   BackgroundExecutionProbe   plan stage 2 — does an HKWorkoutSession keep a timer firing with
                              the wrist down? PASSED 2026-09-25 (worst gap 1.1 s)
   ContentView                the probe's readout
-  WatchWorkoutController     the watch end of the phone link: starts and mirrors the session
+  WatchWorkoutController     the watch end of the phone link: starts and mirrors the session,
+                             records phases and the GPS route, saves or discards when told
   WatchEventLog              saved event log, forwarded to the phone's Documents/watch-events.log
   *.entitlements             HealthKit WRITE — the watch saves workouts; the phone never writes
 Config/*.plist               UIBackgroundModes, NSSupportsLiveActivities — keys that do NOT
@@ -463,10 +489,12 @@ How it runs:
 Seven columns on `workout_intervals.csv` carry it: `endReason`, `baselineReachedAt`, and one
 severity per body area, named exactly as `run_logs.csv` names them.
 
-**Not sent to the Watch, deliberately.** A watchOS 10 `CustomWorkout` is a fixed list of blocks and
-an open-interval plan is an unknown number of legs, so the send action is replaced by a line of text
-saying so. Start a plain open run on the Watch instead. `docs/BACKLOG.md` records the one unmeasured
-question that would change this.
+**Not sent to the Watch through WorkoutKit, deliberately.** A watchOS 10 `CustomWorkout` is a fixed
+list of blocks and an open-interval plan is an unknown number of legs, so the send action is replaced
+by a line of text. **Start** on the run screen launches the Watch's workout like any other run, and
+while the Watch is connected each phase is written into that workout as a segment; do not start one on the Watch by hand,
+or two are recorded. The plan screen's line still gives the older advice — see "Clean out the
+leftovers" in `docs/BACKLOG.md`.
 
 ### Intervals and the workout they belong to
 
@@ -498,7 +526,14 @@ counts only running time, so the phases do not tile the run end to end. The gaps
 which appear as their own rows. Sort by `startDate` for chronology, and see
 [LEARNINGS.md](LEARNINGS.md#run-logging) before joining `workout_notes.csv` on timestamps.
 
-**A timer session counts as this run's only if it started within two minutes of the workout.**
+**A workout saved by this app's watch app is joined by its execution id first.** The watch writes
+the phone's execution id into the workout's metadata (`WorkoutMetadataKeys.executionID`), and
+`RecentWorkoutMatcher` checks that tag before anything else, in both directions: a matching tag wins
+whatever the start time, and a workout tagged for a different run is never time-matched to this one.
+Everything below about the window applies only to **untagged** workouts — runs recorded before the
+watch app saved, and workouts from Apple's Workout app.
+
+**An untagged workout counts as this run's only if the timer started within two minutes of it.**
 Measured rather than picked: `createdAt` and `timerStartedAt` are the same instant in all 23 of the
 owner's real executions, and the one verified match started its timer **1 second** before the workout
 began. The window was 90 minutes, which turned out to be strictly worse — every window from 30s to
@@ -655,15 +690,18 @@ Three companion files, kept separate because they answer different questions:
   after a run where unannounced transitions were surprising — the two were decided from different
   runs and the next change here should settle them together. See [LEARNINGS.md](LEARNINGS.md).
 - **No start countdown by default (spec §6 deviation).** The spec counts down 3 seconds before the
-  first phase. Because there is no app on the Watch, a run is started as two separate taps — the
-  workout on the Watch, then the timer on the phone — and the whole difficulty is landing those on
-  the same second. A countdown adds three seconds between the tap and the first interval, which is
-  the offset the two-device start exists to close. Still selectable per plan and in Settings.
+  first phase. The default was set when a run was started as two separate taps — the workout on the
+  Watch, then the timer on the phone — and the whole difficulty was landing those on the same
+  second; a countdown added three seconds to exactly that offset. Since 2026-09-29 the phone's
+  **Start** launches the Watch's workout itself, so that reason no longer applies; the default has
+  not been revisited since. Still selectable per plan and in Settings.
   Changing this default does **not** change plans that already store a countdown: `readInt` returns
   a stored `UserDefaults` value whenever one exists, and each `PlannedWorkout` carries its own.
-- **Nothing in this app can observe the Watch.** `WorkoutScheduler.shared.scheduledWorkouts` is the
+- **The WorkoutKit queue is not Watch state.** `WorkoutScheduler.shared.scheduledWorkouts` is the
   *phone's* list of workouts scheduled by this app. No screen may describe it as Watch state; three
-  sentences did, and each one misdirected a real diagnosis.
+  sentences did, and each one misdirected a real diagnosis. What the phone *can* see of the Watch
+  comes through this app's own watch link, during a run or the link test: the mirrored session's
+  state, the heart rate the watch sends, and the watch's forwarded event log.
 - **A delivered workout appears under Outdoor Run, never the Watch's main list.** WorkoutKit exposes
   no API for placement, and the only workout on that main list was one created on the Watch itself.
 
@@ -766,17 +804,22 @@ Three companion files, kept separate because they answer different questions:
   for seven weeks it had not, because the Watch was missing from the provisioning profile, not
   because Xcode could not reach it. **Stage 2's background-execution probe passed** the same day: a
   worst gap of 1.1 s between one-second ticks with the screen off. Since 2026-09-29 the phone can
-  **launch the watch app** (`startWatchApp`), which needed `WKBackgroundModes` in its plist. The plan
-  of record — phone decides, watch records — and its remaining steps are in the plan document; how
-  to install, launch and read the watch's logs is [docs/WATCH_DEVELOPMENT.md](docs/WATCH_DEVELOPMENT.md).
+  **launch the watch app** (`startWatchApp`), which needed `WKBackgroundModes` in its plist, and the
+  run screen's **Start** does so for every run (plan step 2). The plan of record — phone decides,
+  watch records — and its remaining steps are in the plan document; how to install, launch and read
+  the watch's logs is [docs/WATCH_DEVELOPMENT.md](docs/WATCH_DEVELOPMENT.md).
 - **Watch pairing problems cannot be diagnosed precisely.** WorkoutKit's `StateError`
   (`watchNotPaired`, `workoutApplicationNotInstalled`) is not thrown by any API reachable from iOS,
   so a failed send reports that it was not confirmed and names the likely causes rather than
   inventing a specific diagnosis.
-- **The iPhone timer and the Watch workout are independent.** The app does not control the Watch
-  workout; you start and stop it yourself. If you forget to stop it, the HealthKit workout will be
-  longer than the app's recorded intervals — which is exactly why interval boundaries are stored
-  separately.
+- **The phone drives the Watch's workout, and a failed Watch never stops the run.** **Start**
+  launches the watch app's workout (`ActiveWorkoutModel.start` → `WatchLink.beginRun`); each phase
+  change is sent to it; finishing the run asks the Watch to save its workout, tagged with the
+  execution id (`WatchLink.finishRun`); abandoning the run asks it to discard (`WatchLink.abandonRun`).
+  The phone cannot see the save itself, so the finish screen says the Watch was *asked* to save. If
+  the Watch fails to connect within 15 seconds, reports an error, or drops, the run screen says so
+  and offers **Try again**, and the run carries on phone-only. The interval boundaries are still
+  stored on the phone either way, which is why a phone-only run keeps them.
 - **Deployment target stays at iOS 17.0.** The spec suggests iOS 18; raising it would emit a
   deprecation warning for `HKWorkout.totalEnergyBurned`, and the supported replacement
   (`statistics(for:)`) is not guaranteed to return a value for workouts saved by older HealthKit

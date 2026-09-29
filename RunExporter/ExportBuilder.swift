@@ -14,7 +14,7 @@ struct ExportBuilder {
 
     struct Result {
         let exportFolder: URL   // the temp working folder (parent of the extract folder)
-        let extractFolder: URL  // running_health_extract_..._to_now
+        let extractFolder: URL  // running_health_extract_<start>_to_<taken>, both yyyy-MM-dd
         let zipURL: URL
     }
 

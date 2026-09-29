@@ -3,12 +3,17 @@ import HealthKit
 import Observation
 import WatchConnectivity
 
-/// The phone's end of the watch link — plan of record step 1 in `docs/WATCHOS_RECORDER_PLAN.md`.
+/// The phone's end of the watch link (plan of record in `docs/WATCHOS_RECORDER_PLAN.md`), for real
+/// runs and for the link test screen.
 ///
-/// Answers two questions by measurement, not by reading documentation:
-/// 1. Does `HKHealthStore.startWatchApp(toHandle:)` launch the watch app, closed or not, and how
-///    long until the watch's session is mirrored back here?
-/// 2. Does the mirrored session's data channel carry messages both ways, and how fast?
+/// For a run (step 2), the run screen's Start calls `beginRun`: this launches the watch app with
+/// `HKHealthStore.startWatchApp(toHandle:)`, receives its mirrored session, sends each phase as a
+/// `PhaseAnchor`, and at the end asks the watch to save (`finishRun`) or discard (`abandonRun`). A
+/// launch that fails or times out leaves the run phone-only, reported through `runConnection`.
+///
+/// For the link test screen (`WatchLinkTestView`, step 1's measuring tool, now a diagnostic):
+/// `launchWatchWorkout`, `ping`, `endWatchWorkout`, `clearLog` and `reset`. The first two also
+/// serve runs; the rest serve only that screen.
 ///
 /// Every step is timestamped on **this phone's clock** in `events`, and only phone timestamps are
 /// ever subtracted from each other. The watch's times are shown but never mixed in — two devices'

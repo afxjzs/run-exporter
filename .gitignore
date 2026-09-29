@@ -28,7 +28,8 @@ running_health_extract_*/
 # Anything specific to the owner lives in these local files, each with a committed template:
 #   Config/Local.xcconfig     Apple Developer Team ID       (template: Local.xcconfig.example)
 #   scripts/local.env         phone and Watch device IDs    (template: local.env.example)
-#   private/                  install log, real run data, the guard's pattern list
+#   private/                  real run data, pre-public docs, the guard's pattern list
+#                             (the install log is docs/INSTALLS.md, committed)
 # scripts/check-sensitive.sh, run as a pre-commit and commit-msg hook, blocks any commit that
 # would publish a value listed in private/sensitive-patterns.txt.
 Config/Local.xcconfig

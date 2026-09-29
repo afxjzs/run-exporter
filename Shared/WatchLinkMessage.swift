@@ -18,7 +18,8 @@ enum WatchLinkMessage: Equatable, Sendable {
     case pong(id: UUID, watchReceivedAt: Date)
     /// Watch → phone, periodically, while the watch's session runs.
     case status(WatchStatus)
-    /// Phone → watch: end the session and **discard** it. The link test screen's End.
+    /// Phone → watch: end the session and **discard** it. The link test screen's End, a run
+    /// abandoned on the phone, and a run that finished with no execution id to tag it with.
     case endWorkout
     /// Phone → watch: a phase has begun (or its pause state changed). Durations, not clock times —
     /// see `PhaseAnchor` and `PhaseClock`.
@@ -52,8 +53,8 @@ struct PhaseAnchor: Codable, Equatable, Sendable {
     /// ends it, so there is nothing to count down to.
     var remainingAtSend: TimeInterval?
     var isPaused: Bool
-    /// The phone's estimate of the one-way message delay: half its median ping round trip, 0 if it
-    /// has none. The watch cannot measure this itself.
+    /// The phone's estimate of the one-way message delay: half its smallest ping round trip
+    /// (`LatencyEstimate`), 0 if it has none. The watch cannot measure this itself.
     var oneWayLatency: TimeInterval
     /// Phone clock. Diagnostic only.
     var sentAt: Date

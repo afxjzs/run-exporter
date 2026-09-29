@@ -1,8 +1,11 @@
 # watchOS companion — build plan
 
-**Status:** stages 1–2 are **built, installed on the Watch, and stage 2 passed** (2026-09-25 — see
-the stage table). Written 2026-08-07, status corrected 2026-09-23 and 2026-09-25. The paragraphs
-directly below describe the state before 2026-09-25 and are kept as history.
+**Status (2026-09-29):** the plan of record below replaced the old stages. Its steps 1–3 are
+**built**: step 1 is done and measured; step 2 was tested once on foot, and what that test found was
+fixed; step 3 is built. **The first outdoor run driven from the phone has not happened yet**, and
+it is the test for what remains unmeasured in steps 2 and 3. Written 2026-08-07; status corrected
+2026-09-23, 2026-09-25 and 2026-09-29. The sections from §0 on predate the plan of record and are
+kept for their reasoning; where they conflict with it, the plan of record wins.
 
 ## Plan of record — decided 2026-09-25
 
@@ -49,9 +52,14 @@ decide, is a later option.
 | Step | Work | The fact that ends it |
 |---|---|---|
 | 1 | Phone launches the Watch, the Watch mirrors back, ping/pong, heart-rate status. Test sessions are **discarded**. **DONE 2026-09-29.** Needed `WKBackgroundModes` (see [WATCH_DEVELOPMENT.md](WATCH_DEVELOPMENT.md)). Measured from the phone's diagnostic files: a **killed** watch app launched, running and mirrored **1.71 s after the tap**; first heart-rate status 3.3 s after; **ping round trip median 0.13 s** over 7 (0.06–0.21 s) | Measured on device: does it launch a closed watch app, how long to mirror, round-trip time |
-| 2 | The real Start runs the phone's timer and the Watch together; boundaries become events; End saves with the execution id and the route; the Watch shows phase, time left, HR, leg pace, current mile split, total distance. **In progress.** Done: timing messages and `PhaseClock` (test-first); the phone side — Start launches the Watch, every engine phase change sends an anchor, finish asks the Watch to save, abandon asks it to discard, a 15 s launch timeout, and **Try again** on the run screen (the owner's ask, until the connection has a track record). Also done (build 202609291030): the watch side — the one-screen display counting down on its own clock, `PaceTracker` (test-first) for leg pace, the current mile split and total distance, each phase written into the workout as a `.segment` event, the phone's pause pausing the session, and **finish saving the workout with the execution id and the GPS route** (when-in-use location, no background-location flag — CLLocationManager.h calls setting it without that mode fatal). **Unmeasured on device:** all of it. Next: a short indoor test, then an outdoor run | One real run, and a type-by-type parity check against an Apple Workout run |
+| 2 | The real Start runs the phone's timer and the Watch together; boundaries become events; End saves with the execution id and the route; the Watch shows phase, time left, HR, leg pace, current mile split, total distance. **Built; tested once on foot.** Done: timing messages and `PhaseClock` (test-first); the phone side — Start launches the Watch, every engine phase change sends an anchor, finish asks the Watch to save, abandon asks it to discard, a 15 s launch timeout, and **Try again** on the run screen (the owner's ask, until the connection has a track record). Also done (build 202609291030): the watch side — the one-screen display counting down on its own clock, `PaceTracker` (test-first) for leg pace, the current mile split and total distance, each phase written into the workout as a `.segment` event, the phone's pause pausing the session, and **finish saving the workout with the execution id and the GPS route** (when-in-use location, no background-location flag — CLLocationManager.h calls setting it without that mode fatal). **The on-foot test** ([LEARNINGS.md](../LEARNINGS.md), "The first run driven from the phone"): end to end it works — the launch, every phase anchor arriving within about 0.1–0.2 s of being sent, the Watch's run screen, the save with a workout id, GPS points throughout, and the route reaching Health. Fixed after it: the latency estimate (now the smallest of three connect-time pings, `LatencyEstimate`), the Watch's countdown rounding down where the phone's rounds up, a `finishRoute` call that belongs to the workout builder, and the phone waiting out its timeout on an error the Watch had already reported. **Still unmeasured on device:** the `.segment` events in the saved workout, the join by execution id (step 3), pace and distance outdoors, and pausing. Next: an outdoor run | One real run, and a type-by-type parity check against an Apple Workout run |
 | 3 | Join by execution id, the time window kept as fallback for old and Apple-Workout runs. Test-first. **Built 2026-09-29 (build 202609291331):** `WorkoutSummary.executionID` read from `WorkoutMetadataKeys.executionID`; both matcher directions let a tag win outright and never time-match a workout tagged for another run; 4 new tests. **Unmeasured:** no run has been joined this way yet — the first outdoor run is the test | A run joins with no time window involved |
 | 4 | Optional: leg-end tap on the Watch | Owner's call after step 2 |
+
+### History — the state before stage 2 ran (kept, not current)
+
+Both paragraphs below were true when written and are not now: the watch target has grown well past
+three files, and the probe **passed** on 2026-09-25 (§7a stage table, row 2).
 
 The watch target exists and holds 449 lines across three files —
 `RunExporterWatchApp.swift`, `ContentView.swift` and `BackgroundExecutionProbe.swift` — put there by
@@ -65,6 +73,9 @@ execution, so a timer keeps firing with the wrist down? It has never run, becaus
 out on the paired Series 5 even when it lists as `available (paired)` — see the Xcode playbook's §3,
 listed in the global `~/.claude/CLAUDE.md`. **If the probe fails, stop.** Building stages 3–6 on an
 unverified assumption is the most expensive mistake available here.
+
+---
+
 **Audience:** a fresh session with no context from the session that wrote this. Everything needed is
 in this document; the only other files worth reading first are `RUNNING_APP_V1_1_SPEC.md` §10.3 and
 `docs/CUE_FEASIBILITY_TEST.md`.
@@ -215,18 +226,19 @@ state; version control makes a mistake recoverable, not free.
 **Commands:**
 
 ```bash
-# Tests (138 currently, all passing)
+# Tests (run for the current count; a number written here goes stale)
 xcodebuild test -project RunExporter.xcodeproj -scheme RunExporter \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 
-# Release build for device (the phone often reports "unavailable"; generic works)
+# Release build for device (the phone often reports "unavailable"; generic works).
+# scripts/sideload.sh does this, clean, into the same ./build folder, and installs.
 xcodebuild -project RunExporter.xcodeproj -scheme RunExporter -configuration Release \
-  -destination 'generic/platform=iOS' -derivedDataPath ./build-device \
+  -destination 'generic/platform=iOS' -derivedDataPath ./build \
   -allowProvisioningUpdates build
 
 # Install, then force-relaunch (the phone must be unlocked to launch)
 xcrun devicectl device install app --device <PHONE_COREDEVICE_ID> \
-  ./build-device/Build/Products/Release-iphoneos/RunExporter.app
+  ./build/Build/Products/Release-iphoneos/RunExporter.app
 xcrun devicectl device process launch --device <PHONE_COREDEVICE_ID> \
   --terminate-existing is.doug.runexporter
 
@@ -267,8 +279,10 @@ xcrun devicectl device copy from --device <PHONE_COREDEVICE_ID> \
 6. **SwiftUI type-checker timeouts fail the Release build outright.** Long `+` chains of interpolated
    strings and stacked ternaries in view bodies have caused this three times. Extract to locals.
 
-7. **HealthKit is immutable and read-only here.** The iPhone app has never requested write access.
-   See §6 — a full recorder changes this.
+7. **The iPhone app never writes to HealthKit.** Its export reads only
+   (`HealthKitManager.requestAuthorization`, `toShare: []`). Since 2026-09-25 `WatchLink` also
+   *requests* workout share access, at the owner's direction (§6, amended); no phone code saves
+   anything. The watch app writes: it saves the workout and its route.
 
 8. **`Shared/` is a plain `PBXGroup`, not a synchronized one.** `RunExporter/` and
    `RunExporterTests/` are `PBXFileSystemSynchronizedRootGroup`s, so new files there are picked up
@@ -286,8 +300,8 @@ Relevant files, all currently iOS-only:
 
 | File | Role |
 |---|---|
-| `RunExporter/Workout/WorkoutPhaseSchedule.swift` | Pure sequencing, incl. "no walk after the final run". 18 tests |
-| `RunExporter/Workout/IntervalTimerEngine.swift` | Absolute-timestamp timer, cue emission. ~30 tests |
+| `RunExporter/Workout/WorkoutPhaseSchedule.swift` | Pure sequencing, incl. "no walk after the final run". `WorkoutPhaseScheduleTests` |
+| `RunExporter/Workout/IntervalTimerEngine.swift` | Absolute-timestamp timer, cue emission. `IntervalTimerEngineTests` |
 | `RunExporter/Audio/AudioCue.swift` | `enum AudioCue` — the cue vocabulary |
 | `RunExporter/Audio/AudioCueEngine.swift` | `AVAudioSession` config. **Read the comment on `sessionOptions`** |
 | `RunExporter/Models/Logger/PlannedWorkout.swift` | SwiftData plan model |
@@ -351,7 +365,7 @@ Disclosure shipped in the same commit as the capability: the README's Capabiliti
 sections, and the export's own `README.txt`.
 
 **The scoping is a standing constraint, not a one-off.** Do not add HealthKit write to the iPhone
-target. The phone's read-only guarantee lives on `HealthKitManager.swift:126`
+target. The phone's read-only guarantee lives in `HealthKitManager.requestAuthorization`
 (`requestAuthorization(toShare: [], read:)`), and anything that changes data handling ships its
 disclosure in the same commit — the point of the rule is that nothing about it changes silently.
 
@@ -418,9 +432,9 @@ phone to start Netflix, so a single tap there would fit the actual routine more 
 
 `HKHealthStore.startWatchApp(toHandle:)` exists for exactly this — launching the companion watch app
 into a workout from iOS. Its availability has now been resolved (see **Stage 0 — resolved** below);
-its *behavior* cannot be measured until the watch app can receive a configuration — the target now
-exists (`RunExporterWatch Watch App/`, embedded since `46ab463`), but
-`handleWorkoutConfiguration(_:)` is still implemented nowhere. If it works, the flow becomes:
+its *behavior* could not be measured until the watch app could receive a configuration.
+*(Superseded 2026-09-29: `WatchAppDelegate.handle(_:)` receives it, and the phone launch is measured
+— plan of record, step 1.)* If it works, the flow becomes:
 
 ```
 iPhone [ Start ] ──▶ startWatchApp(toHandle:) ──▶ Watch launches, HKWorkoutSession starts
@@ -467,10 +481,10 @@ how fast. That measurement is blocked on a precondition the stage table does not
 
 **Corrected 2026-08-10.** This paragraph used to say the project had *no watchOS target at all*. That
 stopped being true at `b1cb2bc`, and the target has shipped embedded at `RunExporter.app/Watch/` since
-`46ab463`. What remains true is the half that actually blocks the measurement:
-`handleWorkoutConfiguration(_:)` is implemented **nowhere** in the watch target, so
-`startWatchApp(toHandle:)` still has nothing to receive the configuration and calling it today can
-only fail. Implementing that handler is the real precondition, not creating the target.
+`46ab463`. What remained true then was the half that actually blocked the measurement:
+`handleWorkoutConfiguration(_:)` was implemented **nowhere** in the watch target, so
+`startWatchApp(toHandle:)` had nothing to receive the configuration. Implementing that handler was
+the real precondition, not creating the target. *(Since done: `WatchAppDelegate.handle(_:)`.)*
 
 Independently blocked on hardware: the paired Apple Watch measured **100% packet loss over 90
 packets**, and `devicectl` cannot reach it even while it lists as `available (paired)`. Nothing in
@@ -491,9 +505,10 @@ stage 5.** The header states the receiving app "can use this configuration objec
 `HKWorkoutSession` and start it" — which is the entire point of the call. Whether starting a session
 (as opposed to *saving* a workout) requires share authorization is not stated in the headers, so
 rather than assume either way, write was granted to the watch target up front (`ec311ac`). **Resolved
-— this no longer gates anything.** The iPhone target still requests
-`requestAuthorization(toShare: [], read: readTypes())` (`HealthKitManager.swift:126`) — **read-only**,
-per gotcha #12 — and must stay that way.
+— this no longer gates anything.** The iPhone's export still requests
+`requestAuthorization(toShare: [], read: readTypes())` (`HealthKitManager.requestAuthorization`) —
+**read-only**, per gotcha #7. Since 2026-09-25 `WatchLink` also requests workout share access (§6,
+amended); no phone code writes.
 
 **Recommendation: keep the Watch-hosted button as the plan of record for now.** It is the option the
 architecture diagram already assumes and the one with no unmeasured launch path. Phone-initiated
@@ -611,7 +626,7 @@ the phone's cues without the two fighting over the route. Record the answer in
 
 The engine and schedule are the asset that makes this feasible, but they currently depend on
 `PlannedWorkout` (SwiftData) and `LoggerDefaults` (UserDefaults), neither of which belongs on the
-Watch. **This is a pure refactor with 138 existing tests as the safety net**, and it is worth doing
+Watch. **This is a pure refactor with the existing test suite as the safety net** (138 tests when this was written), and it is worth doing
 even if the watch app is later abandoned.
 
 ### 7.1 Introduce `WorkoutPlanSpec`
@@ -676,7 +691,7 @@ AA00000000000000000000N2 /* Foo.swift in Sources */ = {isa = PBXBuildFile;
 
 Ids in this project follow `AA00000000000000000000XX`; pick unused ones.
 
-**Verification for stage 1:** all 138 tests pass, and the iPhone app runs a full workout on device
+**Verification for stage 1:** the whole suite passes, and the iPhone app runs a full workout on device
 with identical behaviour. No watch code exists yet.
 
 ---
@@ -709,7 +724,7 @@ with identical behaviour. No watch code exists yet.
 
 ```bash
 plutil -extract UIBackgroundModes json -o - \
-  ./build-device/Build/Products/Release-watchos/RunExporterWatch.app/Info.plist
+  "./build/Build/Products/Release-iphoneos/RunExporter.app/Watch/RunExporterWatch Watch App.app/Info.plist"
 # must print ["workout-processing","audio"]
 ```
 

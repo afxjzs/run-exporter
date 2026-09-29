@@ -98,6 +98,10 @@ reasoning lives next to the code; only the parts that are *not* visible from the
   and `../MISTAKES.md` is largely a record of confident claims about Watch behaviour that were
   wrong. Measure before building.
 
+  *Likely moot since watch plan step 2:* the phone's Start now launches this app's own watch
+  workout, which writes each phase into the workout as a `.segment` event with no button press.
+  Whether those events land in the saved workout is not yet measured on device.
+
   Deliberately left out of v1 because it is purely additive: nothing about the plan model, the bout
   records or the export changes if a send is added later, and v1 does not get blocked on Watch
   behaviour, which is historically where this project loses days.
@@ -159,11 +163,29 @@ effect… making the app easier to use."*
 **Candidates, verified to exist on 2026-09-29 — each needs a decision, not an automatic delete:**
 
 - **Test harnesses in Settings:** "Cue test" (`CueTestView`) and "Watch link test"
-  (`WatchLinkTestView`). The watch link screen exists only until the real Start button (watch plan
-  step 2) replaces it.
+  (`WatchLinkTestView`). The watch link screen was to exist only until the real Start button (watch
+  plan step 2) replaced it; that has now happened — the run screen's Start launches the Watch — so
+  the link test is a diagnostic only. `WatchLinkTestView`'s own comment still calls the real Start
+  "step 2, once this proves the mechanism".
+- **CueTestView's Live Activity test buttons**, as a candidate alongside the cue test itself.
+- **The Watch cue-source options** in Settings ("Apple Workout app" and "Watch companion"), as candidates.
+  Cues stay on the phone (watch plan §1), and see the `.watchCompanion` footer below.
+- **Open-interval wording left over from before the Watch was driven by the phone.** The plan
+  screen's line for an open-interval plan (`PlannedWorkoutDetailView`) still reads "Runs on this
+  iPhone. Start a workout on your Watch and use Lap to keep its data lined up with these legs." Both
+  halves are now wrong: Start launches the Watch's workout itself, so starting one by hand records
+  **two** workouts; and pressing Lap contradicts [../LEARNINGS.md](../LEARNINGS.md#run-logging),
+  *"Pressing Lap on the Watch adds nothing to the data"* — "do not build a reminder to press Lap".
+  README's matching advice has been corrected. Other text that still describes the two-tap start,
+  grepped 2026-09-29: the comment on `LoggerDefaults`' countdown default ("The run is started on the
+  Watch and the timer on the phone as two separate taps") and a comment in `AudioAndShoeTests`.
+- **The `.watchCompanion` cue-source footer in Settings** (`SettingsView.cueSourceExplanation`) says
+  "A Watch companion app is not part of this version" — false since the watch app shipped.
+- **The watch's link screen says "Test session: not saved to Health."** (`WatchLinkView`) for every
+  session it shows, including a phone-driven run before its first phase arrives, which *is* saved.
 - **Two ways to use the Watch on the Today screen:** "Send to Apple Watch" (WorkoutKit) alongside
-  "Start Audio Timer". Once the phone starts the Watch's workout itself, the WorkoutKit route may be
-  redundant.
+  "Start Audio Timer". Now that the phone starts the Watch's workout itself (watch plan step 2), the
+  WorkoutKit route may be redundant.
 - **The "Kept but known-broken" section above** — scheduling, clearing a stuck queue. Those were kept
   *deliberately*, with reasons; removing them means reversing that decision on purpose, not tidying.
 - **Export Data appears twice** — on Today and in Settings.
@@ -219,9 +241,11 @@ neither implies the other.
 
 ---
 
-## Controls that fire on a bump
+## Controls that fire on a bump — **built**
 
-**Asked for after hitting both by accident on real runs.**
+**Asked for after hitting both by accident on real runs.** Shipped as `SlideToConfirm`: the run
+screen's Pause and Skip are "Slide to pause" and "Slide to skip" (`ActiveWorkoutView`). The ask is
+kept below for its reasoning.
 
 The phone is carried in the left hand with the app in front, so the screen takes knocks for the
 whole workout. **Pause** and **Skip** are both single taps, both irreversible in the sense that
@@ -236,7 +260,10 @@ Note that the existing cues already cover the *detection* half of this — `.pau
 are `isControlConfirmation`, so they sound in every cue mode precisely because "a tap with no
 audible response is indistinguishable from a missed tap". What they cannot do is prevent the tap.
 
-### Skip on an open-interval run
+### Skip on an open-interval run — **built**
+
+Shipped as proposed below: Skip is hidden when `IntervalTimerEngine.endsLegsByHand` is true, and
+"Start next leg" can be tapped before the floor behind a confirmation.
 
 Related, and worth deciding at the same time. Skip and "End this leg" both end the phase and
 advance, but Skip writes `wasSkipped: true`, no `endReason` and no body readings — a row that
@@ -253,7 +280,7 @@ Start anyway?" One button per action, and the walk is still recorded honestly as
 
 ## Export filenames say when the data starts, not when it was taken — **built 2026-09-23**
 
-**Shipped the same day it was asked for, in `b3f5164`.** `ExportBuilder.swift:51` now builds
+**Shipped the same day it was asked for, in `b3f5164`.** `ExportBuilder.build` now builds
 `running_health_extract_\(startYMD)_to_\(takenYMD)`, so an export carries the date it was taken.
 
 One way the result deliberately differs from the ask below: **date only, no clock time**, at the
@@ -311,6 +338,11 @@ a near miss is never claimed for the wrong activity.
 
 **The window itself was not touched, and must not be** — see "Do not widen the window" below, which
 is still live guidance rather than history.
+
+**Since watch plan step 3 the window is the fallback.** A workout saved by this app's watch app
+carries the execution id (`WorkoutMetadataKeys.executionID`), and both matcher directions join on
+it before looking at start times (`RecentWorkoutMatcher`, "Priority 0"). The window applies only to
+untagged workouts: older runs and Apple's Workout app.
 
 **Everything below is the original write-up, kept for the reasoning. Its `file:line` citations were
 accurate when written and are not any more** — fixing the code they pointed at moved them. The
@@ -385,8 +417,9 @@ Related: `startScoreReferenceSeconds` is held at 90 minutes deliberately and mus
 to follow the window. Fusing the two once scaled every start score by 45 and quietly converted "too
 close to call, so ask" into a confident pick.
 
-### Until it is fixed
+### Until it is fixed — superseded
 
-The mitigation is behavioural and free: start the workout on the Watch, then tap Start on the phone
-within two minutes. The app states the order (`ActiveWorkoutView.swift:280-282`) and never the
-number.
+The mitigation this section gave, starting the workout on the Watch and then tapping Start on the
+phone within two minutes, **no longer applies and must not be followed**: since watch plan step 2 the
+phone's Start launches the Watch's workout itself, and a workout started by hand as well records
+two. The run screen now says so (`ActiveWorkoutView.startOrderHint`).

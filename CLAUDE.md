@@ -20,14 +20,16 @@ carry the engineering lesson; the owner's specifics live in git-ignored local fi
   `afxjzs/run-exporter-archive`.
 - **The guard** (`scripts/check-sensitive.sh`, hooks in `.githooks/`) blocks listed values and refuses
   to run without its list. It cannot recognize prose about the owner's health — that part is on you.
-- **Commands in documents use placeholders** (`<PHONE_COREDEVICE_ID>`); the real values are in
-  `scripts/local.env`, which you may read to run them.
+- **Commands in documents use placeholders.** `scripts/local.env` holds the CoreDevice ids —
+  `PHONE_DEVICE_ID` for `<PHONE_COREDEVICE_ID>`, `WATCH_DEVICE_ID` for `<WATCH_COREDEVICE_ID>` — and
+  you may read it to run them. Hardware UDIDs (`<PHONE_UDID>`, `<WATCH_UDID>`) are not stored there;
+  find them with `xcrun devicectl list devices`.
 
 ## The documentation, and which file answers what
 
 Twelve committed files (counted 2026-09-29), plus the git-ignored material `private/README.md` indexes. **This table is the index.** Until 2026-09-25 four of these were
 reachable from nothing that loads automatically — 71% of the words in the repo — including the spec
-that 55 `spec §…` citations across 30 source files point at.
+that 67 `spec §…` citations across 39 Swift files point at (counted 2026-09-29).
 
 | File | Answers | Read it when |
 |---|---|---|
@@ -48,6 +50,9 @@ that 55 `spec §…` citations across 30 source files point at.
 **Name the symbol, never the line.** `RecentWorkoutMatcher.startToleranceSeconds`, not
 `RecentWorkoutMatcher.swift:74`. Line citations in this repo have gone wrong within the hour of
 being written, because fixing the code a citation points at is exactly what moves it.
+
+Commit hashes older than `610fdd2`, the first commit here, refer to the private pre-public archive
+and are not in this repository.
 
 **A document may not quote a control that no longer exists.** Two did. Both were real and correct
 when written: `8d145b9` (2026-09-07) renamed **"Remove all workouts from Watch"** to **"Clear this
@@ -80,8 +85,10 @@ label — that test is the enforcement, not a formality.
   *"missed two-minute join window"* entry in [docs/BACKLOG.md](docs/BACKLOG.md) first.
   `startToleranceSeconds = 120` is a measured value, and **widening it is the one change
   measurement has already ruled out** — 60 minutes and above pulled in abandoned timers and made a
-  real workout unmatchable. The same entry records the known defect: a miss is reported as a
-  different problem entirely, and the remedy the app suggests cannot work.
+  real workout unmatchable. The defect that entry was written about — a miss reported as a
+  different problem, with a remedy that could not work — is fixed. Since watch plan step 3, a
+  workout saved by the watch app carries the execution id (`WorkoutMetadataKeys.executionID`) and
+  joins by it before any time window; the window is the fallback for untagged workouts.
 
 - **Adding a new kind of plan, or touching `PlannedWorkout.shape`** → read
   [LEARNINGS.md](LEARNINGS.md#adding-a-kind-to-an-existing-model) first. The `Shape` enum makes a
@@ -106,9 +113,11 @@ Read [MISTAKES.md](MISTAKES.md). It is a record of how previous investigations i
 wrong, and the failures repeat: trusting a UI string as evidence, generating hypotheses before
 reading the repo's own docs, and stating inferences with the confidence of measurements.
 
-The rule that would have saved the most time: **this app cannot observe the Watch.**
-`WorkoutScheduler.shared.scheduledWorkouts` is the phone's list. Any sentence describing it as Watch
-state is wrong, and three shipped that way.
+The rule that would have saved the most time: **`WorkoutScheduler.shared.scheduledWorkouts` is the
+phone's list, not the Watch's.** Any sentence describing it as Watch state is wrong, and three
+shipped that way. Since 2026-09-29 the phone does see some Watch state, through this app's own watch
+link (`WatchLink`, during a run or the link test): the mirrored session's state, the heart rate the
+watch sends, and the watch's forwarded event log. It still cannot see the Watch save a workout.
 
 ## Wanted but not built
 

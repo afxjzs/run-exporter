@@ -33,18 +33,19 @@ Two faults that no simulator test could have caught, both from real runs:
    `Task` that ran *after* the new activity was created, then ended it. Fixed by doing both in one
    ordered task; orphan cleanup moved to app launch.
 
-**Status of the underlying requirement: still unconfirmed.** Test 3 below is what actually proves
-cues survive a locked screen, and it has not been run since the audio fix.
-
-v1.1.0 is installed on the iPhone (`My iPhone`) and both it and the Watch (`My Watch`) are paired and available, so
-the protocol below can be run now. Fill in the result tables as you go.
+*Dated, and superseded by the Status table above, where Test 3 has passed. Kept as written:*
+"Status of the underlying requirement: still unconfirmed. Test 3 below is what actually proves cues
+survive a locked screen, and it has not been run since the audio fix. v1.1.0 is installed on the
+iPhone and both it and the Watch are paired and available, so the protocol below can be run now."
+For what is installed today, see [INSTALLS.md](INSTALLS.md).
 
 Before starting, confirm the background audio mode actually shipped in the build you are testing —
 it is declared in `Config/RunExporter-Info.plist`, and an earlier build silently lacked it:
 
 ```bash
 plutil -extract UIBackgroundModes json -o - \
-  build/Release-iphoneos/RunExporter.app/Info.plist   # must print ["audio"]
+  build/Build/Products/Release-iphoneos/RunExporter.app/Info.plist
+# must include "audio" (today it prints ["audio","workout-processing"])
 ```
 
 If that prints nothing, Tests 2 and 3 will fail on lock/background for a build-configuration
@@ -258,7 +259,9 @@ The app-owned fallback. Implemented and shipping regardless of Test 1's outcome,
 3. Start music or a podcast.
 4. Today › **Start Audio Timer** on the `1/0:30 × 3` workout. Since `e7f7b96` this only *opens* the
    screen, armed — no timer, no audio session, no Live Activity until you tap **Start** on it. The
-   run begins on that second tap, so start counting from there.
+   run begins on that second tap, so start counting from there. Since watch plan step 2
+   (2026-09-29) that tap also launches a workout on the Watch, which is saved when the run
+   finishes; abandon the run to have the Watch discard it.
 
 ### Record
 
@@ -366,6 +369,9 @@ Before locking, on Settings › Cue test confirm **Session: active**, **Backgrou
 that **Output route** names the AirPods. Then open Today › **Start Audio Timer**, tap **Start** on
 the armed screen — that second tap is what begins the run — press the side button immediately, and
 leave the phone locked and screen-down for the full four minutes.
+
+Since watch plan step 2 (2026-09-29), **Start** also launches and, at the finish, saves a workout on
+the Watch — as in Test 2.
 
 ### Expected cue timeline
 

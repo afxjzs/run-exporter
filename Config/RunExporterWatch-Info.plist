@@ -13,7 +13,7 @@
 	  product, never against -showBuildSettings:
 
 	      plutil -extract UIBackgroundModes json -o - \
-	        "./build-device/Build/Products/Release-watchos/RunExporterWatch Watch App.app/Info.plist"
+	        "./build/Build/Products/Release-iphoneos/RunExporter.app/Watch/RunExporterWatch Watch App.app/Info.plist"
 	-->
 
 	<!--
@@ -61,7 +61,8 @@
 	  saved event log showed no process start and no handle(_:). This plist had workout-processing
 	  only under UIBackgroundModes, written by hand on 2026-08-08.
 
-	  HYPOTHESIS until measured: that the missing key is why the launch was refused. Kept alongside
+	  MEASURED 2026-09-29 (LEARNINGS.md, "A phone launch needs WKBackgroundModes"): adding this key
+	  was the only change in the next build, and that build launched. Kept alongside
 	  UIBackgroundModes rather than replacing it, because the stage 2 probe passed with that key and
 	  nothing that works should change in the same step.
 	-->
@@ -79,9 +80,10 @@
 
 	  Write was approved deliberately (plan §6, decided 2026-08-08) because a recorder must call
 	  HKLiveWorkoutBuilder.finishWorkout(), which saves an HKWorkout — there is no read-only way
-	  to record a workout. Scope is as narrow as the API allows: **workouts only**, requested from
-	  the watch app only. Do not widen this to other sample types without revisiting the decision
-	  and the README's Privacy section in the same change.
+	  to record a workout. Scope is as narrow as the API allows: **workouts and their GPS routes**
+	  (HKSeriesType.workoutRoute, added 2026-09-29), requested from the watch app only. Do not
+	  widen this to other sample types without revisiting the decision and the README's Privacy
+	  section in the same change.
 
 	  These strings are shown in the Health permission sheet. They are not a request: nothing is
 	  written until code calls requestAuthorization(toShare:read:) and the user grants it.

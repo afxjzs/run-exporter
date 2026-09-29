@@ -5,9 +5,11 @@ how to see what it did. Written 2026-09-29 from the sessions of 2026-09-25 and 2
 took the watch app from "never installed" to "launched by the phone". Every step below was done on
 this hardware; anything not measured says so.
 
-Hardware and OS versions live in [INSTALLS.md](INSTALLS.md). The placeholders below are the owner's
-real values in `scripts/local.env` (git-ignored — this repository is public; see
-[../private/README.md](../private/README.md)). Identifiers used below:
+Hardware and OS versions live in [INSTALLS.md](INSTALLS.md). This repository is public, so the
+identifiers below are placeholders (see [../private/README.md](../private/README.md)). The CoreDevice
+ids are in the git-ignored `scripts/local.env` as `PHONE_DEVICE_ID` and `WATCH_DEVICE_ID`; the
+hardware UDIDs are not stored there — find them with `xcrun devicectl list devices`. Identifiers
+used below:
 
 | Device | Hardware UDID (portal, provisioning) | CoreDevice id (`devicectl`) |
 |---|---|---|
@@ -85,9 +87,13 @@ only in the phone's log (§4). Codes seen so far:
 
 ## 3. Launching the watch app from the phone
 
-Settings → **Watch link test** → **Start watch workout**. The phone calls
+**Start** on the run screen does this for every run (watch plan step 2): the phone calls
 `HKHealthStore.startWatchApp(toHandle:)`; watchOS launches the watch app and calls
-`WatchAppDelegate.handle(_:)`, which starts the workout session and mirrors it back.
+`WatchAppDelegate.handle(_:)`, which starts the workout session and mirrors it back. Finishing the
+run asks the Watch to save its workout; abandoning it asks the Watch to discard.
+
+Settings → **Watch link test** → **Start watch workout** makes the same launch as a diagnostic:
+a test session, discarded, with ping and end buttons and the link's log on screen.
 
 **What it needs, measured:**
 
@@ -100,12 +106,16 @@ Settings → **Watch link test** → **Start watch workout**. The phone calls
 **What the phone's "success" means: sent, nothing more.** `startWatchApp` returned before the Watch's
 reply arrived. Whether the app launched is visible only on the Watch, or in its event log (§4).
 
-If the screen gets stuck with every button disabled, tap **Reset this screen**. It frees the phone's
-buttons; it does not end a session still running on the Watch — restarting the Watch does.
+If the test screen gets stuck with every button disabled, tap **Reset this screen**. It frees the
+phone's buttons; it does not end a session still running on the Watch — restarting the Watch does.
 
-Not yet handled, found 2026-09-29: a launch arriving while the watch app is already running, and
-the app being killed mid-session. Both are step 2 of the plan in
-[WATCHOS_RECORDER_PLAN.md](WATCHOS_RECORDER_PLAN.md).
+**Open, found 2026-09-29, and not tracked by any plan step:**
+
+- **A launch arriving while a session is already running** is refused: `WatchWorkoutController.start`
+  records "a session is already running" as an error and returns. What the phone's run then shows
+  has not been measured.
+- **The app being killed mid-session** is not recovered. `WatchAppDelegate.handleActiveWorkoutRecovery`
+  only writes a line to the event log.
 
 ---
 
@@ -123,7 +133,7 @@ xcrun devicectl device copy from --device <PHONE_COREDEVICE_ID> \
   --source Documents/watch-events.log --destination ./watch-events.log
 ```
 
-`Documents/watch-link-phone.log` holds the phone's side of the same test. Forwarded lines are queued
+`Documents/watch-link-phone.log` holds the phone's side, for real runs and link tests alike. Forwarded lines are queued
 by the system, so they can arrive late; an empty file right after a test is not yet evidence.
 
 ### The phone's system log — install errors and the launch handoff
