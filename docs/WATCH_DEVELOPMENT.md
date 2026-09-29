@@ -1,0 +1,141 @@
+# Developing on the Apple Watch — runbook
+
+How to get this project's own code running on the owner's Apple Watch, launched from the phone, and
+how to see what it did. Written 2026-09-29 from the sessions of 2026-09-25 and 2026-09-29, which
+took the watch app from "never installed" to "launched by the phone". Every step below was done on
+this hardware; anything not measured says so.
+
+Hardware and OS versions live in [INSTALLS.md](INSTALLS.md). Identifiers used below:
+
+| Device | Hardware UDID (portal, provisioning) | CoreDevice id (`devicectl`) |
+|---|---|---|
+| iPhone 16 Pro | `<PHONE_UDID>` | `<PHONE_COREDEVICE_ID>` |
+| Apple Watch Series 5 | `<WATCH_UDID>` | `<WATCH_COREDEVICE_ID>` |
+
+**The one fact that shapes everything here: the Mac cannot talk to this Watch.** `devicectl` lists it
+as `available (paired)` and times out on every command (`CoreDeviceError 4000`), and Xcode has never
+prepared it. None of the steps below need it to. The Watch is reached **through the phone**.
+
+---
+
+## 1. One-time setup
+
+### Register the Watch with the developer team
+
+A development-signed app installs only on devices listed in its provisioning profile. Xcode adds a
+device to the team the first time it connects to it — which never happens with this Watch — so it
+has to be added by hand.
+
+1. developer.apple.com → Certificates, IDs & Profiles → Devices → **+** → Apple Watch, UDID
+   `<WATCH_UDID>`. Done 2026-09-25, with the name `My Watch`.
+2. **Delete Xcode's cached profile for the watch app**, or Xcode keeps using it.
+   `-allowProvisioningUpdates` reuses any cached profile that is still valid and does not compare
+   its device list with the portal. Cached profiles live in
+   `~/Library/Developer/Xcode/UserData/Provisioning Profiles/<UUID>.mobileprovision`; the UUID is
+   in the profile (step 3). Move it aside rather than deleting it.
+3. Build (§2), then confirm the Watch is in the profile **embedded in the built watch app**:
+
+   ```bash
+   security cms -D -i "build/Build/Products/Release-iphoneos/RunExporter.app/Watch/RunExporterWatch Watch App.app/embedded.mobileprovision" -o /tmp/p.plist
+   plutil -extract ProvisionedDevices json -o - /tmp/p.plist    # must include <WATCH_UDID>
+   ```
+
+### Turn on Developer Mode on the Watch
+
+**The switch does not exist until a development-signed app is on the Watch.** Before the first
+successful install, Settings → Privacy & Security had no Developer Mode row. After it, opening the
+app said Developer Mode was needed, and the row had appeared. Turn it on; the Watch restarts. Xcode
+never connected to the Watch at any point, so it is not needed for this.
+
+---
+
+## 2. Build, install, confirm
+
+```bash
+scripts/sideload.sh <PHONE_COREDEVICE_ID>   # clean Release build, stamped build number, installs + launches on the phone
+```
+
+The script builds **clean** on purpose, stamps `CFBundleVersion` with a timestamp, and verifies the
+**nested** watch app's signature. Then:
+
+1. **The phone installs; the Watch does not install itself.** On the iPhone: Watch app → My Watch →
+   RunExporterWatch → Install (or update). **Wear the Watch, awake, while it installs.** It is slow —
+   minutes.
+2. **Confirm the build by looking.** The watch app shows `build 1.0 (<number>)` at the bottom of its
+   first screen; the phone shows `1.3.0 (<number>)` in Settings → Version. Same number, same build.
+   Do not test until they match.
+
+**If the install hangs** (spinner never finishes, or it sticks on "Uninstalling…"): collect the
+phone's log first (§4), *then* restart the Watch and install again with it on the wrist. Seen once,
+2026-09-25, when the install began with the Watch asleep on its charger; whether sleep caused it is
+not established.
+
+**If Install turns back into "Install" with no message**, the Watch rejected the app. The reason is
+only in the phone's log (§4). Codes seen so far:
+
+| Code | Meaning here | Fix |
+|---|---|---|
+| `0xe8008015` "A valid provisioning profile for this executable was not found" | The Watch is not in the profile | §1 |
+| `0xe8008017` "A signed resource has been added, modified, or deleted" | An incremental build put a new profile in without re-signing | Build clean. Verify the **nested** app with `codesign --verify --strict "<…>/Watch/RunExporterWatch Watch App.app"` — checking the outer app with `--deep` passed this broken build |
+| "This app could not be installed at this time" | Missing app icon | See the Xcode playbook, `~/.claude/docs/ios-xcode-project-playbook.md` §3 |
+
+---
+
+## 3. Launching the watch app from the phone
+
+Settings → **Watch link test** → **Start watch workout**. The phone calls
+`HKHealthStore.startWatchApp(toHandle:)`; watchOS launches the watch app and calls
+`WatchAppDelegate.handle(_:)`, which starts the workout session and mirrors it back.
+
+**What it needs, measured:**
+
+- **`WKBackgroundModes` = `["workout-processing"]` in the watch app's Info.plist.** Without it the
+  request reaches the Watch — the phone's `healthd` logs the send and the Watch's reply — and watchOS
+  silently never launches the app. The app had the mode only under `UIBackgroundModes`, which was
+  enough for a session started on the Watch (the stage 2 probe) but not for a launch from the phone.
+  Adding the key was the only change in the build that first launched (2026-09-29).
+
+**What the phone's "success" means: sent, nothing more.** `startWatchApp` returned before the Watch's
+reply arrived. Whether the app launched is visible only on the Watch, or in its event log (§4).
+
+If the screen gets stuck with every button disabled, tap **Reset this screen**. It frees the phone's
+buttons; it does not end a session still running on the Watch — restarting the Watch does.
+
+Not yet handled, found 2026-09-29: a launch arriving while the watch app is already running, and
+the app being killed mid-session. Both are step 2 of the plan in
+[WATCHOS_RECORDER_PLAN.md](WATCHOS_RECORDER_PLAN.md).
+
+---
+
+## 4. Seeing what happened
+
+### The watch app's own event log — readable without the Watch
+
+The watch app records every launch, `handle(_:)` call, step and error to a log **saved on the Watch**
+(swipe left in the app) and **forwarded to the phone** over `WCSession.transferUserInfo`. The phone
+appends it to a file. Clearing the log on the Watch does not touch the phone's copy.
+
+```bash
+xcrun devicectl device copy from --device <PHONE_COREDEVICE_ID> \
+  --domain-type appDataContainer --domain-identifier is.doug.runexporter \
+  --source Documents/watch-events.log --destination ./watch-events.log
+```
+
+`Documents/watch-link-phone.log` holds the phone's side of the same test. Forwarded lines are queued
+by the system, so they can arrive late; an empty file right after a test is not yet evidence.
+
+### The phone's system log — install errors and the launch handoff
+
+```bash
+sudo log collect --device-udid <PHONE_UDID> --last 30m --output ./phone.logarchive
+command log show ./phone.logarchive --predicate 'process == "appconduitd" AND eventMessage CONTAINS "runexporter.watchkitapp"' --style compact
+command log show ./phone.logarchive --predicate 'process == "healthd" AND eventMessage CONTAINS[c] "Start Workout App"' --style compact
+```
+
+- Needs `sudo`, so the owner runs the first line.
+- It failed with `Device not configured (6)` while the phone was connected only over Wi-Fi, and
+  worked with it on a cable. That USB is required is inferred from that one pair of attempts.
+- `command log` because in zsh `log` is a shell builtin.
+- **The installed watch build can be proven from this log.** `appconduitd` records
+  `watchKitAppExecutableHash=<hex>` on a finished install; it equals `shasum -a 256` of the built
+  watch executable.

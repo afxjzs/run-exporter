@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Partial Info.plist for the watchOS app, merged with the keys Xcode generates from the
+	  target's INFOPLIST_KEY_* build settings (GENERATE_INFOPLIST_FILE stays YES) — the same
+	  arrangement the iOS target uses, and for the same reason.
+
+	  Read Config/RunExporter-Info.plist first: it explains why array-valued keys CANNOT be set
+	  via INFOPLIST_KEY_*. Xcode accepts such a setting without error and silently emits no key.
+	  That has cost this project real time twice, so verify every key below against the BUILT
+	  product, never against -showBuildSettings:
+
+	      plutil -extract UIBackgroundModes json -o - \
+	        "./build-device/Build/Products/Release-watchos/RunExporterWatch Watch App.app/Info.plist"
+	-->
+
+	<!--
+	  Identifies the iOS app this watch app belongs to. THIS KEY IS THE COMPANION
+	  RELATIONSHIP — without it the app is a standalone watch app that merely happens to be
+	  built alongside RunExporter.
+
+	  Both mechanisms the one-tap feature depends on are companion-only:
+	    * HKHealthStore.startWatchApp(toHandle:) launches "the WatchKit app corresponding to
+	      the calling iOS application";
+	    * WCSession pairs an iOS app with *its* watch app.
+	  Neither has a counterpart to find if this is wrong or absent, and neither reports the
+	  absence as a pairing problem — it looks like a connectivity bug several stages later.
+
+	  Must match the iOS target's PRODUCT_BUNDLE_IDENTIFIER exactly, and this app's own bundle
+	  id must be that value + ".watchkitapp".
+	-->
+	<key>WKCompanionAppBundleIdentifier</key>
+	<string>is.doug.runexporter</string>
+
+	<!--
+	  "workout-processing" is what grants a watchOS app real background execution while an
+	  HKWorkoutSession is running — the property the whole watch recorder rests on (plan §9,
+	  stage 2: "survives 5 minutes with the wrist down and screen off").
+
+	  "audio" is carried for parity with the phone. NOTE that cues deliberately stay on the
+	  iPhone (plan §7a): AirPods play from one source at a time, and with media on the phone a
+	  watch-side cue is never heard. This key is here so the option is not closed off, not
+	  because watch audio is planned.
+	-->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>workout-processing</string>
+		<string>audio</string>
+	</array>
+
+	<!--
+	  WKBackgroundModes is watchOS's OWN background-modes key, separate from UIBackgroundModes
+	  above. Added 2026-09-29. Evidence it exists and carries workout-processing: WatchKit exports
+	  _SPInfoPlistWKBackgroundModesKey and _SPInfoPlistWKBackgroundModesWorkoutProcessingValue, and
+	  Xcode's watch Background Modes capability (BACKGROUND_MODES_WATCH) writes this key.
+
+	  Why it matters: the phone's HKHealthStore.startWatchApp(toHandle:) reached the Watch (phone
+	  healthd logged the request and the Watch's reply), yet watchOS never launched this app — the
+	  saved event log showed no process start and no handle(_:). This plist had workout-processing
+	  only under UIBackgroundModes, written by hand on 2026-08-08.
+
+	  HYPOTHESIS until measured: that the missing key is why the launch was refused. Kept alongside
+	  UIBackgroundModes rather than replacing it, because the stage 2 probe passed with that key and
+	  nothing that works should change in the same step.
+	-->
+	<key>WKBackgroundModes</key>
+	<array>
+		<string>workout-processing</string>
+	</array>
+
+	<!--
+	  HealthKit read AND write, for THIS TARGET ONLY.
+
+	  The iOS app never writes. Its export requests `toShare: []` (HealthKitManager.swift); since
+	  2026-09-25 its watch link (WatchLink.swift) also asks for workout share access so the phone
+	  can start this app's workout. Saving stays here, on the watch.
+
+	  Write was approved deliberately (plan §6, decided 2026-08-08) because a recorder must call
+	  HKLiveWorkoutBuilder.finishWorkout(), which saves an HKWorkout — there is no read-only way
+	  to record a workout. Scope is as narrow as the API allows: **workouts only**, requested from
+	  the watch app only. Do not widen this to other sample types without revisiting the decision
+	  and the README's Privacy section in the same change.
+
+	  These strings are shown in the Health permission sheet. They are not a request: nothing is
+	  written until code calls requestAuthorization(toShare:read:) and the user grants it.
+	-->
+	<key>NSHealthShareUsageDescription</key>
+	<string>RunExporter reads your workout data on the Watch so it can record a run and keep the interval timer in sync with it.</string>
+
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>RunExporter saves the run it records on your Watch to the Health app, so the workout appears alongside your other activity. It only ever writes workouts.</string>
+</dict>
+</plist>

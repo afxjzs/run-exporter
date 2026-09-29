@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Partial Info.plist, merged with the keys Xcode generates from the target's
+	  INFOPLIST_KEY_* build settings (GENERATE_INFOPLIST_FILE stays YES).
+
+	  UIBackgroundModes lives here because INFOPLIST_KEY_UIBackgroundModes does NOT work:
+	  Xcode only maps an allowlist of known INFOPLIST_KEY_* settings into the generated
+	  plist, and array-valued UIBackgroundModes is not one of them. The build setting is
+	  accepted without error and silently produces no key, which would leave interval cues
+	  dying the moment the screen locks — with nothing in the build log to say so.
+
+	  "audio" is required so the interval timer and its cues keep running while the phone is
+	  locked or the app is backgrounded (spec §9.4, §23). AudioCueEngine holds the session
+	  open with a silent looping player for exactly this reason.
+	-->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+		<string>workout-processing</string>
+	</array>
+	<!--
+	  "workout-processing" (added 2026-09-25, watch link step 1): the watch mirrors its
+	  HKWorkoutSession to this app, and HealthKit may launch or wake the app in the background to
+	  hand the session over (HKHealthStore.workoutSessionMirroringStartHandler). Declared so the
+	  phone can receive it while locked. Whether the phone strictly needs it has NOT been measured.
+	-->
+
+
+	<!--
+	  Required for ActivityKit. Like UIBackgroundModes there is no working
+	  INFOPLIST_KEY_ equivalent, so it lives here where it demonstrably lands in the
+	  built app. Without it Activity.request throws at runtime and the Lock Screen
+	  card silently never appears.
+	-->
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+
+	<!--
+	  Declares that this app updates its Live Activity at a moderate rate (roughly once
+	  per interval transition).
+
+	  DOES NOT FIX THE BACKGROUND-UPDATE BUG, and was added while testing the theory that
+	  it would. Recorded here so nobody re-runs that experiment: with this key present and
+	  `ActivityAuthorizationInfo.frequentPushesEnabled` reporting **true**, an instrumented
+	  device run on 2026-08-07 still had every background `Activity.update` silently
+	  discarded. iOS applies the update only while the app is in the foreground. See
+	  docs/CUE_FEASIBILITY_TEST.md, Test 3, for the three-run evidence.
+
+	  Kept because the declaration is accurate, not because it changed any behaviour.
+	-->
+	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
+	<true/>
+</dict>
+</plist>

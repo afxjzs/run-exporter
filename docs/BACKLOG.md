@@ -1,0 +1,365 @@
+# Backlog
+
+Wanted, not yet built. Each entry records the *reasoning* as well as the ask, so a future session
+can tell whether a design still serves the intent behind it.
+
+---
+
+## Kept but known-broken
+
+Capabilities the app still exposes because they may work elsewhere or later, deliberately **not**
+deleted. Every one of them is labelled honestly in the UI — no control may imply a power it does not
+have. See [../MISTAKES.md](../MISTAKES.md): a lying button is a silent failure with a tap target.
+
+### Scheduling a workout for a time (`WorkoutScheduler`)
+
+**Status:** kept, labelled, does not deliver on the owner's hardware.
+
+Four workouts scheduled, none delivered, over 26+ hours and both radio states
+([../LEARNINGS.md](../LEARNINGS.md)). It demonstrably worked in early August, so this is a state or
+OS-version failure rather than a broken design, and it may work on another pairing or a later
+watchOS. The button therefore stays, with a caveat line driven by **live state** — the count of
+overdue entries — rather than a hardcoded claim that would itself go stale if delivery started
+working again.
+
+**Revisit when:** the Watch is replaced, or watchOS/iOS move. Re-run Test 5 in
+`CUE_FEASIBILITY_TEST.md` before changing anything on that screen.
+
+### Clearing a stuck queue
+
+`removeAllWorkouts()` left a queue of 4 untouched across repeated taps. The only known remedy is
+restarting the iPhone, which the UI now says instead of advising a retry that does nothing.
+
+**Revisit when:** there is any way to detect the wedged state programmatically. Right now the app
+cannot distinguish "removal worked" from "removal was ignored" except by reading the count back,
+which it already does.
+
+### Removing an app-added workout from the Watch — no API exists
+
+The route that works (Apple's preview sheet) puts the workout in the **Watch's own library**, which
+WorkoutKit cannot address. `removeAllWorkouts()` and `remove(_:at:)` only reach entries this app
+*scheduled*. So there is no programmatic undo for the only add path that functions.
+
+**Do not build a "remove what I added" button for this route.** There is nothing behind it. The UI
+tells the user to delete on the Watch, which is the truth.
+
+### Getting a workout onto the Watch's main workout list
+
+Delivered workouts land under **Outdoor Run**, behind the three-dot menu. The only workout observed
+on the main list was one *created on the Watch itself*. WorkoutKit exposes nothing about placement —
+the whole surface is `schedule`, `markComplete`, `remove`, `removeAllWorkouts`.
+
+Most likely **not achievable by any app**. Recorded so the next session does not spend a day on it.
+
+---
+
+## Capture-anytime notes during a workout — **built 2026-08-19**
+
+Requested 2026-08-12, shipped as the `WorkoutNote` model plus an **Add note** button in every phase
+of `ActiveWorkoutView`. Kept here only as a pointer, so nobody rebuilds it: the reasoning now lives
+next to the code, in `WorkoutNote`'s type comment and `ActiveWorkoutModel.NoteContext`.
+
+One thing the original design note got wrong, worth recording because it is not visible from the
+model definitions. It named `WorkoutIntervalLog` as the natural owner of a mid-run note. That record
+**cannot** own one: its rows are written from `IntervalTimerEngine.onIntervalCompleted`, at the phase
+boundary, so during walk 3 there is no row for walk 3 to write to. Storing the note there would mean
+holding the user's writing in memory for up to a whole interval. `WorkoutNote` carries the phase and
+repetition instead, and the interval it falls inside stays recoverable by timestamp. See
+[../LEARNINGS.md](../LEARNINGS.md#run-logging).
+
+### Still wanted here
+
+- **Editing or deleting a note after the fact.** Notes are append-only today. History shows them and
+  the export carries them, but there is no way to fix a typo or remove one written by accident. Not
+  built because capture speed was the whole point and an edit affordance on the workout screen costs
+  taps; the right home is probably the History detail, not mid-run.
+
+---
+
+## Open-interval runs — **built 2026-09-23**
+
+A plan whose running bouts end when the runner ends them, repeated until a total of accumulated
+running. Built as `OpenIntervalShape`, `OpenIntervalSequencer`/`Schedule`, and its own editor. The
+reasoning lives next to the code; only the parts that are *not* visible from the types are here.
+
+### Still wanted here
+
+- **Send an open-interval workout to the Watch.** Not attempted, and the appeal is not the payload.
+  `WorkoutStep(goal: .open)` already reaches the Watch — `WorkoutKitService.goal(seconds:)` uses it
+  for open warmups and cooldowns today — so an open bout is expressible under the watchOS 10
+  ceiling. What cannot be expressed is the bout *count*: `IntervalBlock(steps:iterations:)` takes a
+  concrete `Int`, and the count is the measurement. A send would therefore mean picking a generous
+  number of rounds and ending the workout early, leaving the rest unused.
+
+  **The question that decides whether that is worth doing is unmeasured:** does advancing an open
+  step on the Watch create the lap or segment in HealthKit that the runner is currently making by
+  hand? If it does, the send replaces the manual Lap button and is worth the guessed iteration
+  count. If it does not, it buys nothing. That is a twenty-minute measurement, not a deduction —
+  and `../MISTAKES.md` is largely a record of confident claims about Watch behaviour that were
+  wrong. Measure before building.
+
+  Deliberately left out of v1 because it is purely additive: nothing about the plan model, the bout
+  records or the export changes if a send is added later, and v1 does not get blocked on Watch
+  behaviour, which is historically where this project loses days.
+
+- **History does not show an open-interval run's shape.** Same omission, and the same reason, as a
+  multi-block run: the shape lives on the execution's `blockShape` (written as `open:1800/180`), and
+  joining through `executionID` would mean a store fetch per row in a list.
+
+- **From the first outdoor run.** The owner's verdict was *"it worked great for a v1 of
+  that feature"*, and the export backs it: leg caps chained exactly, `targetReached` fired on the
+  final leg, and every rated leg recorded its body-signal reading. Three notes, all about the
+  recovery walk:
+
+  **Notes 1 and 2 are built**; note 3 is still open and is waiting on an answer, not on
+  time. The headline now counts the floor down, the button always reads "Start next leg", and the
+  floor arrives behind a 3-2-1. Two tests in `IntervalTimerEngineTests` pin both. The elapsed branch
+  was also re-keyed from `.cooldown` to `phaseEndDate == nil`, because every open phase had the same
+  defect and the cooldown was only the one that had been noticed.
+
+  1. ~~**The walk's countdown is in the wrong place.**~~ **Built.** A function called
+     `startLegButtonTitle` carried the floor countdown *in the button label*: it read "Walk 1:23
+     more" and became "Start next leg" only at the floor. It ended up there because the headline
+     renders `phaseRemainingSeconds`, which an open walk has no answer for — so `Display.countdown`
+     rendered "—" as the largest number on the screen, and the floor had nowhere else to go.
+     `IntervalTimerEngine.walkFloorRemainingSeconds` now feeds the headline, the function is
+     deleted, and past the floor the display falls through to elapsed.
+
+  2. ~~**No countdown into the end of the walk.**~~ **Built.** The five-second warning and the 3-2-1
+     both sit inside the `plannedSeconds` branch of `scheduledCues(for:start:)`, which an open walk
+     never enters, so the floor arrived announced by `.recoveryFloorReached` alone. The 3-2-1 is now
+     scheduled from the open-walk branch. The five-second warning deliberately is **not**: it names
+     the phase that follows and says it is seconds away, which is true at a timed boundary and false
+     at a floor, since the floor does not start the next leg.
+
+     *(No line numbers here on purpose — the ones this entry originally carried were wrong within
+     the hour, because fixing the thing they pointed at moved them.)*
+
+  3. ~~**A reminder to press Lap on the Watch at each mode swap.**~~ **Withdrawn the day it was
+     asked for — do not build it.** The owner confirmed he presses Lap only so the run
+     segments for later analysis, and the measurement shows it already does without him. See
+     [../LEARNINGS.md](../LEARNINGS.md#run-logging), *"Pressing Lap on the Watch adds nothing to the
+     data"*, which has the measurement and the two conditions that would revive the ask.
+
+- **The remaining derived properties still answer from blocks.** `totalWalkSeconds`,
+  `walkIntervalCount`, `expectedTotalSeconds` and `totalRepetitions` return `0` for an open-interval
+  plan, which is honest for the round count — it genuinely is not knowable in advance — and merely
+  unknown for the rest. `singleShape`, `blockShapeDescriptor`, `totalRunSeconds` and
+  `hasDamagedShape` were converted because each had a reader that said something false. The rest
+  have no such reader today. If one appears, convert the property rather than teaching the caller.
+
+---
+
+## Sync non-Health data to the owner's server, on demand
+
+**Asked for 2026-09-29.** A bigger project, unrelated to the watch work, and not started.
+
+The ask, in the owner's words: *"sync non-health data to my server on demand."* Non-Health data means
+what the app itself creates and stores in its local SwiftData store — plans, run logs, notes, interval
+records, shoes — as opposed to what it reads from HealthKit.
+
+**This reverses a property the app states in three places.** The README's Privacy section, the
+Settings screen's footer, and the export's own `README.txt` all say the app makes no network requests
+and has no server. Building this means changing all three in the same change, per the rule the watch
+work already follows: nothing about data handling moves without being written down first.
+
+**Not yet decided, and not to be guessed:** which server and how it authenticates; exactly which
+records go; whether "on demand" means a button, the export, or both; and whether it is one-way.
+
+---
+
+## Swift 6 language mode
+
+**Status:** builds clean today, with warnings that become errors on the move.
+
+`WorkoutKitService.swift:207` and `:340` both read `WorkoutScheduler.authorizationState` from a
+main-actor-isolated context:
+
+```
+warning: non-Sendable type 'WorkoutScheduler.AuthorizationState' of nonisolated property
+'authorizationState' cannot be sent to main actor-isolated context; this is an error in the
+Swift 6 language mode
+```
+
+Not urgent and not a defect in the current language mode — recorded because it is the kind of thing
+discovered at the worst moment, part-way through an unrelated toolchain upgrade. Whoever moves this
+project to Swift 6 should expect these two first.
+
+**Note the location.** Both are in the `WorkoutScheduler` path, which
+[../LEARNINGS.md](../LEARNINGS.md) records as not delivering on this hardware and which is kept
+deliberately rather than deleted. Fixing the warnings and fixing the delivery are separate jobs, and
+neither implies the other.
+
+---
+
+## Controls that fire on a bump
+
+**Asked for after hitting both by accident on real runs.**
+
+The phone is carried in the left hand with the app in front, so the screen takes knocks for the
+whole workout. **Pause** and **Skip** are both single taps, both irreversible in the sense that
+matters — a pause that goes unnoticed costs an interval before it is spotted, and a skip cannot be
+un-skipped — and both sit under a thumb that is not always deliberate.
+
+**Wanted:** a slide gesture rather than a tap for both. "Slide to pause", "slide to skip". A
+confirmation dialog would also work, but it is the wrong shape for the moment: a dialog needs
+reading, and the whole problem is a control operated without looking.
+
+Note that the existing cues already cover the *detection* half of this — `.paused` and `.skipped`
+are `isControlConfirmation`, so they sound in every cue mode precisely because "a tap with no
+audible response is indistinguishable from a missed tap". What they cannot do is prevent the tap.
+
+### Skip on an open-interval run
+
+Related, and worth deciding at the same time. Skip and "End this leg" both end the phase and
+advance, but Skip writes `wasSkipped: true`, no `endReason` and no body readings — a row that
+describes an abandoned leg rather than a measured one. It is a worse version of the correct button,
+sitting beside it.
+
+Its one real use today is during the recovery walk, where it is the only way to start the next leg
+before the floor, since "Start next leg" is gated on it. The proposal that removes the ambiguity
+without removing the capability: hide Skip on open-interval runs entirely, and let "Start next leg"
+be tappable early behind a confirmation that names the number — "You have walked 1:20 of 3:00.
+Start anyway?" One button per action, and the walk is still recorded honestly as cut short.
+
+---
+
+## Export filenames say when the data starts, not when it was taken — **built 2026-09-23**
+
+**Shipped the same day it was asked for, in `b3f5164`.** `ExportBuilder.swift:51` now builds
+`running_health_extract_\(startYMD)_to_\(takenYMD)`, so an export carries the date it was taken.
+
+One way the result deliberately differs from the ask below: **date only, no clock time**, at the
+owner's request, because exports are a once-a-day thing outside of testing. Two exports on the same
+day therefore still share a name and are told apart by the download itself.
+
+Anything in `~/Downloads` still named `..._to_now.zip` predates this build rather than showing it
+broken — the two exports taken the day this shipped were written minutes before the commit
+landed.
+
+**Everything below is the original ask, kept for the reasoning.**
+
+`ExportBuilder` names every export from its start date and the literal word "now":
+
+```swift
+let extractName = "running_health_extract_\(startYMD)_to_now"
+```
+
+So an export made today and one made next month are both
+`running_health_extract_2026-06-18_to_now.zip`. Two consequences, and the second is the one that
+bites:
+
+- **Nothing in the name says when it was taken.** "to_now" was true at the moment of writing and is
+  the only part that dates the file, which means it dates it to whenever you happen to be reading.
+- **They collide.** Same name every time, so a folder of exports is a folder of files that look
+  identical, and saving a second one over a first is a matter of whichever dialog you tapped
+  through. The manifest inside records the real span, but a name that has to be opened to be told
+  apart is not a name.
+
+**Wanted:** the export's own timestamp in the filename, to the minute — something like
+`running_health_extract_2026-06-18_to_YYYY-MM-DD_HHMM.zip`. End date rather than "now", and enough
+precision that two exports on one day are still distinguishable, which matters exactly on the days
+something is being debugged and several are taken in a row.
+
+**Note for whoever does it:** `extractName` is used three times in `ExportBuilder` — the folder, the
+zip, and the manifest's own record of what it produced — so it needs changing in one place and
+checking in three. `ExportPipelineTests` asserts the manifest's inventory matches the zip's contents
+exactly, which will catch a mismatch between them.
+
+---
+
+## A missed two-minute join window is reported as the wrong problem — **built**
+
+**Found while briefing the owner before his first outdoor run, deliberately left alone
+until after it** — the join path was exactly what that run exercised — and fixed the same day it
+finished. All three parts shipped. The run itself did **not** hit this: the owner started the two
+within seconds and `export_log.json` recorded the join with zero warnings.
+
+What the fix looks like now, so nobody re-derives it: `Outcome.outsideWindow` carries the near
+misses nearest-first with the closest offset; `RecentWorkoutMatcher.nearMissWindowSeconds` bounds
+what is worth offering at 90 minutes; the run screen offers the nearest workout with the gap named
+and links it through the same `attach` the automatic path uses; and the export reports unjoined
+interval legs at `info`. Four tests in `RecentWorkoutMatcherTests` pin the behaviour, including that
+a near miss is never claimed for the wrong activity.
+
+**The window itself was not touched, and must not be** — see "Do not widen the window" below, which
+is still live guidance rather than history.
+
+**Everything below is the original write-up, kept for the reasoning. Its `file:line` citations were
+accurate when written and are not any more** — fixing the code they pointed at moved them. The
+symbol names still hold; chase those instead.
+
+### What is verified
+
+`RecentWorkoutMatcher.startToleranceSeconds = 120` (`RecentWorkoutMatcher.swift:74`). The window is
+anchored on `timerStartedAt ?? createdAt` (`PendingWorkoutExecution.swift:134`), and `timerStartedAt`
+is set in `ActiveWorkoutModel.recordExecution`, reached only from the Start button
+(`ActiveWorkoutView.swift:245`). So the clock starts at the **Start tap**, and arming the screen
+early costs nothing.
+
+Miss the window and the failure is loud once, in a misleading way, then silent:
+
+- The end-of-run alert is **"No Apple Watch workout found"** (`ActiveWorkoutView.swift:76-83`). It
+  names two causes — a phone-only run, or a Watch still syncing — and neither is "the two starts
+  were more than two minutes apart."
+- Its advice, *"log it from Today in a minute or two"*, **cannot work.** The reverse direction
+  applies the same gate: `resolvedExecution` filters on
+  `isMatchCandidate(now: workout.startDate, window: RecentWorkoutMatcher.startToleranceSeconds)`
+  (`RunLoggerModel.swift:826-828`). Waiting does not widen it, and there is no free-form picker —
+  the only one is fed from inside the window.
+- The export then says nothing at all. `row(for: WorkoutIntervalLog)` writes a blank
+  `healthKitWorkoutUUID` and checks only `phaseType` for issues
+  (`LoggerExportSnapshot.swift:243-251`), and `pendingCaptureCounts` fetches only `RunLog` and
+  `WorkoutNote`, so unjoined legs are never counted.
+
+The run is not lost — the legs stay and HealthKit keeps the workout. What is permanently lost is the
+**join**, so distance, pace and heart rate never reach the legs.
+
+### The fix, in dependency order
+
+1. **Let the matcher distinguish "nothing there" from "something there that just missed".** At
+   `.noCandidates` the caller is already holding `logger.unloggedWorkouts` and throws it away. Add a
+   case — `outsideWindow(workoutUUIDs:closestOffsetSeconds:)` — returned when the activity-type pool
+   was non-empty but every entry fell outside 120s.
+
+   **Blast radius, grepped rather than assumed:** exactly one production reader switches on
+   `Outcome` (`ActiveWorkoutView.swift:679-705`). `RunLoggerModel` reads the *other* enum,
+   `ExecutionMatch`. That is unusually contained for this repo — compare `LEARNINGS.md`, *"A sum
+   type only protects the readers that look at it"*.
+
+2. **Offer the repair, and let the user be the one to confirm it.** The machinery already exists:
+   `RunLoggerModel.linkIntervals(ofExecution:to:)` (`:922`) backs the ambiguous-candidates picker,
+   and its comment notes a hand-made link is indistinguishable from an automatic one afterwards,
+   including in the export. The alert becomes true and actionable: "A running workout started 4m 12s
+   after your timer, outside the two-minute window. Use it anyway?"
+
+   This follows the matcher's own doctrine rather than bending it. Its opening comment says an
+   uncertain match is never made *silently*, and that ambiguity is escalated to the user instead of
+   resolved by a tiebreak. A near miss is an uncertain match.
+
+3. **Stop the export going quiet — carefully.** Count `WorkoutIntervalLog` rows with a nil
+   `healthKitWorkoutUUID` in the pre-flight, and drop the existing line's claim that an unjoined
+   capture is "normal if the Watch has not finished syncing", which asserts a cause it never checked.
+
+   **The trap:** a phone-only run is supported and its legs *always* carry a nil UUID, so counting
+   them naively fires a warning on every one. This repo already hit that exact shape —
+   `RunLoggerModel.swift:113-116` records why joining to nothing is deliberately not an error. Report
+   the count as fact; escalate to a warning only when a near-miss workout is actually detectable.
+
+### Do not widen the window
+
+It is the first idea that comes to mind and the measurements say no.
+`RecentWorkoutMatcher.swift:60-72` records that across the owner's 23 real workouts, every window
+from 30s to 90min produced the same single automatic match, while 60min and above pulled in
+abandoned timers and turned one real workout into an unresolvable ambiguity. Widening buys no
+matches and costs a link, trading a diagnosable miss for a silent mis-attachment.
+
+Related: `startScoreReferenceSeconds` is held at 90 minutes deliberately and must not be refactored
+to follow the window. Fusing the two once scaled every start score by 45 and quietly converted "too
+close to call, so ask" into a confident pick.
+
+### Until it is fixed
+
+The mitigation is behavioural and free: start the workout on the Watch, then tap Start on the phone
+within two minutes. The app states the order (`ActiveWorkoutView.swift:280-282`) and never the
+number.

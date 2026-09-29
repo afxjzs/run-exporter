@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  HealthKit for the watchOS target. The iOS target keeps its own entitlements file
+	  (RunExporter/RunExporter.entitlements) and never writes; since 2026-09-25 it asks for
+	  workout share access only so it can start this app's workout. See the README's
+	  "Capabilities & entitlements" section.
+
+	  This target needs write access because a recorder must call
+	  HKLiveWorkoutBuilder.finishWorkout(), which saves an HKWorkout. Approved deliberately and
+	  scoped as narrowly as the API allows: workouts only, this target only.
+
+	  An entitlement is a *capability*, not a request. Nothing is shared with HealthKit until
+	  code calls requestAuthorization(toShare:read:) and the user grants it in the Health sheet.
+	-->
+	<key>com.apple.developer.healthkit</key>
+	<true/>
+
+	<!--
+	  Empty by design. This key is for *additional* protected categories (clinical health
+	  records); ordinary workout and quantity types need no entry here. Matches the iOS target.
+	-->
+	<key>com.apple.developer.healthkit.access</key>
+	<array/>
+</dict>
+</plist>

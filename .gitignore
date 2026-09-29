@@ -1,0 +1,31 @@
+# Build products — ~400 MB here, and fully reproducible from source.
+build/
+build-device/
+DerivedData/
+*.xcarchive
+
+# Xcode per-user state. Never useful to anyone else, and a frequent source of
+# spurious diffs.
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# REAL EXPORTED HEALTH DATA — never commit.
+#
+# These are actual exports of the owner's Apple Health record: heart rate,
+# workouts, activity summaries, and (when routes are enabled) GPS tracks that
+# reveal home, work, and habitual routes and times. The README says to treat
+# the export as sensitive; this is that rule enforced.
+#
+# Git history is effectively permanent, so an accidental commit here is not
+# fixed by a later delete.
+running_health_extract_*/
+*.zip
+
+# Local agent/editor settings — machine-specific, not project state.
+.claude/settings.local.json
+
+# macOS
+.DS_Store
+.gstack/
