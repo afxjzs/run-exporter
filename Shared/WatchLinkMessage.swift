@@ -18,8 +18,54 @@ enum WatchLinkMessage: Equatable, Sendable {
     case pong(id: UUID, watchReceivedAt: Date)
     /// Watch → phone, periodically, while the watch's session runs.
     case status(WatchStatus)
-    /// Phone → watch: end the session.
+    /// Phone → watch: end the session and **discard** it. The link test screen's End.
     case endWorkout
+    /// Phone → watch: a phase has begun (or its pause state changed). Durations, not clock times —
+    /// see `PhaseAnchor` and `PhaseClock`.
+    case phaseBegan(PhaseAnchor)
+    /// Phone → watch: the run is over. End the session and **save** the workout, tagged with the
+    /// phone's execution id so the phone can join to it by id rather than by start time.
+    case finishWorkout(executionID: UUID)
+}
+
+/// A phase as the watch shows it. Separate from the phone's `WorkoutPhase`, which also carries UI
+/// states (`idle`, `completed`) that never reach the watch; pause is `PhaseAnchor.isPaused`.
+/// An unknown value fails to decode — a newer phone's phase is not silently shown as an older one.
+enum WatchPhase: String, Codable, Sendable {
+    case countdown, warmup, run, walk, cooldown
+}
+
+/// Everything the watch needs to show and date a phase, **in durations measured on the phone**.
+///
+/// The watch anchors these to its own clock on arrival (`PhaseClock`), so the two devices' clocks
+/// are never compared. `sentAt` is the phone's clock and is for diagnosis only: nothing may subtract
+/// it from a watch time.
+struct PhaseAnchor: Codable, Equatable, Sendable {
+    var phase: WatchPhase
+    /// 1-based leg or repetition, when the phase has one.
+    var legNumber: Int?
+    /// Total legs, when the plan knows it; nil for an open-ended plan.
+    var legCount: Int?
+    /// Seconds into this phase when the message was sent.
+    var elapsedAtSend: TimeInterval
+    /// Seconds left when sent; **nil means open-ended** — an open-interval leg ends when the runner
+    /// ends it, so there is nothing to count down to.
+    var remainingAtSend: TimeInterval?
+    var isPaused: Bool
+    /// The phone's estimate of the one-way message delay: half its median ping round trip, 0 if it
+    /// has none. The watch cannot measure this itself.
+    var oneWayLatency: TimeInterval
+    /// Phone clock. Diagnostic only.
+    var sentAt: Date
+
+    /// Negative durations are a corrupt anchor, and a countdown built on one would be wrong without
+    /// looking wrong. `WatchLinkCodec.decode` refuses them.
+    var validationError: String? {
+        if elapsedAtSend < 0 { return "elapsedAtSend is negative (\(elapsedAtSend))" }
+        if let remainingAtSend, remainingAtSend < 0 { return "remainingAtSend is negative (\(remainingAtSend))" }
+        if oneWayLatency < 0 { return "oneWayLatency is negative (\(oneWayLatency))" }
+        return nil
+    }
 }
 
 /// Who started the watch's workout session. Recorded because the two paths behave differently and
@@ -45,9 +91,12 @@ struct WatchStatus: Codable, Equatable, Sendable {
 enum WatchLinkError: Error, Equatable, LocalizedError {
     case unsupportedVersion(received: Int, supported: Int)
     case unknownKind(String)
+    case invalidValue(String)
 
     var errorDescription: String? {
         switch self {
+        case let .invalidValue(detail):
+            return "The other device sent an invalid value: \(detail)."
         case let .unsupportedVersion(received, supported):
             return "The other device sent watch-link version \(received); this app understands up to \(supported). "
                 + "Update both apps from the same build."
@@ -67,10 +116,11 @@ enum WatchLogTransfer {
     static let key = "watchEventLog"
 }
 
-/// Wire format: `{"version": 1, "kind": "ping", "body": {…}}`.
+/// Wire format: `{"version": 2, "kind": "ping", "body": {…}}`.
 enum WatchLinkCodec {
     /// Bump when a message changes meaning or a new kind is added.
-    static let protocolVersion = 1
+    /// 2 (2026-09-29): `phaseBegan`, `finishWorkout`. Version 1 messages still decode.
+    static let protocolVersion = 2
 
     static func encode(_ message: WatchLinkMessage) throws -> Data {
         switch message {
@@ -82,6 +132,10 @@ enum WatchLinkCodec {
             return try envelope("status", status)
         case .endWorkout:
             return try envelope("endWorkout", EmptyBody())
+        case let .phaseBegan(anchor):
+            return try envelope("phaseBegan", anchor)
+        case let .finishWorkout(executionID):
+            return try envelope("finishWorkout", FinishBody(executionID: executionID))
         }
     }
 
@@ -105,6 +159,14 @@ enum WatchLinkCodec {
             return .status(try body(WatchStatus.self, from: data))
         case "endWorkout":
             return .endWorkout
+        case "phaseBegan":
+            let anchor = try body(PhaseAnchor.self, from: data)
+            if let problem = anchor.validationError {
+                throw WatchLinkError.invalidValue("phaseBegan: \(problem)")
+            }
+            return .phaseBegan(anchor)
+        case "finishWorkout":
+            return .finishWorkout(executionID: try body(FinishBody.self, from: data).executionID)
         default:
             throw WatchLinkError.unknownKind(header.kind)
         }
@@ -126,6 +188,7 @@ enum WatchLinkCodec {
     private struct PingBody: Codable { var id: UUID; var sentAt: Date }
     private struct PongBody: Codable { var id: UUID; var watchReceivedAt: Date }
     private struct EmptyBody: Codable {}
+    private struct FinishBody: Codable { var executionID: UUID }
 
     private static func envelope<Body: Codable>(_ kind: String, _ body: Body) throws -> Data {
         try encoder.encode(Envelope(version: protocolVersion, kind: kind, body: body))

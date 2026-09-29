@@ -150,6 +150,33 @@ reasoning lives next to the code; only the parts that are *not* visible from the
 
 ---
 
+## Clean out the leftovers, and simplify the UI
+
+**Asked for 2026-09-29.** Not started. The owner's words: the app is *"pretty cluttered"* with things
+left over from trials and learnings; clean it out, and treat it as a UI update — *"it's all to the same
+effect… making the app easier to use."*
+
+**Candidates, verified to exist on 2026-09-29 — each needs a decision, not an automatic delete:**
+
+- **Test harnesses in Settings:** "Cue test" (`CueTestView`) and "Watch link test"
+  (`WatchLinkTestView`). The watch link screen exists only until the real Start button (watch plan
+  step 2) replaces it.
+- **Two ways to use the Watch on the Today screen:** "Send to Apple Watch" (WorkoutKit) alongside
+  "Start Audio Timer". Once the phone starts the Watch's workout itself, the WorkoutKit route may be
+  redundant.
+- **The "Kept but known-broken" section above** — scheduling, clearing a stuck queue. Those were kept
+  *deliberately*, with reasons; removing them means reversing that decision on purpose, not tidying.
+- **Export Data appears twice** — on Today and in Settings.
+- **The watch app's probe screen** (`BackgroundExecutionProbe`) — stage 2 passed; it is kept only as
+  an instrument.
+
+**How to go about it:** list every screen and control, decide keep / merge / remove for each with the
+owner, and grep for readers before deleting anything — `LEARNINGS.md` records what happened the last
+time derived code was missed. `DocumentationDriftTests` will name every document that quotes a
+removed label; update them in the same change.
+
+---
+
 ## Sync non-Health data to the owner's server, on demand
 
 **Asked for 2026-09-29.** A bigger project, unrelated to the watch work, and not started.

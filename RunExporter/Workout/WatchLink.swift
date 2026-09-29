@@ -189,7 +189,7 @@ final class WatchLink: NSObject {
                     latestStatus = status
                     latestStatusReceivedAt = now
                     statusesReceived += 1
-                case .ping, .endWorkout:
+                case .ping, .endWorkout, .phaseBegan, .finishWorkout:
                     log("The watch sent a message only the phone should send", isError: true)
                 }
             } catch {

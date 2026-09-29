@@ -259,6 +259,10 @@ final class WatchWorkoutController: NSObject {
                     send(.pong(id: id, watchReceivedAt: now))
                 case .endWorkout:
                     end()
+                case .phaseBegan, .finishWorkout:
+                    // Handled in watch plan step 2, stages 4–5. Until then, say so: silently dropping
+                    // a phase or a finish would leave the watch showing the wrong thing, or not saving.
+                    lastError = "This watch build cannot act on phase or finish messages yet."
                 case .pong, .status:
                     lastError = "The phone sent a message only the watch should send."
                 }
