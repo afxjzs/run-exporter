@@ -382,14 +382,18 @@ final class WatchWorkoutController: NSObject {
                     self.step = "saved without route"
                     return
                 }
-                var route = "no route"
-                if let routeBuilder {
-                    do {
-                        try await routeBuilder.finishRoute(with: workout, metadata: nil)
-                        route = "route with \(self.routePoints) points"
-                    } catch {
-                        route = "route FAILED: \(error.localizedDescription)"
-                    }
+                // No `finishRoute` here. A route builder taken from `seriesBuilder(for:)` is finished
+                // BY the workout builder — calling it ourselves failed on 2026-09-29 with "This route
+                // builder is attached to a workout builder and will be finished with the workout
+                // builder". What this can honestly report is how many points went in; whether they
+                // reached Health is checked from the phone, which reads routes for its export.
+                let route: String
+                if routeBuilder == nil {
+                    route = "no route (\(self.routeStatus))"
+                } else if self.routePoints == 0 {
+                    route = "no GPS points were collected"
+                } else {
+                    route = "\(self.routePoints) GPS points handed to HealthKit with the workout"
                 }
                 self.saveResult = "workout \(workout.uuid.uuidString), \(route)"
                 self.step = "saved"

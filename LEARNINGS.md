@@ -153,6 +153,26 @@ Sleep as the cause is not established.
 `appconduitd` logs `watchKitAppExecutableHash` on a finished install. It is the SHA-256 of the watch
 executable: `813dfe89…` matched `shasum -a 256` of the local build exactly on 2026-09-25.
 
+### The first run driven from the phone (2026-09-29, build 202609291030)
+
+A short test on foot, read from the phone's `watch-events.log` and `watch-link-phone.log`:
+
+- **It works end to end.** Launch, six phase anchors each arriving within about 0.1–0.2 s of being
+  sent, the Watch's run screen, the save with a workout id, and GPS points recorded throughout.
+- **The first ping on a fresh link is slow.** 1.71 s, against a 0.13 s median once warm — the first
+  message waits for the channel. Taking the median of that one sample made the Watch subtract 0.86 s
+  it should not have. The estimate is now the *minimum* of three connect-time pings
+  (`LatencyEstimate`).
+- **Two countdowns disagreed by rounding.** The phone's `Display.countdown` rounds up; the Watch's
+  screen rounded down — up to a second apart on their own. Both round up now.
+- **A route builder from `seriesBuilder(for:)` is finished by the workout builder.** Calling
+  `finishRoute` on it fails with "This route builder is attached to a workout builder and will be
+  finished with the workout builder". The header says as much; the call was ours to drop.
+- **A new Health type means a new permission, in the foreground.** Adding route sharing made the
+  Watch's launch-time check report "would prompt"; it stopped and said so, as designed. The phone
+  still waited out its 15 s timeout, although the Watch's error reached it 2.5 s after the tap —
+  the phone now shows that error as soon as it arrives.
+
 ---
 
 ## Audio cues

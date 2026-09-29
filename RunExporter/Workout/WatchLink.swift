@@ -100,14 +100,19 @@ final class WatchLink: NSObject {
     /// now, not where it was at the tap. Nil when no run is using the watch.
     @ObservationIgnored private var anchorProvider: ((TimeInterval) -> PhaseAnchor?)?
     @ObservationIgnored private var launchTimeout: Task<Void, Never>?
+    /// True once the watch's log shows this launch reached its code. See `reportWatchErrorDuringLaunch`.
+    @ObservationIgnored private var sawLaunchArriveOnWatch = false
 
-    /// Half the median measured round trip: the one-way delay `PhaseClock` subtracts. Zero until a
-    /// ping has been answered, which errs by that delay — about 0.07 s — rather than by a guess.
+    /// The one-way delay `PhaseClock` subtracts: half the **smallest** round trip (`LatencyEstimate`).
+    /// It was the median until 2026-09-29, when the only sample was the connect-time ping at 1.71 s
+    /// and the watch subtracted 0.86 s it should not have.
     var oneWayLatencyEstimate: TimeInterval {
-        guard !roundTrips.isEmpty else { return 0 }
-        let sorted = roundTrips.sorted()
-        return sorted[sorted.count / 2] / 2
+        LatencyEstimate.oneWay(fromRoundTrips: roundTrips)
     }
+
+    /// Pings sent when the link connects. The first waits for the fresh channel, so it is never the
+    /// estimate on its own; the minimum over several is.
+    static let connectPings = 3
 
     /// Starts the watch's workout for a run. Called from the run screen's Start.
     func beginRun(anchor: @escaping (TimeInterval) -> PhaseAnchor?) {
@@ -171,6 +176,7 @@ final class WatchLink: NSObject {
             return
         }
         runConnection = .connecting
+        sawLaunchArriveOnWatch = false
         launchTimeout?.cancel()
         launchTimeout = Task { [weak self] in
             // Cancellation — the link connected, or the run ended — is the normal way this ends;
@@ -284,9 +290,19 @@ final class WatchLink: NSObject {
         launchTimeout?.cancel()
         launchTimeout = nil
         runConnection = .connected
-        // Measure the delay the watch's clock must allow for, then tell it where the run is now.
-        ping()
+        // Tell the watch where the run is now, then measure the delay its clock must allow for.
+        // Each pong that improves the estimate re-sends the phase (see `received`).
         sendCurrentPhase()
+        Task { [weak self] in
+            for index in 0..<Self.connectPings {
+                if index > 0 {
+                    // Spacing only; an early wake-up is harmless, so the sleep's error carries nothing.
+                    try? await Task.sleep(for: .seconds(1))
+                }
+                guard let self, self.isConnected else { return }
+                self.ping()
+            }
+        }
     }
 
     private func send(_ message: WatchLinkMessage, describe: String) {
@@ -324,8 +340,14 @@ final class WatchLink: NSObject {
                         continue
                     }
                     let roundTrip = now.timeIntervalSince(sentAt)
+                    let before = oneWayLatencyEstimate
                     roundTrips.append(roundTrip)
                     log("Pong: round trip \(Self.seconds(roundTrip))")
+                    // A better estimate is worth sending: the watch re-anchors the phase in progress,
+                    // which is not a boundary, so it corrects the countdown and splits nothing.
+                    if anchorProvider != nil, isConnected, oneWayLatencyEstimate < before || before == 0 {
+                        sendCurrentPhase()
+                    }
                 case let .status(status):
                     if statusesReceived == 0 {
                         log("First status from the watch")
@@ -384,7 +406,31 @@ final class WatchLink: NSObject {
             } catch {
                 fileError = "Could not save the watch's log: \(error.localizedDescription)"
             }
+            reportWatchErrorDuringLaunch(line)
         }
+    }
+
+    /// While a run is waiting for the watch, an error the watch reports is the real reason it has not
+    /// connected — say it now. Measured 2026-09-29: the watch's "Health access not granted yet" reached
+    /// this phone 2.5 s after the tap, and the screen still waited out the 15 s timeout and then said
+    /// only that the watch had not responded.
+    ///
+    /// The watch's log is a queue, so an old error from an earlier session can arrive during a new
+    /// launch. The two clocks cannot be compared to filter it, so order does it instead: the watch
+    /// logs `handle(workoutConfiguration) called` first on every phone launch, and only an error
+    /// after that line, within this connecting window, is about this launch.
+    private func reportWatchErrorDuringLaunch(_ line: String) {
+        guard runConnection == .connecting else { return }
+        if line.contains("handle(workoutConfiguration) called") {
+            sawLaunchArriveOnWatch = true
+            return
+        }
+        guard sawLaunchArriveOnWatch, let range = line.range(of: "ERROR: ") else { return }
+        let reason = "The Watch reported: " + line[range.upperBound...]
+        launchTimeout?.cancel()
+        launchTimeout = nil
+        runConnection = .failed(reason)
+        log(reason, isError: true)
     }
 
     fileprivate func connectivityProblem(_ text: String) {

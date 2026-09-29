@@ -74,8 +74,15 @@ struct WatchRunView: View {
     }
 
     /// Time left for a timed phase; elapsed for an open-ended one, which has nothing to count to.
+    ///
+    /// A countdown rounds **up**, exactly as the phone's `Display.countdown` does. The first build
+    /// rounded down, so with 12.3 s left the phone read 0:13 and the watch 0:12 — measured on
+    /// 2026-09-29 as "about a second" between the two screens.
     private func timeText(_ clock: PhaseClock, now: Date) -> String {
-        Self.clock(clock.remaining(at: now) ?? clock.elapsed(at: now))
+        if let remaining = clock.remaining(at: now) {
+            return Self.clock(remaining.rounded(.up))
+        }
+        return Self.clock(clock.elapsed(at: now))
     }
 
     private func timeCaption(_ clock: PhaseClock, now: Date) -> String {
