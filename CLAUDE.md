@@ -3,9 +3,29 @@
 Pointers only. The content lives in the files named below; duplicating it here would let the two
 copies drift, which this project already has a documented history of.
 
+## THIS REPOSITORY IS PUBLIC — nothing personal goes in a commit
+
+Published at github.com/afxjzs/run-exporter since 2026-09-29. **Committed files and commit messages
+carry the engineering lesson; the owner's specifics live in git-ignored local files.** See
+[private/README.md](private/README.md).
+
+- **Never commit:** device IDs or names, the Team ID, the owner's run dates/times, heart rates,
+  distances, body-signal ratings, health details, export filenames with real dates. Write "heart
+  rate per leg separated running from walking" in a document; put the numbers in
+  `private/run-notes.md`. The same goes for **commit messages** — the pre-public repository could
+  never be published because its messages held exactly these.
+- **Where the specifics live:** `Config/Local.xcconfig` (Team ID), `scripts/local.env` (device IDs),
+  `private/` (run notes, the guard's pattern list, and `private/archive-docs/` — the full-detail
+  docs as they stood before going public). The full old history is the private repository
+  `afxjzs/run-exporter-archive`.
+- **The guard** (`scripts/check-sensitive.sh`, hooks in `.githooks/`) blocks listed values and refuses
+  to run without its list. It cannot recognize prose about the owner's health — that part is on you.
+- **Commands in documents use placeholders** (`<PHONE_COREDEVICE_ID>`); the real values are in
+  `scripts/local.env`, which you may read to run them.
+
 ## The documentation, and which file answers what
 
-Eleven files, about 6,300 lines (counted 2026-09-29). **This table is the index.** Until 2026-09-25 four of these were
+Twelve committed files (counted 2026-09-29), plus the git-ignored material `private/README.md` indexes. **This table is the index.** Until 2026-09-25 four of these were
 reachable from nothing that loads automatically — 71% of the words in the repo — including the spec
 that 55 `spec §…` citations across 30 source files point at.
 
@@ -21,6 +41,7 @@ that 55 `spec §…` citations across 30 source files point at.
 | [docs/WATCHOS_RECORDER_PLAN.md](docs/WATCHOS_RECORDER_PLAN.md) | The watch plan of record: phone decides, watch records; its steps and what ends each | Before any watch app work |
 | [docs/WATCH_DEVELOPMENT.md](docs/WATCH_DEVELOPMENT.md) | **How** to get the watch app installed, launched from the phone, and its logs read — Developer Mode, the profile, error codes, `WKBackgroundModes` | Before installing on, launching, or diagnosing the Watch |
 | [docs/Native-iOS-Health-Running-Export.md](docs/Native-iOS-Health-Running-Export.md) | The **historical** v1.0 spec | Rarely. It is superseded, and says so at the top |
+| [private/README.md](private/README.md) | What is kept out of this public repo and where — and the git-ignored files beside it: `run-notes.md` (real run measurements), `archive-docs/` (pre-public docs with every detail) | Before writing anything about the owner's runs or devices, and when a public doc says a detail is private |
 
 ## Citing code from a document
 

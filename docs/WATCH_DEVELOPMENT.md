@@ -5,7 +5,9 @@ how to see what it did. Written 2026-09-29 from the sessions of 2026-09-25 and 2
 took the watch app from "never installed" to "launched by the phone". Every step below was done on
 this hardware; anything not measured says so.
 
-Hardware and OS versions live in [INSTALLS.md](INSTALLS.md). Identifiers used below:
+Hardware and OS versions live in [INSTALLS.md](INSTALLS.md). The placeholders below are the owner's
+real values in `scripts/local.env` (git-ignored — this repository is public; see
+[../private/README.md](../private/README.md)). Identifiers used below:
 
 | Device | Hardware UDID (portal, provisioning) | CoreDevice id (`devicectl`) |
 |---|---|---|
@@ -52,7 +54,7 @@ never connected to the Watch at any point, so it is not needed for this.
 ## 2. Build, install, confirm
 
 ```bash
-scripts/sideload.sh <PHONE_COREDEVICE_ID>   # clean Release build, stamped build number, installs + launches on the phone
+scripts/sideload.sh   # device id from scripts/local.env; clean Release build, stamped build number, installs + launches on the phone
 ```
 
 The script builds **clean** on purpose, stamps `CFBundleVersion` with a timestamp, and verifies the

@@ -138,12 +138,23 @@ Find your device UDID with `xcrun devicectl list devices`.
 
 ### Building it yourself
 
-The project ships with `DEVELOPMENT_TEAM` empty, so it will not sign as-is. In Xcode, open each
-target's **Signing & Capabilities** tab (the app, the Live Activity extension, the watch app and the
-tests) and choose your own team. The bundle identifiers all start with `is.doug.`, which belongs to
-the author's team; change them to a prefix you own, or automatic signing will refuse to provision
-them. `Config/RunExporterWatch-Info.plist` names the phone app's bundle id as the watch app's
-companion, and the helper scripts in `scripts/` name it too, so update those to match.
+Personal settings live in git-ignored local files, each with a committed template:
+
+```bash
+cp Config/Local.xcconfig.example Config/Local.xcconfig   # set DEVELOPMENT_TEAM to your team ID
+cp scripts/local.env.example scripts/local.env           # optional: your phone's device id
+```
+
+`Config/Shared.xcconfig` includes `Local.xcconfig` for every target, so the team is set once, for
+Xcode and command-line builds alike. Without it the project still builds for the simulator. The bundle
+identifiers all start with `is.doug.`, which belongs to the author's team; change them to a prefix you
+own, or automatic signing will refuse to provision them. `Config/RunExporterWatch-Info.plist` names
+the phone app's bundle id as the watch app's companion, and the helper scripts in `scripts/` name it
+too, so update those to match.
+
+**Contributing:** this repository is public, and nothing personal may be committed. Enable the guard
+with `git config core.hooksPath .githooks` and list your own values in `private/sensitive-patterns.txt`
+(template alongside it) — see [private/README.md](private/README.md).
 
 ## Capabilities & entitlements
 
@@ -228,12 +239,13 @@ otherwise fail every one of them for a reason unrelated to what they check.
 
 ## Sideloading to a device
 
-Helper scripts live in `scripts/`. Each needs the phone's device id as its first argument and
-stops with a usage message without one (find it with `xcrun devicectl list devices`):
+Helper scripts live in `scripts/`. Each takes the phone's device id as its first argument, or reads
+`PHONE_DEVICE_ID` from `scripts/local.env`, prints which it used, and stops with a usage message if
+it has neither (find the id with `xcrun devicectl list devices`):
 
 ```bash
-scripts/sideload.sh <device-id>    # build Release + install + launch
-scripts/relaunch.sh <device-id>    # launch the already-installed app (no rebuild)
+scripts/sideload.sh [device-id]    # clean Release build + install + launch
+scripts/relaunch.sh [device-id]    # launch the already-installed app (no rebuild)
 ```
 
 ### Verifying a real export

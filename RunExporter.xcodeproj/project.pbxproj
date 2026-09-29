@@ -71,6 +71,7 @@
 		AA000000000000000000001B /* RunExporterLiveActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RunExporterLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA000000000000000000001E /* RunWorkoutActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunWorkoutActivityAttributes.swift; sourceTree = "<group>"; };
 		AA000000000000000000002E /* WatchLinkMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLinkMessage.swift; sourceTree = "<group>"; };
+		AA0000000000000000000031 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Shared.xcconfig; path = Config/Shared.xcconfig; sourceTree = SOURCE_ROOT; };
 		AA000000000000000000001F /* RunWorkoutLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunWorkoutLiveActivity.swift; sourceTree = "<group>"; };
 		CD3917EA3027108C00D02ADA /* RunExporterWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "RunExporterWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -122,6 +123,7 @@
 				CD3917EE3027108C00D02ADA /* RunExporterWatch Watch App */,
 				AA0000000000000000000003 /* Products */,
 				CD39175C30270E1300D02ADA /* Recovered References */,
+				AA0000000000000000000031 /* Shared.xcconfig */,
 			);
 			sourceTree = "<group>";
 		};
@@ -383,6 +385,7 @@
 /* Begin XCBuildConfiguration section */
 		AA000000000000000000000C /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = AA0000000000000000000031 /* Shared.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -446,6 +449,7 @@
 		};
 		AA000000000000000000000D /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = AA0000000000000000000031 /* Shared.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -508,7 +512,6 @@
 				CODE_SIGN_ENTITLEMENTS = RunExporter/RunExporter.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/RunExporter-Info.plist";
@@ -540,7 +543,6 @@
 				CODE_SIGN_ENTITLEMENTS = RunExporter/RunExporter.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/RunExporter-Info.plist";
@@ -570,7 +572,6 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				PRODUCT_BUNDLE_IDENTIFIER = is.doug.runexporter.tests;
@@ -588,7 +589,6 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				PRODUCT_BUNDLE_IDENTIFIER = is.doug.runexporter.tests;
@@ -605,7 +605,6 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/RunExporterLiveActivity-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Run Workout";
@@ -629,7 +628,6 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/RunExporterLiveActivity-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Run Workout";
@@ -657,7 +655,6 @@
 				CODE_SIGN_ENTITLEMENTS = "RunExporterWatch Watch App/RunExporterWatch.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/RunExporterWatch-Info.plist";
@@ -692,7 +689,6 @@
 				CODE_SIGN_ENTITLEMENTS = "RunExporterWatch Watch App/RunExporterWatch.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/RunExporterWatch-Info.plist";

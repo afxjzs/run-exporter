@@ -17,7 +17,7 @@ Series 5 is slow and has the sensors.
 |---|---|---|
 | Owns | Plans, interval timer, cues to AirPods, open-interval logic, logs, notes, export | The `HKWorkoutSession`: heart rate, distance, energy, GPS route, and saving the workout |
 | Decides | Every phase boundary, including when an open leg ends | Nothing. It records what the phone sends |
-| Shows | The full run screen | **One screen, specified by the owner 2026-09-29:** phase, time left, heart rate, **leg pace**, **mile pace**, and **total distance across all legs**. Zone later |
+| Shows | The full run screen | **One screen, specified by the owner 2026-09-29:** phase, time left, heart rate, **leg pace** (the current leg's average), **mile pace — the current mile split**, i.e. pace since the last whole mile (decided 2026-09-29), and **total distance across all legs**. Zone later |
 | Start | The one tap. The owner is fine starting on the phone *as long as it also starts the Watch* | Starts on its own |
 
 **The saved workout is a real running workout.** Same `HKWorkout` type Apple's Workout app writes, in

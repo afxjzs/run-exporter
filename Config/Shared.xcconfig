@@ -1,0 +1,11 @@
+// Project-wide base configuration, attached to the project's Debug and Release configurations.
+//
+// Its only job is to pull in the owner's machine-local settings without committing them: this
+// repository is public, and the Apple Developer Team ID is personal. `#include?` (with the `?`) is
+// optional — a clone without Config/Local.xcconfig still opens and builds for the simulator, and
+// signing for a device asks for a team, which is the honest failure.
+//
+// Targets must NOT set DEVELOPMENT_TEAM themselves: a target-level value, even an empty one,
+// overrides this file and silently leaves the team blank. Check what actually resolved with:
+//   xcodebuild -project RunExporter.xcodeproj -target RunExporter -showBuildSettings | grep DEVELOPMENT_TEAM
+#include? "Local.xcconfig"

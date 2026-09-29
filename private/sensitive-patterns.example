@@ -1,0 +1,10 @@
+# Copy to private/sensitive-patterns.txt (git-ignored) and list YOUR values, one per line.
+# Matched as fixed strings, case-insensitively, against every added line and every commit message.
+# Lines starting with # and blank lines are ignored. An empty list makes the guard refuse every commit.
+#
+# Typical entries:
+#   your Apple Developer Team ID
+#   your iPhone's and Watch's hardware UDIDs and CoreDevice ids (xcrun devicectl list devices)
+#   your devices' names and serial numbers
+#   your home IP address or network name
+#   specific identifiers from your own health data (workout UUIDs)

@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Blocks a commit message containing one of the owner's personal values. See private/README.md.
+exec "$(git rev-parse --show-toplevel)/scripts/check-sensitive.sh" --file "$1"

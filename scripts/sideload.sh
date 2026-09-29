@@ -5,12 +5,10 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-# The phone's device id is required. `xcrun devicectl list devices` prints it.
-if [[ $# -lt 1 || -z "$1" ]]; then
-  echo "usage: $0 <device-id>   (find it with: xcrun devicectl list devices)" >&2
-  exit 64
-fi
-UDID="$1"
+# The phone's device id: the first argument, else PHONE_DEVICE_ID from scripts/local.env
+# (git-ignored; template scripts/local.env.example). Which one was used is printed.
+source scripts/device-id.sh
+UDID="$(resolve_phone_device_id "${1:-}")"
 BUNDLE_ID="is.doug.runexporter"
 SCHEME="RunExporter"
 DERIVED="./build"

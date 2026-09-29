@@ -23,6 +23,20 @@ xcuserdata/
 running_health_extract_*/
 *.zip
 
+# THE OWNER'S PERSONAL VALUES — this repository is public.
+#
+# Anything specific to the owner lives in these local files, each with a committed template:
+#   Config/Local.xcconfig     Apple Developer Team ID       (template: Local.xcconfig.example)
+#   scripts/local.env         phone and Watch device IDs    (template: local.env.example)
+#   private/                  install log, real run data, the guard's pattern list
+# scripts/check-sensitive.sh, run as a pre-commit and commit-msg hook, blocks any commit that
+# would publish a value listed in private/sensitive-patterns.txt.
+Config/Local.xcconfig
+scripts/local.env
+private/*
+!private/README.md
+!private/sensitive-patterns.example
+
 # Local agent/editor settings — machine-specific, not project state.
 .claude/settings.local.json
 
