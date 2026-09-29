@@ -245,7 +245,7 @@ on the removal diff and `/code-review` once on the watch-flow diff (`610fdd2..HE
     first open-ended phase, so an open-interval run's card may show little beyond the elapsed
     clock. Removing the cue test (item 5) leaves `LiveActivityController.droppedUpdates` with no
     reader — it was shown only there — so it goes with item 5 or gets a new home.
-12. **Countdown default** — **3 seconds, the spec §6 value, for new plans.** The reason for 0 (two
+12. **[Done]** **Countdown default** — **3 seconds, the spec §6 value, for new plans.** The reason for 0 (two
     separate taps) is gone, and the Watch usually connects within the countdown. Existing plans and
     a stored Settings value are unchanged. Change the assertion in `AudioAndShoeTests` first (it
     pins 0 with the two-tap reasoning), then `LoggerDefaults`; update README's deviation note and

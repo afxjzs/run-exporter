@@ -274,12 +274,11 @@ final class LoggerDefaultsTests: XCTestCase {
         // cues late. The voice carries the whole meaning; the tone only added queue pressure.
         // Still user-switchable. See LEARNINGS.md → Audio cues.
         XCTAssertEqual(defaults.cueMode, .voice, "Voice only by default; see §9.2 deviation")
-        // Deliberate deviation from spec §6, which counts down 3 seconds before the first phase.
-        // The owner starts the run on the Watch and the timer on the phone as two separate taps,
-        // and a countdown puts three seconds between the tap and the run — exactly the offset the
-        // two-device start is trying to eliminate. Off by default; still selectable per plan and in
-        // Settings. See LEARNINGS.md → Run logging.
-        XCTAssertEqual(defaults.countdownSeconds, 0, "No countdown by default; see §6 deviation")
+        // Spec §6's 3 seconds, restored in the 2026-09-29 clean-out. It was 0 while a run started as
+        // two taps, the Watch then the phone, where a countdown added exactly the offset the start
+        // was trying to close. Start now launches the Watch itself, and the Watch usually connects
+        // within the countdown. Existing plans keep their own value.
+        XCTAssertEqual(defaults.countdownSeconds, 3, "Spec §6 default")
         XCTAssertEqual(defaults.cooldownMode, .open, "Spec §6 default")
         // Deliberate deviation from spec §11.3, which defaults this off. Turned on after a real
         // run where unannounced transitions were repeatedly surprising. Still user-switchable.
@@ -345,9 +344,9 @@ final class LoggerDefaultsTests: XCTestCase {
         suite.set(7, forKey: "cue.countdownSeconds")
         let defaults = LoggerDefaults(defaults: suite)
 
-        // Falls back to the documented default, which is now 0 — and says so rather than silently
-        // substituting it.
-        XCTAssertEqual(defaults.countdownSeconds, 0)
+        // Falls back to the documented default — 3 seconds since the 2026-09-29 clean-out — and
+        // says so rather than silently substituting it.
+        XCTAssertEqual(defaults.countdownSeconds, 3)
         XCTAssertFalse(defaults.configurationIssues.isEmpty)
     }
 

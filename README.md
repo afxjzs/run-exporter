@@ -396,14 +396,13 @@ cited throughout this README and in the source refer to it). **That spec covers 
 there** — open-interval runs were asked for and built afterwards and are specified nowhere, so their
 reasoning lives in the code's own comments and in [docs/BACKLOG.md](docs/BACKLOG.md).
 
-The code diverges from the spec deliberately in five places, and they are **not** all explained in
+The code diverges from the spec deliberately in four places, and they are **not** all explained in
 the same file:
 
 | Deviation | Spec | Explained in |
 |---|---|---|
 | Deployment target stays at iOS 17.0 | suggests iOS 18 | [Known limitations](#known-limitations) |
 | Cue mode defaults to Voice, not Voice + beeps | §9.2 | [Known limitations](#known-limitations) |
-| No start countdown by default | §6 | [Known limitations](#known-limitations) |
 | Transition countdown defaults **on** | §11.3 | [Known limitations](#known-limitations) — inside the cue-mode entry, which it sits in tension with |
 | Two `AVAudioSession` options changed | §9.4 | [docs/CUE_FEASIBILITY_TEST.md](docs/CUE_FEASIBILITY_TEST.md), **not** here |
 
@@ -428,12 +427,13 @@ reasoning first.
    yourself as well, or two are recorded. The run screen says whether the Watch is recording and
    offers **Try again** if it is not; a Watch that fails never stops the run, which carries on
    phone-only. Before this, the Watch's workout was started by hand and matched to the timer by
-   start time, which is why there is no countdown by default.
+   start time, which is why the start countdown defaulted to 0 until the 2026-09-29 clean-out.
 3. **Cues play through AirPods** — run, walk, cooldown and completion, plus the five-second warning
    and the 3-2-1 into each transition (both on by default), the final-round call (on) and the
    halfway call (off). Pause, resume, skip and end are confirmed aloud in every cue mode, because a
    tap with no audible answer is indistinguishable from a missed one. The **start** countdown is
-   `0` by default, for the reason in step 2. An open-interval run adds two more: the running still
+   3 seconds by default (spec §6), which also gives the Watch time to connect before the first
+   phase; plans made before the 2026-09-29 clean-out keep the countdown they were saved with. An open-interval run adds two more: the running still
    to do, announced as each leg begins, and the recovery walk reaching its floor — the latter
    counted into with the same 3-2-1, and never announcing a run, because the floor does not start
    the next leg.
@@ -673,14 +673,13 @@ Three companion files, kept separate because they answer different questions:
   boundary. Note this sits in tension with the §11.3 deviation, which turned that countdown *on*
   after a run where unannounced transitions were surprising — the two were decided from different
   runs and the next change here should settle them together. See [LEARNINGS.md](LEARNINGS.md).
-- **No start countdown by default (spec §6 deviation).** The spec counts down 3 seconds before the
-  first phase. The default was set when a run was started as two separate taps — the workout on the
-  Watch, then the timer on the phone — and the whole difficulty was landing those on the same
-  second; a countdown added three seconds to exactly that offset. Since 2026-09-29 the phone's
-  **Start** launches the Watch's workout itself, so that reason no longer applies; the default has
-  not been revisited since. Still selectable per plan and in Settings.
-  Changing this default does **not** change plans that already store a countdown: `readInt` returns
-  a stored `UserDefaults` value whenever one exists, and each `PlannedWorkout` carries its own.
+- **Plans made before 2026-09-29 keep the start countdown they were saved with** — 0 unless it was
+  changed by hand. The default was 0 — a spec §6 deviation —
+  while a run started as two taps, the Watch then the phone, where a countdown added exactly the
+  offset that start was trying to close. The 2026-09-29 clean-out restored the spec's 3 seconds,
+  since Start now launches the Watch. That changes **new** plans only: each `PlannedWorkout`
+  stores its own countdown, and `readInt` keeps a Settings value that was ever stored. Change an
+  existing plan's countdown in its editor.
 - **The phone sees only part of the Watch.** What it can see comes through this app's own watch
   link, during a run: the mirrored session's state, the heart rate the watch sends, and the watch's
   forwarded event log. It cannot see the Watch save a workout. (When the app used WorkoutKit, three

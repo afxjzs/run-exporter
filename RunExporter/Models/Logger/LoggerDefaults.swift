@@ -72,10 +72,12 @@ final class LoggerDefaults {
         self.cueVoiceIdentifier = defaults.string(forKey: Key.cueVoiceIdentifier)
         self.cueVolume = Self.readCueVolume(defaults, issues: &issues)
         self.duckOtherAudio = Self.readBool(defaults, Key.duckOtherAudio, default: true)
-        // No countdown, a deviation from spec §6. The run is started on the Watch and the timer on
-        // the phone as two separate taps, and three seconds between the tap and the first phase is
-        // the exact offset that two-device start is trying to close. Selectable per plan and here.
-        self.countdownSeconds = Self.readInt(defaults, Key.countdownSeconds, default: 0,
+        // Spec §6's 3 seconds. It was 0 while a run started as two taps — the Watch, then the phone —
+        // where a countdown added exactly the offset that start was trying to close. Since Start
+        // launches the Watch itself, the countdown gives the Watch time to connect before the
+        // first phase (restored in the 2026-09-29 clean-out). Applies to new plans; each plan
+        // stores its own. Selectable per plan and here.
+        self.countdownSeconds = Self.readInt(defaults, Key.countdownSeconds, default: 3,
                                              allowed: Self.allowedCountdownSeconds,
                                              label: "Countdown", issues: &issues)
         self.fiveSecondWarning = Self.readBool(defaults, Key.fiveSecondWarning, default: true)
