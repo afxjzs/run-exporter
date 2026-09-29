@@ -147,9 +147,6 @@ enum CueSource: String, CaseIterable, Identifiable {
         case .none: return "No cues"
         }
     }
-
-    /// Whether this app is responsible for producing the cues.
-    var usesAppOwnedEngine: Bool { self == .iphoneAudioEngine }
 }
 
 /// Spoken cues, tones, or both. Mirrors `cue_mode` in manifest.json.

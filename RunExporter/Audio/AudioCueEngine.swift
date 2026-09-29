@@ -39,39 +39,10 @@ final class AudioCueEngine {
     /// genuine error behind a condition that had already passed.
     private(set) var routeNotice: String?
 
-    /// Cues actually played, newest last. Drives the on-device cue test (spec §26, Test 2).
-    private(set) var playbackLog: [PlaybackRecord] = []
-
     private(set) var isSessionActive = false
-    /// True when the `.playback` category was actually applied.
-    ///
-    /// Surfaced because the difference is invisible in the foreground and decisive once the screen
-    /// locks: a session that failed to configure still makes noise, so "I can hear it" is not
-    /// evidence that background cues will work.
-    private(set) var isSessionConfigured = false
     /// True while an interruption (a call, Siri) is in effect.
     private(set) var isInterrupted = false
     private(set) var currentRouteDescription = ""
-
-    struct PlaybackRecord: Identifiable {
-        let id = UUID()
-        let cue: String
-        /// When `play(_:)` was entered.
-        let requestedAt: Date
-        /// When the tone actually started, or nil when this cue had no tone.
-        let soundedAt: Date?
-        let route: String
-        let spoke: Bool
-        let played: Bool
-
-        /// How long this cue spent between being requested and being audible.
-        ///
-        /// The number that matters for "the beeps are not on the seconds". Nil for a voice-only cue,
-        /// where there is no tone whose start could be late.
-        var startLatency: TimeInterval? {
-            soundedAt.map { $0.timeIntervalSince(requestedAt) }
-        }
-    }
 
     private let session = AVAudioSession.sharedInstance()
     private let synthesizer = AVSpeechSynthesizer()
@@ -107,12 +78,10 @@ final class AudioCueEngine {
 
         do {
             try configureSession(ducking: false)
-            isSessionConfigured = true
         } catch {
             // Do NOT claim cues will not play: they generally still do, through whatever session
             // the system falls back to. What is actually lost is background and locked-screen
             // playback, and ducking — so say that, and keep going rather than refusing to run.
-            isSessionConfigured = false
             let message = "Audio is running in a reduced mode (\(error.localizedDescription)). "
                 + "Cues should still play while the app is open, but may stop when the screen "
                 + "locks, and may interrupt music instead of ducking it."
@@ -173,16 +142,8 @@ final class AudioCueEngine {
 
     /// Plays a cue in whatever mode the user selected.
     ///
-    /// Deliberately does nothing when the cue source is not this app: the engine never competes
-    /// with the Apple Workout app for the same transition.
+    /// Deliberately does nothing when cues are off ("Play cues" in Settings).
     func play(_ cue: AudioCue) {
-        // Taken on entry, before any session work, so the log can show how long a cue spent getting
-        // to the speaker. It used to be stamped at the very end of this method, which meant the log
-        // recorded when the work finished and had nothing to compare it against — perfectly regular
-        // rows while the audible beeps drifted. A timing log that cannot show drift is not a timing
-        // log.
-        let requestedAt = Date()
-
         guard let settings else {
             lastError = "A cue was requested before audio was prepared, so it did not play."
             return
@@ -201,16 +162,10 @@ final class AudioCueEngine {
         var spoke = false
         var played = false
 
-        var soundedAt: Date?
-
         if wantsTone, let player = tonePlayers[cue.identifier] {
             player.volume = Float(settings.cueVolume)
             player.currentTime = 0
             played = player.play()
-            // Stamped immediately after `play()` returns, so `soundedAt - requestedAt` is the delay
-            // this cue actually suffered. Everything expensive on that path — `setCategory` for
-            // ducking is a synchronous round trip to the audio server — lands inside this gap.
-            soundedAt = Date()
             if played {
                 duckCounter.started(player)
             } else {
@@ -236,14 +191,6 @@ final class AudioCueEngine {
             // earlier cue is still sounding, which must keep it.
             restoreOtherAudio()
         }
-
-        playbackLog.append(PlaybackRecord(cue: cue.identifier,
-                                          requestedAt: requestedAt,
-                                          soundedAt: soundedAt,
-                                          route: currentRouteDescription,
-                                          spoke: spoke,
-                                          played: played))
-        if playbackLog.count > 200 { playbackLog.removeFirst(playbackLog.count - 200) }
     }
 
     /// Whether `cue` may be played at all under `source`.
@@ -261,8 +208,6 @@ final class AudioCueEngine {
     nonisolated static func shouldPlay(_ cue: AudioCue, source: CueSource) -> Bool {
         source == .iphoneAudioEngine
     }
-
-    func clearPlaybackLog() { playbackLog.removeAll() }
 
     func clearError() { lastError = nil }
 

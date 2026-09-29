@@ -27,9 +27,6 @@ struct SettingsView: View {
             loggingSection($defaults)
 
             Section {
-                NavigationLink { CueTestView() } label: {
-                    Label("Cue test", systemImage: "waveform")
-                }
                 NavigationLink { WatchLinkTestView() } label: {
                     Label("Watch link test", systemImage: "applewatch")
                 }

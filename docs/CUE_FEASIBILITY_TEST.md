@@ -4,10 +4,12 @@ Spec §26, Tests 1–4. These are the two deliverables that **cannot be produced
 hardware**: whether a cue is audible, unambiguous and correctly routed is a question only a person
 wearing the AirPods can answer. Nothing in the automated suite can substitute for it.
 
-> **A dated record.** The Send to Watch screen these tests used — "Add to Apple Watch", "Schedule
-> for a time", "Clear this iPhone's queue" — was removed in the 2026-09-29 clean-out
-> ([BACKLOG.md](BACKLOG.md)). The phone's Start now launches this app's own watch workout. The
-> procedures below describe the app as it was when each test ran.
+> **A dated record.** Two screens these tests used were removed in the 2026-09-29 clean-out
+> ([BACKLOG.md](BACKLOG.md)): Settings' **Cue test** harness (with its playback log and the Live
+> Activity dropped-update count), and the Send to Watch screen — "Add to Apple Watch", "Schedule
+> for a time", "Clear this iPhone's queue". The phone's Start now launches this app's own watch
+> workout. The procedures below describe the app as it was when each test ran; re-running one
+> means bringing its harness back from git history.
 
 ## Status
 

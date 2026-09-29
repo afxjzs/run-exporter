@@ -356,11 +356,11 @@ Workout/DiagnosticLogFile    append-only log file in Documents, pulled with devi
 Audio/AudioCueEngine     AVAudioSession + speech + tones, background audio, route/interruption
 Audio/CueDuckCounter     holds the ducking invariant: only un-duck what this cue ducked
 Audio/ToneGenerator      programmatically generated WAV cue tones (no bundled/licensed audio)
-Workout/LiveActivityController  Live Activity lifecycle; detects updates iOS discards
+Workout/LiveActivityController  Live Activity lifecycle and stale dates (the card needs no updates)
 Views/*                  Today, Plans (list + detail + editor), OpenIntervalPlanEditorView,
-                         send-to-Watch, active workout, LegEndSheet (annotates a leg that has
-                         already ended), SlideToConfirm (the drag behind Pause and Skip),
-                         post-run logger, history, shoes, settings, cue test
+                         active workout, LegEndSheet (annotates a leg that has already ended),
+                         SlideToConfirm (the drag behind Pause and Skip), post-run logger,
+                         history, shoes, settings
 Views/WatchLinkTestView  Settings' watch link test: launch, ping and end a test session (diagnostic)
 
 — shared / other targets —

@@ -201,13 +201,20 @@ on the removal diff and `/code-review` once on the watch-flow diff (`610fdd2..HE
 4. **[Done]** **Cue source** — **remove "Apple Workout app" and "Watch companion"; replace the picker with a
    "Play cues" toggle** (on = iPhone audio engine, off = No cues). The first only made sense with
    item 2; the second was never built and its footer was false. The export's `cue_source` keeps its
-   existing values. A phone with a removed value stored reports it once under "Settings that could
-   not be read" — by design, not a regression. `CueSourceExplanationTests` changes first.
-5. **Cue test** (`CueTestView`, including its Live Activity test buttons) — **remove it.** The
+   existing values. A phone with a removed value stored reports it under "Settings that could not
+   be read" at every launch until "Play cues" is toggled, which stores a current value — by
+   design, not a regression. `CueSourceExplanationTests` changes first.
+5. **[Done]** **Cue test** (`CueTestView`, including its Live Activity test buttons) — **remove it.** The
    on-hardware tests it served are recorded in `CUE_FEASIBILITY_TEST.md`, its Test 1 needs the
    route removed in item 2, and its create button writes a real plan into Plans. Goes with it:
    `latencyDescription` and `CueLatencyTests`, and `AudioCueEngine.playbackLog`, which has no
-   other reader.
+   other reader. **Also removed, each read only by that screen:** `CueSource.usesAppOwnedEngine`,
+   `AudioCueEngine.isSessionConfigured` (a degraded session is still reported through
+   `lastError` on the run screen), and the Live Activity's dropped-update detection
+   (`droppedUpdates`, `isCardStale`, `recordOutcome`, and the unused `statusDescription`) with
+   the four tests that pinned it — resolving item 11's "goes with item 5 or gets a new home".
+   Left for `/simplify`: `AudioCueEngine.isSessionActive` and `isInterrupted` are written but
+   never read, which was already true before the clean-out.
 6. **Watch link test** (`WatchLinkTestView`) — **remove it, and move `WatchLink.fileError` to the run
    screen's Watch status.** A real Start and End Workout do the same and log to the same files.
    `fileError` (a diagnostic file could not be written) is shown nowhere else, so dropping the

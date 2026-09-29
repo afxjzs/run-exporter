@@ -1,9 +1,9 @@
 import XCTest
 @testable import RunExporter
 
-/// Regression tests for the Live Activity going silently stale (spec §12.1).
+/// How long a Live Activity's content stays valid (spec §12.1).
 ///
-/// ## The bug these lock down
+/// ## Why this matters
 ///
 /// `Activity.update(_:)` applies its content **only while the app is in the foreground**. Called
 /// from a backgrounded app it returns normally, throws nothing, reports nothing — and discards the
@@ -11,16 +11,10 @@ import XCTest
 /// workout the Lock Screen card kept reading "RUN · Round 1 of 3 · 0:00" while the app itself was
 /// correctly in cooldown at round 3. Full evidence in `docs/CUE_FEASIBILITY_TEST.md`, Test 3.
 ///
-/// That is the worst failure shape available: no crash, no error, and a confident wrong answer on
-/// the Lock Screen — the one surface the user looks at while running.
-///
-/// ## What can and cannot be tested here
-///
-/// The OS behaviour itself **cannot** be reproduced off-device; nothing in the simulator declines
-/// an update. What is testable is the app's response to it, which is where the defect actually lay:
-/// the outcome was never inspected. These tests pin that the app notices a discarded update and
-/// says so, and that the stale date expires at the phase boundary so the system dims a card that
-/// has stopped being true.
+/// The card was redesigned so it needs no updates. What remains testable, and pinned here, is the
+/// stale date: the system dims a card that has stopped being true, and must not dim one that is
+/// still true. (Tests that a discarded update was *detected* and counted were removed in the
+/// 2026-09-29 clean-out, with the count they pinned; it was shown only on the cue test screen.)
 @MainActor
 final class LiveActivityStalenessTests: XCTestCase {
 
@@ -39,64 +33,6 @@ final class LiveActivityStalenessTests: XCTestCase {
             nextPhaseName: "Walk 0:30",
             isPaused: paused,
             pausedAt: nil)
-    }
-
-    // MARK: - Detecting a discarded update
-
-    /// The core regression: content the system did not apply must be reported, not shrugged off.
-    func testDiscardedUpdateIsRecorded() {
-        let controller = LiveActivityController()
-
-        controller.recordOutcome(pushed: state(phase: "walk", name: "Walk", repetition: 2),
-                                 applied: state())
-
-        XCTAssertTrue(controller.isCardStale,
-                      "A dropped update must mark the card stale — this is exactly the silent "
-                      + "failure the whole bug consisted of")
-        XCTAssertEqual(controller.droppedUpdates, 1)
-    }
-
-    /// A discarded update must not raise a user-facing error any more.
-    ///
-    /// It did while the card displayed a phase name that could contradict the workout. The card now
-    /// shows only values derived from fixed bounds, so a dropped update changes nothing visible —
-    /// and a warning on every locked workout would be a banner reporting a non-problem.
-    func testDiscardedUpdateNoLongerRaisesAUserFacingError() {
-        let controller = LiveActivityController()
-
-        controller.recordOutcome(pushed: state(phase: "cooldown", name: "Cooldown", repetition: 3),
-                                 applied: state(name: "Run", repetition: 1))
-
-        XCTAssertNil(controller.lastError)
-        XCTAssertEqual(controller.droppedUpdates, 1, "Still counted, for the diagnostics screen")
-    }
-
-    /// An update that *was* applied must not raise a warning.
-    func testAppliedUpdateIsNotFlagged() {
-        let controller = LiveActivityController()
-        let pushed = state(phase: "walk", name: "Walk", repetition: 2)
-
-        controller.recordOutcome(pushed: pushed, applied: pushed)
-
-        XCTAssertFalse(controller.isCardStale)
-        XCTAssertEqual(controller.droppedUpdates, 0)
-    }
-
-    /// Staleness must clear when the card catches up, not latch for the rest of the workout.
-    ///
-    /// Recovery is the normal case: returning to the foreground gets an update applied, which is
-    /// precisely why `refreshFromClock` now pushes one unconditionally.
-    func testStalenessClearsOnceAnUpdateLands() {
-        let controller = LiveActivityController()
-        let current = state(phase: "cooldown", name: "Cooldown", repetition: 3)
-
-        controller.recordOutcome(pushed: current, applied: state())
-        XCTAssertTrue(controller.isCardStale)
-
-        controller.recordOutcome(pushed: current, applied: current)
-
-        XCTAssertFalse(controller.isCardStale, "The card caught up; the warning must clear")
-        XCTAssertEqual(controller.droppedUpdates, 1, "The count is cumulative for diagnostics")
     }
 
     // MARK: - Stale date

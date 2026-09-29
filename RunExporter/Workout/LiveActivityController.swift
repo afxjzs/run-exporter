@@ -14,18 +14,12 @@ final class LiveActivityController {
     /// Non-nil when something went wrong. Shown on the workout screen alongside audio problems.
     private(set) var lastError: String?
 
-    /// True when the system has discarded an update, so the Lock Screen card is now showing an
-    /// **older phase than the workout is actually in**.
-    ///
-    /// This is not a hypothetical. iOS applies `Activity.update` only while the app is in the
-    /// foreground; from the background the call returns normally and silently drops the content
-    /// (confirmed on device across three instrumented runs — see `docs/CUE_FEASIBILITY_TEST.md`).
-    /// Without this flag the card confidently displays "Run 1 of 3" during round 3 and nothing
-    /// anywhere contradicts it.
-    private(set) var isCardStale = false
-
-    /// How many updates the system has thrown away this workout. Diagnostics only.
-    private(set) var droppedUpdates = 0
+    // iOS applies `Activity.update` only while the app is in the foreground; from the background
+    // the call returns normally and silently drops the content (confirmed on device across three
+    // instrumented runs — see `docs/CUE_FEASIBILITY_TEST.md`, Test 3). The card was therefore
+    // redesigned to need no updates: it shows only values derived from bounds that do not move.
+    // A dropped update changes nothing visible, so it is no longer detected or counted; the count
+    // was shown only on the cue test screen, removed in the 2026-09-29 clean-out.
 
     /// True while an activity is on screen.
     var isActive: Bool { activity != nil }
@@ -43,8 +37,6 @@ final class LiveActivityController {
                activityName: String = "Running",
                state: RunWorkoutAttributes.ContentState) {
         guard activity == nil else { return }
-        droppedUpdates = 0
-        isCardStale = false
         guard areActivitiesEnabled else {
             // Not an error: a deliberate setting. Reported quietly so "why is there no Lock
             // Screen card?" has an answer, without implying something broke.
@@ -77,52 +69,14 @@ final class LiveActivityController {
         }
     }
 
-    /// Compares what the system actually holds against what was just pushed, and reports a
-    /// discarded update rather than letting the card go quietly wrong.
-    ///
-    /// Recovery is normal and expected: an update issued while the app happens to be in the
-    /// foreground is applied, so the card corrects itself the moment the user opens the app. The
-    /// warning therefore clears on success instead of latching.
-    /// Internal rather than private so `LiveActivityStalenessTests` can exercise it directly: the
-    /// OS behaviour that triggers it cannot be reproduced off-device, but this decision can.
-    func recordOutcome(pushed: RunWorkoutAttributes.ContentState,
-                       applied: RunWorkoutAttributes.ContentState) {
-        guard applied != pushed else {
-            isCardStale = false
-            return
-        }
-
-        droppedUpdates += 1
-        isCardStale = true
-        // Counted, but deliberately **not** raised to the user any more. It was a real warning
-        // while the card displayed a phase name that could contradict the workout. The card now
-        // shows only values derived from fixed bounds, so a discarded update changes nothing the
-        // user can see, and a banner on every locked workout would be noise reporting a
-        // non-problem. The count stays for the Cue test screen.
-    }
-
-    /// A one-line description of why no card is showing, for the diagnostics screen.
-    ///
-    /// Exists because "nothing appeared" is the least actionable bug report possible, and the
-    /// three causes — switched off, request failed, or working fine — are indistinguishable from
-    /// the outside.
-    var statusDescription: String {
-        if isActive { return "running" }
-        if !areActivitiesEnabled { return "turned off in Settings" }
-        if lastError != nil { return "failed to start" }
-        return "idle (starts with a workout)"
-    }
-
     /// Pushes new state. Called at phase transitions and on pause/resume — never per second.
+    ///
+    /// `Activity.update` is non-throwing and silently discarded while the app is backgrounded. That
+    /// is accepted: see the note on the properties above.
     func update(_ state: RunWorkoutAttributes.ContentState) {
         guard let activity else { return }
         Task {
             await activity.update(ActivityContent(state: state, staleDate: staleDate(for: state)))
-
-            // `Activity.update` is non-throwing and reports nothing when the system declines to
-            // apply the content, which it always does while the app is backgrounded. Reading the
-            // content back is the only way to know it happened at all.
-            recordOutcome(pushed: state, applied: activity.content.state)
         }
     }
 

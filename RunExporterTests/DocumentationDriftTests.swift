@@ -55,8 +55,6 @@ final class DocumentationDriftTests: XCTestCase {
         .init(text: "Watch link test",
               citedBy: ["docs/WATCH_DEVELOPMENT.md", "docs/BACKLOG.md"]),
         // Added 2026-09-29 with the clean-out backlog entry.
-        .init(text: "Cue test",
-              citedBy: ["docs/BACKLOG.md"]),
         .init(text: "Export Data",
               citedBy: ["docs/BACKLOG.md"]),
         .init(text: "Start watch workout",
@@ -194,6 +192,8 @@ final class DocumentationDriftTests: XCTestCase {
         .init(text: "Add to Apple Watch", retiredIn: cleanOut, replacement: nil),
         .init(text: "Schedule for a time", retiredIn: cleanOut, replacement: nil),
         .init(text: "Clear this iPhone's queue", retiredIn: cleanOut, replacement: nil),
+        // The on-device cue harness; its tests are done and recorded.
+        .init(text: "Cue test", retiredIn: cleanOut, replacement: nil),
     ]
 
     /// Every document that names a retired control also says where it went.
