@@ -1,16 +1,18 @@
+import CoreLocation
 import Foundation
 import HealthKit
 import Observation
 
-/// Runs the watch's workout session and mirrors it to the iPhone — plan of record step 1 in
-/// `docs/WATCHOS_RECORDER_PLAN.md`: **does the phone launch this app, and can the two talk?**
+/// Runs the watch's workout session and mirrors it to the iPhone (`docs/WATCHOS_RECORDER_PLAN.md`,
+/// plan of record).
 ///
-/// The phone decides, the watch records. This type makes no decisions about the workout; it starts
-/// the session when told, reports what its sensors see, and ends when told.
+/// The phone decides, the watch records. This type makes no decisions about the workout: it starts
+/// the session when told, shows the phase the phone sends, measures what its sensors see, marks each
+/// boundary in the workout, and saves or discards when told.
 ///
-/// **Step 1 discards the workout instead of saving it.** Every test launch would otherwise leave a
-/// short fake run in the owner's Health record. Saving arrives with step 2, together with the route
-/// and the checks that the result carries no less data than Apple's own Workout app records.
+/// - `endWorkout` **discards** — the link test screen, and a run abandoned on the phone.
+/// - `finishWorkout(executionID:)` **saves** the workout with the GPS route, tagged with the phone's
+///   execution id so the phone can join to it by id instead of by start time.
 @MainActor
 @Observable
 final class WatchWorkoutController: NSObject {
@@ -21,13 +23,17 @@ final class WatchWorkoutController: NSObject {
 
     private static let statusInterval: TimeInterval = 5
 
+    /// Workout metadata key holding the phone's execution id. Custom keys must not start with "HK".
+    static let executionIDMetadataKey = "RunExporterExecutionID"
+    /// Segment-event metadata key holding the phase the segment was.
+    static let phaseMetadataKey = "RunExporterPhase"
+
     // MARK: - Observable state, all of it shown on the watch
 
     private(set) var isRunning = false
     private(set) var origin: WatchWorkoutOrigin?
     private(set) var startedAt: Date?
     private(set) var sessionState = "not started"
-    /// Plain words for the mirroring state: the phone link is the thing step 1 measures.
     private(set) var mirroring = "not started" {
         didSet { WatchEventLog.shared.record("iPhone link: \(mirroring)") }
     }
@@ -43,23 +49,35 @@ final class WatchWorkoutController: NSObject {
         }
     }
 
-    /// When the phone's `startWatchApp` last reached this app's code. Set before anything else can
-    /// fail, so "the launch never arrived" and "it arrived and stalled" are told apart on screen —
-    /// the first test of the link could not, because nothing showed until a session was running.
+    /// When the phone's `startWatchApp` last reached this app's code — set before anything else can
+    /// fail, so "never arrived" and "arrived and stalled" are told apart.
     private(set) var launchReceivedAt: Date?
-    /// The last thing `start` got to. Read together with `launchReceivedAt`.
+    /// The last thing `start` got to.
     private(set) var step = "idle" {
         didSet { WatchEventLog.shared.record("step: \(step)") }
     }
-    /// Outcome of asking for Health access in the foreground. HealthKit does not reveal whether a
-    /// *read* was granted, only whether the question has been answered, so this says "answered".
     private(set) var healthAccess = "not asked yet" {
         didSet { WatchEventLog.shared.record("Health access request: \(healthAccess)") }
     }
 
-    /// One list, used both when asking up front and when checking at launch, so the two cannot drift
-    /// apart — which is how the first link test stalled: the link asked for a type the probe never had.
-    private static let shareTypes: Set<HKSampleType> = [HKObjectType.workoutType()]
+    /// The phase the phone last sent, on this watch's clock. Nil until the first arrives.
+    private(set) var phaseClock: PhaseClock?
+    /// Leg pace, current mile split and total distance, from this watch's distance readings.
+    private(set) var pace = PaceTracker(start: Date())
+    /// The GPS route, in words: recording and how many points, or why not.
+    private(set) var routeStatus = "off" {
+        didSet { WatchEventLog.shared.record("route: \(routeStatus)") }
+    }
+    private(set) var routePoints = 0
+    /// What happened when the workout was saved: its id and the route, or the error.
+    private(set) var saveResult: String? {
+        didSet { if let saveResult { WatchEventLog.shared.record("save: \(saveResult)") } }
+    }
+
+    /// One list, used both when asking up front and when checking at launch, so the two cannot
+    /// drift apart — the first link test stalled when the link asked for a type the probe never had.
+    /// `workoutRoute` is shared so the GPS route can be saved with the workout.
+    private static let shareTypes: Set<HKSampleType> = [HKObjectType.workoutType(), HKSeriesType.workoutRoute()]
     private static let readTypes: Set<HKObjectType> = [
         HKObjectType.workoutType(),
         HKQuantityType(.heartRate),
@@ -67,20 +85,31 @@ final class WatchWorkoutController: NSObject {
         HKQuantityType(.distanceWalkingRunning),
     ]
 
+    /// Location points worse than this are left out of the route; they zigzag and inflate distance.
+    private static let maximumRouteAccuracyMeters = 50.0
+
     // MARK: - Machinery
 
     @ObservationIgnored private let store = HKHealthStore()
     @ObservationIgnored private var session: HKWorkoutSession?
     @ObservationIgnored private var builder: HKLiveWorkoutBuilder?
+    @ObservationIgnored private var routeBuilder: HKWorkoutRouteBuilder?
     @ObservationIgnored private var statusTimer: Timer?
+    @ObservationIgnored private let locationManager = CLLocationManager()
+    /// The phase segment in progress, closed into a workout event at the next boundary.
+    @ObservationIgnored private var openSegment: (phase: WatchPhase, start: Date)?
     @ObservationIgnored private lazy var bridge = WatchSessionBridge(owner: self)
+    @ObservationIgnored private lazy var locationBridge = WatchLocationBridge(owner: self)
 
-    // MARK: - Health access
+    // MARK: - Permissions
 
-    /// Asks for everything the link needs, from the foreground, where the permission sheet can
-    /// actually appear. Called when the app's screen opens. A launch from the phone may arrive in
-    /// the background, where a sheet has nowhere to show and a request can wait indefinitely.
+    /// Asks for everything a run needs, from the foreground, where a permission sheet can appear.
+    /// A launch from the phone may arrive in the background, where a sheet has nowhere to show.
     func prepareHealthAccess() async {
+        locationManager.delegate = locationBridge
+        if locationManager.authorizationStatus == .notDetermined {
+            locationManager.requestWhenInUseAuthorization()
+        }
         healthAccess = "asking"
         do {
             try await store.requestAuthorization(toShare: Self.shareTypes, read: Self.readTypes)
@@ -98,12 +127,11 @@ final class WatchWorkoutController: NSObject {
             launchReceivedAt = Date()
         }
         guard !isRunning else {
-            // A second launch from the phone while a session runs is plausible (a double tap).
-            // Say so rather than silently starting nothing.
             lastError = "Ignored a start from the \(origin.rawValue): a session is already running."
             return
         }
         lastError = nil
+        saveResult = nil
 
         step = "checking Health access"
         let status: HKAuthorizationRequestStatus
@@ -119,7 +147,6 @@ final class WatchWorkoutController: NSObject {
         case .unnecessary:
             break
         case .shouldRequest:
-            // Never wait on a sheet that may not be able to appear. Say what to do instead.
             step = "stopped"
             lastError = "Health access not granted yet. Open RunExporterWatch, allow Health access, "
                 + "then start again from the phone."
@@ -156,6 +183,9 @@ final class WatchWorkoutController: NSObject {
             pingsAnswered = 0
             statusesSent = 0
             heartRate = nil
+            phaseClock = nil
+            openSegment = nil
+            pace = PaceTracker(start: now)
         } catch {
             step = "stopped"
             lastError = "Could not start the workout session: \(error.localizedDescription)"
@@ -164,6 +194,7 @@ final class WatchWorkoutController: NSObject {
             return
         }
 
+        startRoute()
         step = "connecting to iPhone"
         await startMirroring()
     }
@@ -186,27 +217,197 @@ final class WatchWorkoutController: NSObject {
         }
     }
 
-    // MARK: - End
+    // MARK: - GPS route
 
-    func end() {
-        guard isRunning, let session, let builder else { return }
-        statusTimer?.invalidate()
-        statusTimer = nil
-        let now = Date()
-        session.stopActivity(with: now)
-        session.end()
-        isRunning = false
-        step = "ended"
+    /// Location updates continue while the workout session keeps this app running (stage 2
+    /// measured that it does). `allowsBackgroundLocationUpdates` is deliberately NOT set: without the
+    /// "location" background mode, CLLocationManager.h calls setting it "a fatal error".
+    private func startRoute() {
+        guard let builder else { return }
+        routePoints = 0
+        switch locationManager.authorizationStatus {
+        case .authorizedWhenInUse, .authorizedAlways:
+            break
+        case .notDetermined:
+            routeStatus = "no GPS: location permission not asked yet — open the app once"
+            return
+        case .denied, .restricted:
+            routeStatus = "no GPS: location access is off for this app"
+            return
+        @unknown default:
+            routeStatus = "no GPS: unknown location permission (\(locationManager.authorizationStatus.rawValue))"
+            return
+        }
+        guard let routeBuilder = builder.seriesBuilder(for: HKSeriesType.workoutRoute()) as? HKWorkoutRouteBuilder else {
+            routeStatus = "no GPS: HealthKit gave no route builder"
+            return
+        }
+        self.routeBuilder = routeBuilder
+        locationManager.delegate = locationBridge
+        locationManager.activityType = .fitness
+        locationManager.desiredAccuracy = kCLLocationAccuracyBest
+        locationManager.distanceFilter = kCLDistanceFilterNone
+        locationManager.startUpdatingLocation()
+        routeStatus = "waiting for GPS"
+    }
+
+    private func stopRoute() {
+        locationManager.stopUpdatingLocation()
+    }
+
+    fileprivate func locationsArrived(_ locations: [CLLocation]) {
+        guard isRunning, let routeBuilder else { return }
+        let usable = locations.filter {
+            $0.horizontalAccuracy >= 0 && $0.horizontalAccuracy <= Self.maximumRouteAccuracyMeters
+        }
+        guard !usable.isEmpty else { return }
         Task {
             do {
-                try await builder.endCollection(at: now)
-                builder.discardWorkout()   // Step 1: see the type comment.
+                try await routeBuilder.insertRouteData(usable)
+                self.routePoints += usable.count
+                self.routeStatus = "recording, \(self.routePoints) points"
+            } catch {
+                self.lastError = "Could not add GPS points to the route: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    fileprivate func locationFailed(_ message: String) {
+        routeStatus = "GPS error: \(message)"
+    }
+
+    fileprivate func locationAuthorizationChanged(_ status: CLAuthorizationStatus) {
+        WatchEventLog.shared.record("location permission: \(status.rawValue)")
+    }
+
+    // MARK: - Phases from the phone
+
+    private func handlePhase(_ anchor: PhaseAnchor) {
+        let clock = PhaseClock(anchor: anchor, receivedAt: Date())
+        let previous = phaseClock?.anchor
+        phaseClock = clock
+
+        // A boundary is a different phase or leg. Re-sends of the same phase — on connect, a pause
+        // toggling — are not, and must not split a segment. (Restarting a phase in place is not
+        // detected as a boundary: a known, rare gap.)
+        let isBoundary = previous.map { $0.phase != anchor.phase || $0.legNumber != anchor.legNumber } ?? true
+        if isBoundary {
+            let start = clock.phaseStartedAt
+            closeSegment(at: start)
+            openSegment = (anchor.phase, start)
+            if anchor.phase == .run {
+                pace.beginLeg(at: start)
+            }
+            WatchEventLog.shared.record("phase: \(anchor.phase.rawValue)"
+                + (anchor.legNumber.map { " leg \($0)" } ?? ""))
+        }
+
+        // The phone's pause is the workout's pause, so a stop is not recorded as running time.
+        if let session {
+            if anchor.isPaused, session.state == .running {
+                session.pause()
+            } else if !anchor.isPaused, session.state == .paused {
+                session.resume()
+            }
+        }
+    }
+
+    /// Writes the phase segment in progress into the workout, ending at `end`.
+    private func closeSegment(at end: Date) {
+        guard let segment = openSegment, let builder else { return }
+        openSegment = nil
+        guard end > segment.start else { return }
+        let event = HKWorkoutEvent(type: .segment,
+                                   dateInterval: DateInterval(start: segment.start, end: end),
+                                   metadata: [Self.phaseMetadataKey: segment.phase.rawValue])
+        Task {
+            do {
+                try await builder.addWorkoutEvents([event])
+            } catch {
+                self.lastError = "Could not mark the \(segment.phase.rawValue) phase in the workout: "
+                    + error.localizedDescription
+            }
+        }
+    }
+
+    // MARK: - End
+
+    /// Ends the session and **discards** the workout: the link test, and a run abandoned on the phone.
+    func end() {
+        guard isRunning, let session, let builder else { return }
+        stopRoute()
+        routeBuilder?.discard()
+        routeBuilder = nil
+        openSegment = nil
+        stopSession(session, at: Date())
+        step = "ended, discarded"
+        Task {
+            do {
+                try await builder.endCollection(at: Date())
+                builder.discardWorkout()
             } catch {
                 self.lastError = "Ending data collection failed: \(error.localizedDescription)"
             }
         }
         self.session = nil
         self.builder = nil
+    }
+
+    /// Ends the session and **saves** the workout with its route, tagged with the phone's execution
+    /// id. Every outcome is recorded in `saveResult` and the event log, which reaches the phone.
+    func finish(executionID: UUID) {
+        guard isRunning, let session, let builder else {
+            lastError = "Asked to save a workout, but none is running."
+            return
+        }
+        let now = Date()
+        closeSegment(at: now)
+        stopRoute()
+        let routeBuilder = self.routeBuilder
+        self.routeBuilder = nil
+        stopSession(session, at: now)
+        step = "saving"
+        self.session = nil
+        self.builder = nil
+
+        Task {
+            do {
+                try await builder.endCollection(at: now)
+                try await builder.addMetadata([Self.executionIDMetadataKey: executionID.uuidString])
+                guard let workout = try await builder.finishWorkout() else {
+                    // HKWorkoutBuilder.h: nil with no error means it saved but cannot be read while
+                    // the device is locked — and the route needs the workout object to attach to.
+                    routeBuilder?.discard()
+                    self.saveResult = "saved, but not readable while locked; the GPS route could not be attached"
+                    self.step = "saved without route"
+                    return
+                }
+                var route = "no route"
+                if let routeBuilder {
+                    do {
+                        try await routeBuilder.finishRoute(with: workout, metadata: nil)
+                        route = "route with \(self.routePoints) points"
+                    } catch {
+                        route = "route FAILED: \(error.localizedDescription)"
+                    }
+                }
+                self.saveResult = "workout \(workout.uuid.uuidString), \(route)"
+                self.step = "saved"
+            } catch {
+                routeBuilder?.discard()
+                self.saveResult = "FAILED: \(error.localizedDescription)"
+                self.step = "save failed"
+                self.lastError = "Saving the workout failed: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func stopSession(_ session: HKWorkoutSession, at date: Date) {
+        statusTimer?.invalidate()
+        statusTimer = nil
+        session.stopActivity(with: date)
+        session.end()
+        isRunning = false
     }
 
     // MARK: - Talking to the phone
@@ -259,10 +460,10 @@ final class WatchWorkoutController: NSObject {
                     send(.pong(id: id, watchReceivedAt: now))
                 case .endWorkout:
                     end()
-                case .phaseBegan, .finishWorkout:
-                    // Handled in watch plan step 2, stages 4–5. Until then, say so: silently dropping
-                    // a phase or a finish would leave the watch showing the wrong thing, or not saving.
-                    lastError = "This watch build cannot act on phase or finish messages yet."
+                case let .phaseBegan(anchor):
+                    handlePhase(anchor)
+                case let .finishWorkout(executionID):
+                    finish(executionID: executionID)
                 case .pong, .status:
                     lastError = "The phone sent a message only the watch should send."
                 }
@@ -299,6 +500,14 @@ final class WatchWorkoutController: NSObject {
         heartRate = bpm
     }
 
+    fileprivate func distanceUpdated(totalMeters: Double, at date: Date) {
+        let rejectedBefore = pace.rejectedReadings
+        pace.record(totalMeters: totalMeters, at: date)
+        if pace.rejectedReadings > rejectedBefore {
+            WatchEventLog.shared.record("distance reading went backwards and was ignored (\(pace.rejectedReadings) so far)")
+        }
+    }
+
     private static func name(for state: HKWorkoutSessionState) -> String {
         switch state {
         case .notStarted: return "not started"
@@ -312,10 +521,9 @@ final class WatchWorkoutController: NSObject {
     }
 }
 
-/// Carries HealthKit's callbacks, which arrive on framework threads, to the main actor. Same
-/// pattern, and same reasoning for `nonisolated(unsafe)`, as `SessionDelegateBridge` in
-/// `BackgroundExecutionProbe.swift`: `owner` is written once in `init`, before HealthKit holds the
-/// bridge, and every read hops straight back to the main actor.
+/// Carries HealthKit's callbacks, which arrive on framework threads, to the main actor. `owner` is
+/// written once in `init`, before HealthKit holds the bridge, and every read hops straight back to
+/// the main actor — the same reasoning as `SessionDelegateBridge` in `BackgroundExecutionProbe.swift`.
 private final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutBuilderDelegate {
     nonisolated(unsafe) private weak var owner: WatchWorkoutController?
 
@@ -346,13 +554,45 @@ private final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate, HKLi
 
     nonisolated func workoutBuilder(_ workoutBuilder: HKLiveWorkoutBuilder,
                                     didCollectDataOf collectedTypes: Set<HKSampleType>) {
+        // Read here, on HealthKit's thread, so only plain values cross to the main actor.
         let heartRateType = HKQuantityType(.heartRate)
-        guard collectedTypes.contains(heartRateType),
-              let quantity = workoutBuilder.statistics(for: heartRateType)?.mostRecentQuantity() else { return }
-        // Read here, on HealthKit's thread, so only a Double crosses to the main actor.
-        let bpm = quantity.doubleValue(for: .count().unitDivided(by: .minute()))
-        Task { @MainActor [weak owner] in owner?.heartRateUpdated(bpm) }
+        if collectedTypes.contains(heartRateType),
+           let quantity = workoutBuilder.statistics(for: heartRateType)?.mostRecentQuantity() {
+            let bpm = quantity.doubleValue(for: .count().unitDivided(by: .minute()))
+            Task { @MainActor [weak owner] in owner?.heartRateUpdated(bpm) }
+        }
+        let distanceType = HKQuantityType(.distanceWalkingRunning)
+        if collectedTypes.contains(distanceType),
+           let statistics = workoutBuilder.statistics(for: distanceType),
+           let sum = statistics.sumQuantity() {
+            let meters = sum.doubleValue(for: .meter())
+            let date = statistics.endDate
+            Task { @MainActor [weak owner] in owner?.distanceUpdated(totalMeters: meters, at: date) }
+        }
     }
 
     nonisolated func workoutBuilderDidCollectEvent(_ workoutBuilder: HKLiveWorkoutBuilder) {}
+}
+
+/// Carries Core Location's callbacks to the main actor. Same pattern as `WatchSessionBridge`.
+private final class WatchLocationBridge: NSObject, CLLocationManagerDelegate {
+    nonisolated(unsafe) private weak var owner: WatchWorkoutController?
+
+    init(owner: WatchWorkoutController) {
+        self.owner = owner
+    }
+
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        Task { @MainActor [weak owner] in owner?.locationsArrived(locations) }
+    }
+
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        let message = error.localizedDescription
+        Task { @MainActor [weak owner] in owner?.locationFailed(message) }
+    }
+
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
+        Task { @MainActor [weak owner] in owner?.locationAuthorizationChanged(status) }
+    }
 }

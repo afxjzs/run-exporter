@@ -811,10 +811,12 @@ most sensitive part of this export: it reveals home, work, and habitual routes a
 
 **The watchOS app is the one exception, and it is deliberate.** The watch target is provisioned to
 **write workouts** to HealthKit, because recording a run means saving an `HKWorkout` and there is no
-read-only way to do that. The scope is as narrow as the API permits — workouts only, from the watch
-app only. No write has occurred yet: the permission is requested, but the probe never finishes its
-workout and the watch link's test sessions are discarded. Nothing about how this app handles data
-moves without it being written down here first.
+read-only way to do that. The scope is as narrow as the API permits — workouts and their GPS routes,
+from the watch app only. **Since 2026-09-29 the watch app also uses location**: when-in-use only, and
+only while a workout runs, to save the run's route with it — what Apple's Workout app does. A run
+started from the phone is saved to Health when it finishes, tagged with the phone's execution id; a
+run abandoned on the phone, and the link test's sessions, are discarded. Nothing about how this app
+handles data moves without it being written down here first.
 
 v1.1 changes none of this. Planner, logger, shoe and interval data live in a local SwiftData store
 on the device; there is no account, no sync, no cloud database and no external weather API. The

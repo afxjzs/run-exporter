@@ -16,7 +16,10 @@ struct RootView: View {
     var body: some View {
         TabView {
             Group {
-                if controller.origin != nil || controller.launchReceivedAt != nil {
+                if controller.phaseClock != nil {
+                    // A run the phone is driving: the run screen, not the diagnostics.
+                    WatchRunView(controller: controller)
+                } else if controller.origin != nil || controller.launchReceivedAt != nil {
                     WatchLinkView(controller: controller)
                 } else {
                     ContentView()

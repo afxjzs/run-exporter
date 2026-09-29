@@ -86,6 +86,14 @@
 	  These strings are shown in the Health permission sheet. They are not a request: nothing is
 	  written until code calls requestAuthorization(toShare:read:) and the user grants it.
 	-->
+	<!--
+	  Location, for the GPS route saved with each workout (watch plan step 2, 2026-09-29). Only
+	  while a workout runs; when-in-use, never always. The route is saved into Apple Health with the
+	  workout, the same as Apple's own Workout app does, and the phone's export already reads it.
+	-->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>RunExporter records your route during a workout, so the run is saved to Health with its map, the same as Apple's Workout app.</string>
+
 	<key>NSHealthShareUsageDescription</key>
 	<string>RunExporter reads your workout data on the Watch so it can record a run and keep the interval timer in sync with it.</string>
 
