@@ -129,6 +129,7 @@ final class SmokeTests: XCTestCase {
 
     /// Runs one named step and attaches a screenshot of where it ended — or where it failed.
     private func step(_ name: String, _ body: () -> Void) {
+        dismissHealthSheetIfShown(timeout: 1)
         XCTContext.runActivity(named: name) { activity in
             defer {
                 let shot = XCTAttachment(screenshot: app.screenshot())
@@ -155,9 +156,13 @@ final class SmokeTests: XCTestCase {
         tab.tap()
     }
 
+    /// Waits for `element`. If it is not there, a late Health sheet may be covering the app — so
+    /// that is cleared and the element looked for once more before the step fails.
     private func expect(_ element: XCUIElement, _ what: String,
                         file: StaticString = #filePath, line: UInt = #line) {
-        XCTAssertTrue(element.waitForExistence(timeout: 10), "Not found: \(what)",
+        if element.waitForExistence(timeout: 10) { return }
+        dismissHealthSheetIfShown(timeout: 1)
+        XCTAssertTrue(element.waitForExistence(timeout: 5), "Not found: \(what)",
                       file: file, line: line)
     }
 
@@ -172,15 +177,29 @@ final class SmokeTests: XCTestCase {
     ///
     /// The sheet belongs to its own process, `com.apple.HealthPrivacyService` — found by listing the
     /// simulator's processes while it was up; it is in neither the app's element tree nor
-    /// SpringBoard's. It also arrives several seconds after the request, so this waits for it
-    /// rather than glancing: the first version glanced, the sheet appeared a few steps later, and
-    /// it swallowed a tab tap.
+    /// SpringBoard's. It arrives an unpredictable time after the request — measured at a few
+    /// seconds on one run and about 27 s on another — so it is checked for at launch, at the start
+    /// of every step, and before any `expect` gives up. Checking only once at launch let it arrive
+    /// mid-walkthrough and swallow a tab tap, twice.
+    ///
+    /// More than one can be queued — the logger asks for read access and Start asks for workout
+    /// access — so this keeps declining until none is left, and fails only if the same sheet will
+    /// not go away after several tries.
     private func dismissHealthSheetIfShown(timeout: TimeInterval = 15) {
         let sheet = XCUIApplication(bundleIdentifier: "com.apple.HealthPrivacyService")
-        let dontAllow = sheet.buttons["Don’t Allow"]
+        // The system's own identifier, stabler than the label's curly apostrophe.
+        let dontAllow = sheet.buttons["UIA.Health.DoNotAllow.Button"]
         guard dontAllow.waitForExistence(timeout: timeout) else { return }
-        dontAllow.tap()
-        XCTAssertTrue(dontAllow.waitForNonExistence(timeout: 10),
-                      "The Health sheet did not go away after Don’t Allow")
+        for _ in 1...4 {
+            // A coordinate tap, not `dontAllow.tap()`: the sheet can replace or dismiss itself
+            // between finding the button and tapping it, and XCTest then refuses an element-based
+            // tap as "no longer valid after interruption handling" (seen 2026-09-30).
+            dontAllow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            if dontAllow.waitForNonExistence(timeout: 5) {
+                // A queued sheet may follow a moment later; decline that one too.
+                guard dontAllow.waitForExistence(timeout: 2) else { return }
+            }
+        }
+        XCTFail("A Health sheet was still showing after declining four times")
     }
 }
