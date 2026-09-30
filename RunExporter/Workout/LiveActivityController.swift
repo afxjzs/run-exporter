@@ -72,7 +72,7 @@ final class LiveActivityController {
     /// Pushes new state. Called at phase transitions and on pause/resume — never per second.
     ///
     /// `Activity.update` is non-throwing and silently discarded while the app is backgrounded. That
-    /// is accepted: see the note on the properties above.
+    /// is accepted: see the note under `lastError` near the top of this type.
     func update(_ state: RunWorkoutAttributes.ContentState) {
         guard let activity else { return }
         Task {
@@ -108,51 +108,6 @@ final class LiveActivityController {
     }
 
     func clearError() { lastError = nil }
-
-    // MARK: - Diagnostics
-
-    /// Requests a standalone activity for testing, and reports exactly what happened.
-    ///
-    /// Separates the two failures that look identical from the outside: the app being unable to
-    /// *create* an activity, and the widget extension being unable to *render* one. If this
-    /// reports success and a live count but no card appears, the app side is fine and the problem
-    /// is in the extension.
-    func runDiagnostic() -> String {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
-            return "Live Activities are disabled for this app in iOS Settings."
-        }
-
-        let now = Date()
-        let state = RunWorkoutAttributes.ContentState(
-            phaseName: "Run",
-            phaseRawValue: "run",
-            repetition: 1,
-            totalRepetitions: 5,
-            phaseStart: now,
-            phaseEnd: now.addingTimeInterval(300),
-            nextPhaseName: "Walk 1:00",
-            isPaused: false,
-            pausedAt: nil)
-
-        do {
-            let requested = try Activity.request(
-                attributes: RunWorkoutAttributes(workoutName: "Diagnostic"),
-                content: ActivityContent(state: state, staleDate: nil),
-                pushType: nil)
-            activity = requested
-
-            let live = Activity<RunWorkoutAttributes>.activities.count
-            return "Request succeeded. id=\(requested.id.prefix(8))… "
-                + "state=\(requested.activityState) activeCount=\(live).\n\n"
-                + "If no card is visible now, the app created the activity correctly and the "
-                + "widget extension is not rendering it."
-        } catch {
-            return "Activity.request failed: \(error)\n\n(\(type(of: error)))"
-        }
-    }
-
-    /// How many activities this app currently has, whatever started them.
-    var activeCount: Int { Activity<RunWorkoutAttributes>.activities.count }
 
     /// When the shown state stops being trustworthy.
     ///

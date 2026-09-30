@@ -18,9 +18,7 @@ import WatchConnectivity
 @Observable
 final class WatchLink: NSObject {
 
-    private(set) var isLaunching = false
     private(set) var latestStatus: WatchStatus?
-    private(set) var statusesReceived = 0
     /// Round trips measured on the phone's clock, most recent last.
     private(set) var roundTrips: [TimeInterval] = []
     /// Set when a diagnostic file cannot be written. Shown on the run screen, never swallowed —
@@ -87,6 +85,8 @@ final class WatchLink: NSObject {
     /// Builds the anchor for the phase in progress *at the moment it is called*, given the current
     /// latency estimate — so a watch that connects 1.7 s into a phase is sent where the phase is
     /// now, not where it was at the tap. Nil when no run is using the watch.
+    /// Guards against a second launch while one is in flight. Not shown anywhere, so not observed.
+    @ObservationIgnored private var isLaunching = false
     @ObservationIgnored private var anchorProvider: ((TimeInterval) -> PhaseAnchor?)?
     /// The run's plan activity, so a Try again launches the same workout as the first attempt.
     @ObservationIgnored private var runActivityType: PlannedActivityType = .running
@@ -219,8 +219,7 @@ final class WatchLink: NSObject {
 
     /// Asks the watch to start its workout. Returns why it failed, or nil once the request has been
     /// **sent** — `startWatchApp` succeeding says nothing about the watch (docs/WATCH_DEVELOPMENT.md).
-    @discardableResult
-    func launchWatchWorkout(activityType: PlannedActivityType) async -> String? {
+    private func launchWatchWorkout(activityType: PlannedActivityType) async -> String? {
         guard !isLaunching else { return nil }
         isLaunching = true
         defer { isLaunching = false }
@@ -253,7 +252,7 @@ final class WatchLink: NSObject {
         }
     }
 
-    func ping() {
+    private func ping() {
         let id = UUID()
         let sentAt = Date()
         pendingPings[id] = sentAt
@@ -338,11 +337,10 @@ final class WatchLink: NSObject {
                         sendCurrentPhase()
                     }
                 case let .status(status):
-                    if statusesReceived == 0 {
+                    if latestStatus == nil {
                         log("First status from the watch")
                     }
                     latestStatus = status
-                    statusesReceived += 1
                 case .ping, .endWorkout, .phaseBegan, .finishWorkout:
                     log("The watch sent a message only the phone should send", isError: true)
                 }
@@ -442,7 +440,7 @@ final class WatchLink: NSObject {
         date.formatted(.iso8601.year().month().day().time(includingFractionalSeconds: true))
     }
 
-    static func seconds(_ interval: TimeInterval) -> String {
+    private static func seconds(_ interval: TimeInterval) -> String {
         String(format: "%.2f s", interval)
     }
 

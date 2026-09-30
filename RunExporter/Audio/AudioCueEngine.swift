@@ -39,11 +39,6 @@ final class AudioCueEngine {
     /// genuine error behind a condition that had already passed.
     private(set) var routeNotice: String?
 
-    private(set) var isSessionActive = false
-    /// True while an interruption (a call, Siri) is in effect.
-    private(set) var isInterrupted = false
-    private(set) var currentRouteDescription = ""
-
     private let session = AVAudioSession.sharedInstance()
     private let synthesizer = AVSpeechSynthesizer()
     private let delegateBridge = DelegateBridge()
@@ -92,7 +87,6 @@ final class AudioCueEngine {
         loadTonePlayers(volume: Float(settings.cueVolume))
         loadSilencePlayer()
         warmUpSpeech()
-        currentRouteDescription = Self.describe(route: session.currentRoute)
         return nil
     }
 
@@ -101,16 +95,13 @@ final class AudioCueEngine {
     func beginWorkoutAudio() -> String? {
         do {
             try session.setActive(true)
-            isSessionActive = true
         } catch {
             let message = "Audio could not start: \(error.localizedDescription). "
                 + "Interval cues will not play."
             lastError = message
-            isSessionActive = false
             return message
         }
 
-        currentRouteDescription = Self.describe(route: session.currentRoute)
         if silencePlayer?.play() != true {
             // Not fatal on its own — cues still work while the app is in the foreground — but it
             // is exactly what makes background cues stop, so it is reported rather than ignored.
@@ -135,7 +126,6 @@ final class AudioCueEngine {
             lastError = "Audio could not be released: \(error.localizedDescription). "
                 + "Other apps' audio may stay quiet until you reopen this app."
         }
-        isSessionActive = false
     }
 
     // MARK: - Playing
@@ -148,7 +138,7 @@ final class AudioCueEngine {
             lastError = "A cue was requested before audio was prepared, so it did not play."
             return
         }
-        guard Self.shouldPlay(cue, source: settings.cueSource) else { return }
+        guard Self.shouldPlay(source: settings.cueSource) else { return }
 
         let mode = settings.cueMode
         let wantsVoice = mode.includesVoice && cue.spokenText != nil
@@ -205,7 +195,8 @@ final class AudioCueEngine {
     ///
     /// `nonisolated static` for the same reason as `sessionOptions`: it makes the rule assertable
     /// without an audio device.
-    nonisolated static func shouldPlay(_ cue: AudioCue, source: CueSource) -> Bool {
+    /// Takes no cue: since the 2026-09-29 clean-out no rule depends on which cue it is.
+    nonisolated static func shouldPlay(source: CueSource) -> Bool {
         source == .iphoneAudioEngine
     }
 
@@ -377,10 +368,8 @@ final class AudioCueEngine {
 
         switch type {
         case .began:
-            isInterrupted = true
             duckCounter.reset()
         case .ended:
-            isInterrupted = false
             // Only resume when the system says it is appropriate; forcing it can fail silently.
             let optionsRaw = note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
             let options = AVAudioSession.InterruptionOptions(rawValue: optionsRaw)
@@ -400,20 +389,16 @@ final class AudioCueEngine {
         do {
             try configureSession(ducking: false)
             try session.setActive(true)
-            isSessionActive = true
             if silencePlayer?.play() != true {
                 lastError = "Background audio did not restart after the interruption. Keep the app "
                     + "open, or restart the timer, to keep hearing cues."
             }
         } catch {
-            isSessionActive = false
             lastError = "Audio did not resume after the interruption: \(error.localizedDescription)"
         }
     }
 
     private func handleRouteChange(_ note: Notification) {
-        currentRouteDescription = Self.describe(route: session.currentRoute)
-
         guard let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
               let reason = AVAudioSession.RouteChangeReason(rawValue: raw) else { return }
 
@@ -429,7 +414,7 @@ final class AudioCueEngine {
             } else {
                 // Recovered on its own: information, not a failure.
                 routeNotice = "Headphones disconnected. Cues are now playing through "
-                    + "\(currentRouteDescription)."
+                    + "\(Self.describe(route: session.currentRoute))."
             }
 
         case .newDeviceAvailable:
@@ -447,7 +432,6 @@ final class AudioCueEngine {
 
     private func handleMediaServicesReset() {
         // Everything the system handed us is invalid after this; rebuild it all.
-        isSessionActive = false
         tonePlayers.removeAll()
         silencePlayer = nil
         lastError = "The system audio service restarted, so cue audio was rebuilt. "

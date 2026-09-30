@@ -129,6 +129,13 @@ final class PlannedWorkout {
         return .intervals(resolvedBlocks)
     }
 
+    /// Whether this is an open-interval plan. Asked of `shape`, so it cannot disagree with it;
+    /// one copy here instead of one per screen.
+    var isOpenIntervals: Bool {
+        if case .openIntervals = shape { return true }
+        return false
+    }
+
     // MARK: - Derived durations
 
     // All four read `expandedIntervals`, which is also what `WorkoutPhaseSchedule` builds its

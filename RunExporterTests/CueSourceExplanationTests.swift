@@ -12,12 +12,6 @@ import XCTest
 @MainActor
 final class CueSourceExplanationTests: XCTestCase {
 
-    /// Every cue the app can emit, transitions and confirmations alike.
-    private let allCues: [AudioCue] = [.countdown(3), .countdown(2), .countdown(1),
-                                       .run, .walk, .cooldown, .finalRound, .halfway,
-                                       .nextPhase(.walk, seconds: 5), .complete,
-                                       .paused, .resumed(.run), .skipped, .ended]
-
     /// Phrasings that promise the user will hear nothing from this app.
     private let silenceClaims = ["plays no cues", "play nothing", "hear nothing",
                                  "no cues will play"]
@@ -25,26 +19,18 @@ final class CueSourceExplanationTests: XCTestCase {
     // MARK: - The invariant that was broken
 
     func testNoSourceClaimsSilenceWhileTheEngineStillPlaysSomething() {
-        for source in CueSource.allCases {
-            let audible = allCues.filter { AudioCueEngine.shouldPlay($0, source: source) }
-            guard !audible.isEmpty else { continue }
-
+        for source in CueSource.allCases where AudioCueEngine.shouldPlay(source: source) {
             let text = SettingsView.cueSourceExplanation(for: source).lowercased()
             for claim in silenceClaims {
-                XCTAssertFalse(
-                    text.contains(claim),
-                    "\(source.rawValue) still plays \(audible.count) cue(s) "
-                        + "(\(audible.map(\.identifier).joined(separator: ", "))) "
-                        + "but its Settings footer claims \"\(claim)\"")
+                XCTAssertFalse(text.contains(claim),
+                               "\(source.rawValue) plays cues but its Settings footer claims \"\(claim)\"")
             }
         }
     }
 
     /// The converse, so the rule cannot be satisfied by deleting every mention of silence.
     func testTheGenuinelySilentSourceDoesSaySoPlainly() {
-        let audible = allCues.filter { AudioCueEngine.shouldPlay($0, source: .none) }
-        XCTAssertTrue(audible.isEmpty,
-                      "\"No cues\" must be silent; \(audible.map(\.identifier)) got through")
+        XCTAssertFalse(AudioCueEngine.shouldPlay(source: .none), "\"No cues\" must be silent")
 
         let text = SettingsView.cueSourceExplanation(for: CueSource.none).lowercased()
         XCTAssertTrue(silenceClaims.contains { text.contains($0) }, text)

@@ -67,14 +67,24 @@ struct WatchIdleView: View {
                 Text("Health access: \(controller.healthAccess)")
                     .font(.caption2)
                     .foregroundStyle(controller.healthAccess == "failed" ? .red : .secondary)
-                if let error = controller.lastError {
-                    Text(error)
-                        .font(.caption2)
-                        .foregroundStyle(.red)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                WatchErrorText(error: controller.lastError)
             }
             .padding(.horizontal, 4)
+        }
+    }
+}
+
+/// The controller's last error, in red and wrapped, or nothing. One view so the idle and link
+/// screens cannot drift in how they show a failure.
+struct WatchErrorText: View {
+    let error: String?
+
+    var body: some View {
+        if let error {
+            Text(error)
+                .font(.caption2)
+                .foregroundStyle(.red)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -134,12 +144,7 @@ struct WatchLinkView: View {
                 row("pings answered", "\(controller.pingsAnswered)")
                 row("statuses sent", "\(controller.statusesSent)")
 
-                if let error = controller.lastError {
-                    Text(error)
-                        .font(.caption2)
-                        .foregroundStyle(.red)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                WatchErrorText(error: controller.lastError)
 
                 if controller.isRunning {
                     Button("End", role: .destructive) { controller.end() }

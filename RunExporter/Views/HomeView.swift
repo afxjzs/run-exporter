@@ -201,11 +201,6 @@ struct WorkoutRow: View {
 struct PlannedWorkoutCard: View {
     let plan: PlannedWorkout
 
-    private var isOpenIntervals: Bool {
-        if case .openIntervals = plan.shape { return true }
-        return false
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(plan.name)
@@ -265,7 +260,7 @@ struct PlannedWorkoutCard: View {
                 // not knowable in advance, so "Rounds 0" would state something false; and its main
                 // set counts only the running, because those walks have no planned length, so the
                 // figure would read as the whole workout and be short by every walk in it.
-                if !isOpenIntervals {
+                if !plan.isOpenIntervals {
                     GridRow {
                         Text("Rounds").foregroundStyle(.secondary)
                         Text("\(plan.totalRepetitions)").monospacedDigit()

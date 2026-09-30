@@ -135,18 +135,9 @@ enum WorkoutPhase: String, CaseIterable {
 /// made sense alongside the removed WorkoutKit route, and the second was never built. A phone that
 /// still has one stored gets it reported by `LoggerDefaults` rather than silently replaced, and
 /// exports made before then keep those values.
-enum CueSource: String, CaseIterable, Identifiable {
+enum CueSource: String, CaseIterable {
     case iphoneAudioEngine = "iphone_audio_engine"
     case none
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .iphoneAudioEngine: return "iPhone audio engine"
-        case .none: return "No cues"
-        }
-    }
 }
 
 /// Spoken cues, tones, or both. Mirrors `cue_mode` in manifest.json.

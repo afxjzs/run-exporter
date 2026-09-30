@@ -131,12 +131,7 @@ final class SmokeTests: XCTestCase {
     private func step(_ name: String, _ body: () -> Void) {
         dismissHealthSheetIfShown(timeout: 1)
         XCTContext.runActivity(named: name) { activity in
-            defer {
-                let shot = XCTAttachment(screenshot: app.screenshot())
-                shot.name = name
-                shot.lifetime = .keepAlways
-                activity.add(shot)
-            }
+            defer { activity.add(screenshot(named: name)) }
             body()
         }
     }
@@ -144,10 +139,15 @@ final class SmokeTests: XCTestCase {
     /// A screenshot mid-step, for a screen the step leaves before it ends — otherwise the evidence
     /// would show where the step went back to, not the screen it checked.
     private func snapshot(_ name: String) {
+        add(screenshot(named: name))
+    }
+
+    /// A kept, named screenshot of the app as it is now.
+    private func screenshot(named name: String) -> XCTAttachment {
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = name
         shot.lifetime = .keepAlways
-        add(shot)
+        return shot
     }
 
     private func tapTab(_ name: String) {

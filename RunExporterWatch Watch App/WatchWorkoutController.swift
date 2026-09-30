@@ -36,7 +36,6 @@ final class WatchWorkoutController: NSObject {
     }
     private(set) var heartRate: Double?
     private(set) var pingsAnswered = 0
-    private(set) var lastPingAt: Date?
     private(set) var statusesSent = 0
     /// Every failure lands here verbatim, and in the saved event log. Nothing on this path fails
     /// quietly.
@@ -120,9 +119,8 @@ final class WatchWorkoutController: NSObject {
     // MARK: - Start
 
     func start(configuration: HKWorkoutConfiguration, origin: WatchWorkoutOrigin) async {
-        if origin == .phone {
-            launchReceivedAt = Date()
-        }
+        // Every start is a phone launch — the watch's own screens never start a session.
+        launchReceivedAt = Date()
         guard !isRunning else {
             lastError = "Ignored a start from the \(origin.rawValue): a session is already running."
             return
@@ -461,7 +459,6 @@ final class WatchWorkoutController: NSObject {
                 switch try WatchLinkCodec.decode(data) {
                 case let .ping(id, _):
                     let now = Date()
-                    lastPingAt = now
                     pingsAnswered += 1
                     send(.pong(id: id, watchReceivedAt: now))
                 case .endWorkout:

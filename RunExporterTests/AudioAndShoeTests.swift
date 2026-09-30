@@ -141,30 +141,21 @@ final class AudioCueTests: XCTestCase {
         XCTAssertEqual(Set(cues.map(\.identifier)).count, cues.count)
     }
 
-    // MARK: - Which cues each source is allowed to play
+    // MARK: - Whether cues play at all
 
-    private static let transitionCues: [AudioCue] = [.run, .walk, .cooldown, .complete,
-                                                     .countdown(3), .nextPhase(.walk, seconds: 5)]
-    private static let confirmationCues: [AudioCue] = [.paused, .resumed(.run), .skipped, .ended]
-
-    /// **"No cues" must mean no cues.**
+    /// **"No cues" must mean no cues** — confirmations of taps included.
     ///
     /// Regression test. The gate once let control confirmations through for every source that was
     /// not the iPhone engine — right for the Watch sources (removed 2026-09-29), but wrong for
     /// `.none`, whose Settings footer promises "No cues will play from this app at all." Choosing
-    /// silence produced four cues, with nothing to indicate it.
+    /// silence produced four cues, with nothing to indicate it. The gate no longer looks at the cue
+    /// at all, so one assertion per source covers every cue.
     func testNoCuesSourceIsCompletelySilent() {
-        for cue in Self.transitionCues + Self.confirmationCues {
-            XCTAssertFalse(AudioCueEngine.shouldPlay(cue, source: .none),
-                           "\(cue.identifier) must not play when the cue source is \"No cues\"")
-        }
+        XCTAssertFalse(AudioCueEngine.shouldPlay(source: .none))
     }
 
     func testIPhoneEnginePlaysEveryCue() {
-        for cue in Self.transitionCues + Self.confirmationCues {
-            XCTAssertTrue(AudioCueEngine.shouldPlay(cue, source: .iphoneAudioEngine),
-                          "\(cue.identifier) must play when this app owns the cues")
-        }
+        XCTAssertTrue(AudioCueEngine.shouldPlay(source: .iphoneAudioEngine))
     }
 }
 

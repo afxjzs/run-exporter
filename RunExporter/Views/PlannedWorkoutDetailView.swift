@@ -17,13 +17,6 @@ struct PlannedWorkoutDetailView: View {
     let plan: PlannedWorkout
     let logger: RunLoggerModel
 
-    /// Asked once and used by several actions, so they cannot disagree about which kind of plan
-    /// this screen is showing.
-    private var isOpenIntervals: Bool {
-        if case .openIntervals = plan.shape { return true }
-        return false
-    }
-
     @State private var showingTimer = false
     @State private var errorMessage: String?
     @State private var didDelete = false
@@ -59,7 +52,7 @@ struct PlannedWorkoutDetailView: View {
                 // would quietly turn this plan into an interval one while its open-interval record
                 // sat there unread.
                 NavigationLink {
-                    if isOpenIntervals {
+                    if plan.isOpenIntervals {
                         OpenIntervalPlanEditorView(plan: plan)
                     } else {
                         PlannedWorkoutEditorView(plan: plan)
