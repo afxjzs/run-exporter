@@ -160,13 +160,8 @@ struct OpenIntervalPlanEditorView: View {
         if let plan {
             target = plan
         } else {
-            // The three interval fields stay at zero: this plan has no intervals, and zero is
-            // already this app's way of saying "the shape is not described here". Nothing may read
-            // them without going through `shape` first.
-            target = PlannedWorkout(name: trimmedName.isEmpty ? proposedName : trimmedName,
-                                    runIntervalSeconds: 0,
-                                    walkIntervalSeconds: 0,
-                                    plannedRepetitions: 0)
+            target = PlannedWorkout.newOpenIntervalPlan(
+                name: trimmedName.isEmpty ? proposedName : trimmedName, defaults: defaults)
             context.insert(target)
         }
 

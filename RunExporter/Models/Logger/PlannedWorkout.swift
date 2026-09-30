@@ -401,6 +401,20 @@ final class PlannedWorkout {
         return copy
     }
 
+    /// A new open-interval plan, before its editor writes the shape and the rest.
+    ///
+    /// The three interval fields stay at zero: this plan has no intervals, and zero is already this
+    /// app's way of saying "the shape is not described here". Nothing may read them without going
+    /// through `shape` first. The countdown is the Settings one, as for every new plan (BACKLOG
+    /// Decision 12): it is what gives the Watch time to connect before the first phase.
+    static func newOpenIntervalPlan(name: String, defaults: LoggerDefaults) -> PlannedWorkout {
+        PlannedWorkout(name: name,
+                       runIntervalSeconds: 0,
+                       walkIntervalSeconds: 0,
+                       plannedRepetitions: 0,
+                       countdownSeconds: defaults.countdownSeconds)
+    }
+
     // MARK: - Deletion
 
     /// What deleting this plan will actually do, in the user's terms.

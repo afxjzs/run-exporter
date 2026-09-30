@@ -293,4 +293,19 @@ final class PlannedWorkoutShapeTests: XCTestCase {
     func testAnOpenIntervalPlanPlansItsTargetOfRunning() {
         XCTAssertEqual(openIntervalPlan().totalRunSeconds, 1800)
     }
+
+    /// A new plan starts with the Settings countdown, open-interval plans included (BACKLOG
+    /// Decision 12: the Watch usually connects within it). Found by review: the open-interval editor
+    /// built its plan without one, so every new open-interval plan started with no countdown.
+    func testANewOpenIntervalPlanStartsWithTheSettingsCountdown() {
+        let suiteName = "PlannedWorkoutShapeTests.\(UUID().uuidString)"
+        let suite = UserDefaults(suiteName: suiteName)!
+        defer { suite.removePersistentDomain(forName: suiteName) }
+        let defaults = LoggerDefaults(defaults: suite)
+        defaults.countdownSeconds = 5
+
+        let workout = PlannedWorkout.newOpenIntervalPlan(name: "Open", defaults: defaults)
+
+        XCTAssertEqual(workout.countdownSeconds, 5)
+    }
 }
