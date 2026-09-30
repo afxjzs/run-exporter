@@ -20,7 +20,7 @@ final class WatchLink: NSObject {
 
     private(set) var latestStatus: WatchStatus?
     /// True while the watch may be showing the wrong phase: the latest phase message failed to send.
-    /// Cleared when a resend gets through. Measured on the first real run (2026-09-30): one
+    /// Cleared when a resend gets through. Measured on the first real outdoor run: one
     /// "Remote device is unreachable" left the watch on WALK through a whole run leg, with nothing
     /// on the phone saying so.
     private(set) var phaseUnsent = false
@@ -186,7 +186,7 @@ final class WatchLink: NSObject {
             try? await Task.sleep(for: .seconds(Self.launchTimeoutSeconds))
             guard !Task.isCancelled, let self, self.runConnection == .connecting else { return }
             // The likely fix is named here because the watch's own reason can arrive too late: on
-            // 2026-09-30 its "Health access not granted yet" reached this phone 35 s after the tap,
+            // a real run its "Health access not granted yet" reached this phone 35 s after the tap,
             // well after this message. A build that adds a Health type needs that grant, on the
             // watch, once.
             let reason = "The Watch did not respond within \(Int(Self.launchTimeoutSeconds)) s. "

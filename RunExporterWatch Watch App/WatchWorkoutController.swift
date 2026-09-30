@@ -75,8 +75,8 @@ final class WatchWorkoutController: NSObject {
         case saving, saved, savedWithoutRoute, notSaved, discarded
     }
     private(set) var outcome: Outcome?
-    /// When the session stopped. The run screen freezes its clock here: after the 2026-09-30 run
-    /// the screen kept counting the open cooldown up after the save, and read as a workout still
+    /// When the session stopped. The run screen freezes its clock here: after the first real outdoor
+    /// run the screen kept counting the open cooldown up after the save, and read as a workout still
     /// going.
     private(set) var endedAt: Date?
 

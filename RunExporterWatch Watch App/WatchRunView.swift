@@ -12,7 +12,7 @@ struct WatchRunView: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             // Frozen once the session has ended: an open cooldown's clock counting on after the save
-            // read as a workout still going (the first real run, 2026-09-30).
+            // read as a workout still going (the first real outdoor run).
             content(now: controller.endedAt ?? context.date)
         }
     }
@@ -60,7 +60,7 @@ struct WatchRunView: View {
                 }
                 // Once the session has ended, only a failed save shows its error. A stale link error
                 // from mid-run under "Workout saved" read as the save having failed (the owner, after
-                // the 2026-09-30 run). Every error is still in the event log, which reaches the phone.
+                // the first real outdoor run). Every error is still in the event log, which reaches the phone.
                 if let error = controller.lastError,
                    controller.outcome == nil || controller.outcome == .notSaved {
                     Text(error)
