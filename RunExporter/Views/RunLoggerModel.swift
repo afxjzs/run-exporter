@@ -824,10 +824,15 @@ final class RunLoggerModel {
         }
 
         // The workout's own start is the reference point, not "now" — a run logged days later must
-        // still resolve against the executions that were live when it happened.
+        // still resolve against the executions that were live when it happened. The run a workout
+        // is tagged with is exempt from the window: the tag is proof, and a Watch that joined late
+        // (Try again, minutes in) saves a workout that starts well outside it. It must still be
+        // unmatched and in a matchable state, like any other candidate.
         let eligible = executions.filter {
-            $0.isMatchCandidate(now: workout.startDate,
-                                window: RecentWorkoutMatcher.startToleranceSeconds)
+            let window = $0.id == workout.executionID
+                ? TimeInterval.infinity
+                : RecentWorkoutMatcher.startToleranceSeconds
+            return $0.isMatchCandidate(now: workout.startDate, window: window)
         }
         let candidates = eligible.compactMap(\.matchCandidate)
         let unrecognized = eligible.count - candidates.count

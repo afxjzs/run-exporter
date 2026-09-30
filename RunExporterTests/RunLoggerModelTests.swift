@@ -43,7 +43,8 @@ final class RunLoggerModelTests: XCTestCase {
 
     private func workout(startOffset: TimeInterval = 0,
                          duration: TimeInterval = 1_500,
-                         uuid: UUID = UUID()) -> HealthKitManager.WorkoutSummary {
+                         uuid: UUID = UUID(),
+                         executionID: UUID? = nil) -> HealthKitManager.WorkoutSummary {
         let start = base.addingTimeInterval(startOffset)
         return HealthKitManager.WorkoutSummary(
             uuid: uuid,
@@ -61,7 +62,7 @@ final class RunLoggerModelTests: XCTestCase {
             isIndoor: false,
             metadataKeys: [],
             isReclassifiedAsRunning: false,
-            executionID: nil)
+            executionID: executionID)
     }
 
     /// Inserts an execution, and `intervalCount` interval records belonging to it.
@@ -831,6 +832,16 @@ final class RunLoggerModelTests: XCTestCase {
         writeNote("a different run entirely", on: execution, seconds: 60)
 
         XCTAssertNil(model.execution(forWorkout: workout()))
+    }
+
+    /// A workout the watch app saved names its run, and that is proof whatever the start times say.
+    /// Found by review: the candidates were filtered by the two-minute window *before* the tag was
+    /// read, so a Watch that joined late — Try again tapped ten minutes into the run — saved a
+    /// workout its own run could never be joined to after the fact.
+    func testATaggedWorkoutJoinsItsRunOutsideTheTimeWindow() {
+        let execution = insertExecution(timerStartOffset: -600, timerEndOffset: 1_540)
+
+        XCTAssertEqual(model.execution(forWorkout: workout(executionID: execution.id)), execution.id)
     }
 
     // MARK: - Notes reaching the export
