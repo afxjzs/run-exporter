@@ -58,7 +58,11 @@ struct WatchRunView: View {
                         .foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                if let error = controller.lastError {
+                // Once the session has ended, only a failed save shows its error. A stale link error
+                // from mid-run under "Workout saved" read as the save having failed (the owner, after
+                // the 2026-09-30 run). Every error is still in the event log, which reaches the phone.
+                if let error = controller.lastError,
+                   controller.outcome == nil || controller.outcome == .notSaved {
                     Text(error)
                         .font(.system(size: 10))
                         .foregroundStyle(.red)
