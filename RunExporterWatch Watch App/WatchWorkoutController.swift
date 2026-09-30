@@ -70,6 +70,16 @@ final class WatchWorkoutController: NSObject {
         didSet { if let saveResult { WatchEventLog.shared.record("save: \(saveResult)") } }
     }
 
+    /// How the session ended, for the run screen. Nil while a session runs.
+    enum Outcome: Equatable {
+        case saving, saved, savedWithoutRoute, notSaved, discarded
+    }
+    private(set) var outcome: Outcome?
+    /// When the session stopped. The run screen freezes its clock here: after the 2026-09-30 run
+    /// the screen kept counting the open cooldown up after the save, and read as a workout still
+    /// going.
+    private(set) var endedAt: Date?
+
     /// One list, used both when asking up front and when checking at launch, so the two cannot
     /// drift apart — the first link test stalled when the link asked for a type the probe never had.
     /// `workoutRoute` is shared so the GPS route can be saved with the workout.
@@ -180,6 +190,8 @@ final class WatchWorkoutController: NSObject {
             heartRate = nil
             phaseClock = nil
             openSegment = nil
+            outcome = nil
+            endedAt = nil
             pace = PaceTracker(start: now)
         } catch {
             step = "stopped"
@@ -337,6 +349,7 @@ final class WatchWorkoutController: NSObject {
         openSegment = nil
         stopSession(session, at: Date())
         step = "ended, discarded"
+        outcome = .discarded
         Task {
             do {
                 try await builder.endCollection(at: Date())
@@ -364,6 +377,7 @@ final class WatchWorkoutController: NSObject {
         self.routeBuilder = nil
         stopSession(session, at: now)
         step = "saving"
+        outcome = .saving
         self.session = nil
         self.builder = nil
 
@@ -379,6 +393,7 @@ final class WatchWorkoutController: NSObject {
                     routeBuilder?.discard()
                     self.saveResult = "saved, but not readable while locked; the GPS route could not be attached"
                     self.step = "saved without route"
+                    self.outcome = .savedWithoutRoute
                     return
                 }
                 // No `finishRoute` here. A route builder taken from `seriesBuilder(for:)` is finished
@@ -397,10 +412,12 @@ final class WatchWorkoutController: NSObject {
                 let tag = executionID == nil ? ", untagged (the phone had no execution id)" : ""
                 self.saveResult = "workout \(workout.uuid.uuidString)\(tag), \(route)"
                 self.step = "saved"
+                self.outcome = .saved
             } catch {
                 routeBuilder?.discard()
                 self.saveResult = "FAILED: \(error.localizedDescription)"
                 self.step = "save failed"
+                self.outcome = .notSaved
                 self.lastError = "Saving the workout failed: \(error.localizedDescription)"
             }
         }
@@ -412,6 +429,7 @@ final class WatchWorkoutController: NSObject {
         session.stopActivity(with: date)
         session.end()
         isRunning = false
+        endedAt = date
     }
 
     // MARK: - Talking to the phone

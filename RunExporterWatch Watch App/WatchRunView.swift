@@ -11,7 +11,9 @@ struct WatchRunView: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
-            content(now: context.date)
+            // Frozen once the session has ended: an open cooldown's clock counting on after the save
+            // read as a workout still going (the first real run, 2026-09-30).
+            content(now: controller.endedAt ?? context.date)
         }
     }
 
@@ -19,7 +21,12 @@ struct WatchRunView: View {
     private func content(now: Date) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 4) {
-                if let clock = controller.phaseClock {
+                if let outcome = controller.outcome {
+                    Text(Self.headline(outcome))
+                        .font(.system(size: 22, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Self.color(outcome))
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if let clock = controller.phaseClock {
                     Text(phaseTitle(clock.anchor))
                         .font(.system(size: 18, weight: .heavy, design: .rounded))
                         .foregroundStyle(phaseColor(clock.anchor.phase))
@@ -63,6 +70,25 @@ struct WatchRunView: View {
     }
 
     // MARK: - Text
+
+    private static func headline(_ outcome: WatchWorkoutController.Outcome) -> String {
+        switch outcome {
+        case .saving: return "Saving…"
+        case .saved: return "Workout saved"
+        case .savedWithoutRoute: return "Saved, no route"
+        case .notSaved: return "Not saved"
+        case .discarded: return "Discarded"
+        }
+    }
+
+    private static func color(_ outcome: WatchWorkoutController.Outcome) -> Color {
+        switch outcome {
+        case .saving, .discarded: return .secondary
+        case .saved: return .green
+        case .savedWithoutRoute: return .orange
+        case .notSaved: return .red
+        }
+    }
 
     private func phaseTitle(_ anchor: PhaseAnchor) -> String {
         var title = anchor.phase.rawValue.uppercased()
