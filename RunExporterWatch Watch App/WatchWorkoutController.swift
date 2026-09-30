@@ -18,8 +18,8 @@ import Observation
 @Observable
 final class WatchWorkoutController: NSObject {
 
-    /// One instance, because the app delegate (a phone launch) and the screen (a local start) must
-    /// both reach the same session.
+    /// One instance, because the app delegate (a phone launch) and the screens (which show and can
+    /// end the session) must both reach the same session.
     static let shared = WatchWorkoutController()
 
     private static let statusInterval: TimeInterval = 5
@@ -529,7 +529,8 @@ final class WatchWorkoutController: NSObject {
 
 /// Carries HealthKit's callbacks, which arrive on framework threads, to the main actor. `owner` is
 /// written once in `init`, before HealthKit holds the bridge, and every read hops straight back to
-/// the main actor — the same reasoning as `SessionDelegateBridge` in `BackgroundExecutionProbe.swift`.
+/// the main actor. (The stage 2 probe used the same pattern; it was removed in the 2026-09-29
+/// clean-out.)
 private final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutBuilderDelegate {
     nonisolated(unsafe) private weak var owner: WatchWorkoutController?
 

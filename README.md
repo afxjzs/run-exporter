@@ -212,9 +212,8 @@ with `git config core.hooksPath .githooks` and list your own values in `private/
   **Used since 2026-09-29.** A run started with the phone's **Start** is saved by the watch app when
   the phone finishes it (`WatchWorkoutController.finish(executionID:)`): the workout, its GPS route,
   and the phone's execution id in the workout's metadata (`WorkoutMetadataKeys.executionID`), which
-  is what the phone joins on. A run abandoned on the phone is discarded
-  (`WatchWorkoutController.end`). The background probe (`87eeca9`) requests write access
-  and never saves.
+  is what the phone joins on — or untagged, joined by start time, when the phone recorded no
+  execution. A run abandoned on the phone is discarded (`WatchWorkoutController.end`).
 
 - **Background modes** — `Config/RunExporterWatch-Info.plist` declares
   `UIBackgroundModes = ["workout-processing", "audio"]`. `workout-processing` is what gives a
@@ -380,13 +379,13 @@ Shared/PhaseClock            a PhaseAnchor turned into a countdown on the watch'
 Shared/PaceTracker           the watch's leg pace, current mile split and total distance
 RunExporterLiveActivity/     widget extension: Lock Screen card and Dynamic Island
 RunExporterWatch Watch App/  watchOS companion; ships embedded at RunExporter.app/Watch/
-  RootView                   picks the screen: run, link diagnostics, or the probe
+  RootView                   picks the screen: run, link diagnostics, or idle; asks for Health
+                             access when opened by hand
   WatchRunView               the run screen: phase, time left, heart rate, pace, distance
-  WatchLinkView              the link's diagnostic readout: test sessions, and a run until its
-                             first phase arrives
-  BackgroundExecutionProbe   plan stage 2 — does an HKWorkoutSession keep a timer firing with
-                             the wrist down? PASSED 2026-09-25 (worst gap 1.1 s)
-  ContentView                the probe's readout
+  WatchLinkView              a run until its first phase arrives, and why a start failed
+  WatchIdleView              "Start a workout from your iPhone" and the Health access status
+                             (replaced the stage 2 probe, which passed on 2026-09-25, in the
+                             2026-09-29 clean-out)
   WatchWorkoutController     the watch end of the phone link: starts and mirrors the session,
                              records phases and the GPS route, saves or discards when told
   WatchEventLog              saved event log, forwarded to the phone's Documents/watch-events.log

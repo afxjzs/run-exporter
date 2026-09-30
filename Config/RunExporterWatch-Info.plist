@@ -100,6 +100,6 @@
 	<string>RunExporter reads your workout data on the Watch so it can record a run and keep the interval timer in sync with it.</string>
 
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>RunExporter saves the run it records on your Watch to the Health app, so the workout appears alongside your other activity. It only ever writes workouts.</string>
+	<string>RunExporter saves the run it records on your Watch to the Health app, so the workout appears alongside your other activity. It only ever writes workouts and their routes.</string>
 </dict>
 </plist>

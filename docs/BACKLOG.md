@@ -250,12 +250,12 @@ on the removal diff and `/code-review` once on the watch-flow diff (`610fdd2..HE
    the Watch workout too, and the name matches "End Workout". Move the `DocumentationDriftTests`
    entry to the new label; update README and `CUE_FEASIBILITY_TEST.md`; the v1.1 spec gets a note
    rather than a rewrite, since it records requirements as written.
-9. **The watch probe** (`ContentView`, `BackgroundExecutionProbe`) — **remove it; the root shows a
+9. **[Done in code 2026-09-30 — `WatchIdleView`; not yet on the Watch]** **The watch probe** (`ContentView`, `BackgroundExecutionProbe`) — **remove it; the root shows a
    small idle screen instead:** "Start a workout from your iPhone" and the Health access status.
    Must keep: `prepareHealthAccess` running when the app is opened by hand (a phone launch stops
    until access is granted from the foreground), the build label, the event log page. Batched with
    the other watch changes into one Watch install.
-10. **The watch's link screen** (`WatchLinkView`) — **keep it; delete "Test session: not saved to
+10. **[Done in code 2026-09-30; not yet on the Watch]** **The watch's link screen** (`WatchLinkView`) — **keep it; delete "Test session: not saved to
     Health."** It is the only place a failed Watch start explains itself, and its End is the way out
     of a session the phone lost.
 11. **The Live Activity** (Lock Screen card) — **keep it.** Redesigned 2026-08-07 to show only what
@@ -270,7 +270,7 @@ on the removal diff and `/code-review` once on the watch-flow diff (`610fdd2..HE
     LEARNINGS "Run logging".
 13. **The watch's `audio` background mode** — **leave it.** Unused but invisible, and changing
     background-mode keys on this Watch has cost a day before (`WKBackgroundModes`).
-14. **[Phone side done; the watch permission string and `.watch` go in the Watch build]**
+14. **[Done in code 2026-09-30, both sides; the watch half is not yet on the Watch]**
     **Corrections, all approved:** the watch's `NSHealthUpdateUsageDescription` and the export's
     README.txt say "only workouts" — make them say workouts and their GPS routes; correct every
     comment still describing the two-tap start (`LoggerDefaults` countdown, `AudioAndShoeTests`,

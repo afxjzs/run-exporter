@@ -24,8 +24,8 @@ final class WatchLinkMessageTests: XCTestCase {
                                 origin: .phone)),
             .status(WatchStatus(sentAt: sentAt,
                                 sessionStartedAt: sentAt,
-                                heartRate: nil,
-                                origin: .watch)),
+                                heartRate: nil,       // no reading yet
+                                origin: .phone)),
             .endWorkout,
         ]
         for message in messages {

@@ -1,11 +1,15 @@
 import SwiftUI
 
-/// Chooses between the phone-linked session and the stage 2 probe, and asks for Health access up
-/// front.
+/// Chooses between the run screen, the link screen and the idle screen, and asks for Health access
+/// up front.
 ///
 /// The link screen appears as soon as a launch from the phone **arrives**, not once a session is
 /// running — otherwise a launch that stalls before the session looks exactly like one that never
-/// came. The probe stays reachable because it is still the instrument for background execution.
+/// came. With nothing arrived, the idle screen says where a workout starts. (Until the 2026-09-29
+/// clean-out that slot held the stage 2 background-execution probe, which had passed.)
+///
+/// The Health request below must stay: a launch from the phone may arrive in the background, where
+/// no permission sheet can appear, so access is granted by opening this app by hand.
 ///
 /// Swipe left for the saved event log. The build number sits at the bottom of the first page, so
 /// every test starts by confirming which build is actually on the Watch.
@@ -22,7 +26,7 @@ struct RootView: View {
                 } else if controller.origin != nil || controller.launchReceivedAt != nil {
                     WatchLinkView(controller: controller)
                 } else {
-                    ContentView()
+                    WatchIdleView(controller: controller)
                 }
             }
             .safeAreaInset(edge: .bottom) {
@@ -45,6 +49,32 @@ struct RootView: View {
         case .inactive: return "inactive"
         case .background: return "background"
         @unknown default: return "unknown"
+        }
+    }
+}
+
+/// Opening the app by hand with no run from the phone: where a workout starts, and whether Health
+/// access is in place — without it, a phone launch stops with an error.
+struct WatchIdleView: View {
+    let controller: WatchWorkoutController
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Start a workout from your iPhone.")
+                    .font(.headline)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Health access: \(controller.healthAccess)")
+                    .font(.caption2)
+                    .foregroundStyle(controller.healthAccess == "failed" ? .red : .secondary)
+                if let error = controller.lastError {
+                    Text(error)
+                        .font(.caption2)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.horizontal, 4)
         }
     }
 }
@@ -78,8 +108,10 @@ struct WatchEventLogView: View {
     }
 }
 
-/// Step 1's measuring screen: what started this session, whether the phone link is up, and what the
-/// sensors are reporting. Not a run screen — that comes once the link is proven.
+/// What the watch shows between a phone launch arriving and the first phase — and when a start
+/// fails, the only place the watch says why: the step it reached and the error. End discards a
+/// session the phone has lost track of. (Its "Test session: not saved to Health." footer was false
+/// for a real run and went in the 2026-09-29 clean-out.)
 struct WatchLinkView: View {
     let controller: WatchWorkoutController
 
@@ -113,10 +145,6 @@ struct WatchLinkView: View {
                     Button("End", role: .destructive) { controller.end() }
                         .buttonStyle(.borderedProminent)
                 }
-
-                Text("Test session: not saved to Health.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 4)
         }

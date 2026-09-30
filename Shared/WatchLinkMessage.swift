@@ -72,13 +72,12 @@ struct PhaseAnchor: Codable, Equatable, Sendable {
     }
 }
 
-/// Who started the watch's workout session. Recorded because the two paths behave differently and
-/// a result from one says nothing about the other.
+/// Who started the watch's workout session, carried in every status. Only `phone` exists: the
+/// watch's own screen never starts a session. A `watch` case was declared and never produced, and
+/// was removed in the 2026-09-29 clean-out; an older build never sent it either.
 enum WatchWorkoutOrigin: String, Codable, Sendable {
     /// `HKHealthStore.startWatchApp(toHandle:)` on the phone launched the watch app.
     case phone
-    /// Started from the watch's own screen.
-    case watch
 }
 
 struct WatchStatus: Codable, Equatable, Sendable {
