@@ -202,6 +202,24 @@ one, the save with its GPS route — and found three things:
   screen stayed up and counted the open cooldown up, so it read as a workout still in progress.
   It now freezes and says "Workout saved" (`WatchWorkoutController.outcome`).
 
+### The install after it, and a short test (2026-09-30, build 202609301411)
+
+Read from both logs; specifics in `private/run-notes.md`.
+
+- **The Watch needed Health access again after this install.** The first two launches from the
+  phone stopped at status 1 ("would prompt"). The owner allowed it on the Watch, and the next Try
+  again connected in about half a second. This build added no Health type; its watch plist's
+  `NSHealthUpdateUsageDescription` wording changed. Which of the two — the reinstall or the new
+  wording — caused the re-prompt is **not established**. Expect it after a watch install until
+  it is.
+- **The watch's refusal reached the phone within about a second** this time, so the run screen
+  showed the watch's own reason, not the timeout. The first outdoor run's took 35 s. Delivery by
+  `transferUserInfo` varies that widely; the timeout's wording is still untested on the devices.
+- **"Workout saved" works on the Watch**: the save completed a few seconds after Finish, with its
+  route, and the screen said so.
+- **Walks recorded as walks: not tested.** The test plan's Activity was Running; both logs agree
+  (the phone's `activity running`, the watch's activity 37, which is `HKWorkoutActivityType.running`).
+
 ---
 
 ## Audio cues
