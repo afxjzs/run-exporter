@@ -239,8 +239,13 @@ final class WatchLink: NSObject {
 
     /// Asks the watch to start its workout. Returns why it failed, or nil once the request has been
     /// **sent** — `startWatchApp` succeeding says nothing about the watch (docs/WATCH_DEVELOPMENT.md).
+    /// Also nil when a launch is already in flight: no second request is made, and the one in flight
+    /// reports its own failure through its caller.
     private func launchWatchWorkout(activityType: PlannedActivityType) async -> String? {
-        guard !isLaunching else { return nil }
+        guard !isLaunching else {
+            log("A Watch launch is already in progress; waiting on it instead of starting another")
+            return nil
+        }
         isLaunching = true
         defer { isLaunching = false }
 

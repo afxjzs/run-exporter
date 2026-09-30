@@ -140,11 +140,9 @@ final class SmokeTests: XCTestCase {
             complete.buttons["Later"].tap()
             expect(app.buttons["Start Workout"], "back on Today after the run")
         }
-
-        // Last, with a wait: the sheet has arrived as late as 27 s after its request, and both
-        // requests — the logger's at launch and the Watch launch's at Start — are behind us now.
-        XCTAssertFalse(healthSheet.waitForExistence(timeout: 5),
-                       "A Health permission sheet appeared despite -uiTestingSkipsHealthAuthorization")
+        // No closing "no sheet appeared" wait: the sheet has arrived as late as 27 s after its
+        // request, so a 5 s wait passed whenever it was merely late. The launch flag is proved by
+        // Today's own state in the first step instead.
     }
 
     // MARK: - Helpers
