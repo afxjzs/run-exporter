@@ -443,6 +443,11 @@ struct ActiveWorkoutView: View {
             EmptyView()
         case .connecting:
             watchLine("Connecting to your Watch…", systemImage: "applewatch")
+        case .connected where watchLink.phaseUnsent:
+            // Connected, but the latest phase did not get through, so the Watch may show the wrong
+            // one. Clears itself when a resend lands (`WatchLink.phaseUnsent`).
+            watchLine("Watch not updated. It may show the wrong phase until the link recovers.",
+                      systemImage: "exclamationmark.applewatch")
         case .connected:
             watchLine(watchConnectedText, systemImage: "applewatch.radiowaves.left.and.right")
         case .failed(let reason), .disconnected(let reason):
@@ -460,8 +465,11 @@ struct ActiveWorkoutView: View {
         return "Watch recording · \(Int(bpm.rounded())) bpm"
     }
 
+    /// A system error's text often has no final full stop ("Unable to launch watch app"), which ran it
+    /// into the next sentence; one is added when it is missing.
     private func watchProblemText(_ reason: String) -> String {
-        reason + " This run continues on the phone only."
+        let sentence = reason.hasSuffix(".") ? reason : reason + "."
+        return sentence + " This run continues on the phone only."
     }
 
     /// Wraps to as many lines as it needs. Without `fixedSize` the run screen, short of height,

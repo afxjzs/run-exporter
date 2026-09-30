@@ -19,6 +19,11 @@ import WatchConnectivity
 final class WatchLink: NSObject {
 
     private(set) var latestStatus: WatchStatus?
+    /// True while the watch may be showing the wrong phase: the latest phase message failed to send.
+    /// Cleared when a resend gets through. Measured on the first real run (2026-09-30): one
+    /// "Remote device is unreachable" left the watch on WALK through a whole run leg, with nothing
+    /// on the phone saying so.
+    private(set) var phaseUnsent = false
     /// Round trips measured on the phone's clock, most recent last.
     private(set) var roundTrips: [TimeInterval] = []
     /// Set when a diagnostic file cannot be written. Shown on the run screen, never swallowed —
@@ -88,6 +93,8 @@ final class WatchLink: NSObject {
     /// Guards against a second launch while one is in flight. Not shown anywhere, so not observed.
     @ObservationIgnored private var isLaunching = false
     @ObservationIgnored private var anchorProvider: ((TimeInterval) -> PhaseAnchor?)?
+    /// Counts phase sends, so only the latest one's result sets `phaseUnsent`.
+    @ObservationIgnored private var phaseSendNumber = 0
     /// The run's plan activity, so a Try again launches the same workout as the first attempt.
     @ObservationIgnored private var runActivityType: PlannedActivityType = .running
     @ObservationIgnored private var launchTimeout: Task<Void, Never>?
@@ -161,6 +168,7 @@ final class WatchLink: NSObject {
         launchTimeout?.cancel()
         launchTimeout = nil
         runConnection = .off
+        phaseUnsent = false
     }
 
     private func connectForRun() {
@@ -177,7 +185,12 @@ final class WatchLink: NSObject {
             // it is signalled by `isCancelled`, so the sleep's own CancellationError carries nothing.
             try? await Task.sleep(for: .seconds(Self.launchTimeoutSeconds))
             guard !Task.isCancelled, let self, self.runConnection == .connecting else { return }
-            let reason = "The Watch did not respond within \(Int(Self.launchTimeoutSeconds)) s."
+            // The likely fix is named here because the watch's own reason can arrive too late: on
+            // 2026-09-30 its "Health access not granted yet" reached this phone 35 s after the tap,
+            // well after this message. A build that adds a Health type needs that grant, on the
+            // watch, once.
+            let reason = "The Watch did not respond within \(Int(Self.launchTimeoutSeconds)) s. "
+                + "If the Watch app is asking for Health access, allow it there, then tap Try again."
             self.runConnection = .failed(reason)
             self.log(reason, isError: true)
         }
@@ -196,8 +209,15 @@ final class WatchLink: NSObject {
             log("No phase to send to the watch at this moment")
             return
         }
+        phaseSendNumber += 1
+        let number = phaseSendNumber
         send(.phaseBegan(anchor), describe: "Phase sent: \(anchor.phase.rawValue)"
-             + (anchor.isPaused ? " (paused)" : ""))
+             + (anchor.isPaused ? " (paused)" : "")) { [weak self] sent in
+            // Only the latest send decides: an older send finishing late must not clear, or set,
+            // the flag for a newer phase.
+            guard let self, number == self.phaseSendNumber else { return }
+            self.phaseUnsent = !sent
+        }
     }
 
     // MARK: - Actions
@@ -297,9 +317,11 @@ final class WatchLink: NSObject {
         }
     }
 
-    private func send(_ message: WatchLinkMessage, describe: String) {
+    /// `sent` is told whether the message reached the watch's session; a failure is logged either way.
+    private func send(_ message: WatchLinkMessage, describe: String, sent: ((Bool) -> Void)? = nil) {
         guard let session = mirroredSession else {
             log("\(describe): not sent, no watch session is connected", isError: true)
+            sent?(false)
             return
         }
         let data: Data
@@ -307,14 +329,17 @@ final class WatchLink: NSObject {
             data = try WatchLinkCodec.encode(message)
         } catch {
             log("Could not encode a message: \(error.localizedDescription)", isError: true)
+            sent?(false)
             return
         }
         Task {
             do {
                 try await session.sendToRemoteWorkoutSession(data: data)
                 self.log(describe)
+                sent?(true)
             } catch {
                 self.log("\(describe): send failed: \(error.localizedDescription)", isError: true)
+                sent?(false)
             }
         }
     }
@@ -345,6 +370,11 @@ final class WatchLink: NSObject {
                         log("First status from the watch")
                     }
                     latestStatus = status
+                    // A status arriving proves the link works again: resend where the run is now.
+                    if phaseUnsent, anchorProvider != nil, isConnected {
+                        log("Resending the phase after a failed send")
+                        sendCurrentPhase()
+                    }
                 case .ping, .endWorkout, .phaseBegan, .finishWorkout:
                     log("The watch sent a message only the phone should send", isError: true)
                 }

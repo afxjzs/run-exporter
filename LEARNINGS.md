@@ -181,6 +181,27 @@ A short test on foot, read from the phone's `watch-events.log` and `watch-link-p
   still waited out its 15 s timeout, although the Watch's error reached it 2.5 s after the tap —
   the phone now shows that error as soon as it arrives.
 
+### The first outdoor run driven from the phone (2026-09-30, build 202609291331)
+
+Read from both logs; specifics in `private/run-notes.md`. The run worked — launch, every phase but
+one, the save with its GPS route — and found three things:
+
+- **The watch's own launch error can arrive too late to use.** Forwarded log lines travel by
+  `WCSession.transferUserInfo`, which the system queues: the watch's "Health access not granted yet"
+  reached the phone **35 s** after the tap, long after the 15 s timeout had fired with no reason. The
+  2026-09-29 fix (show the watch's error as soon as it arrives) works only when it arrives in time.
+  The timeout message now names the likely cause and fix itself. **Try again** then connected in
+  about 2 s — the button earned its keep on the first real run.
+- **A phase message can fail to send, and nothing retried it.** One "Remote device is unreachable"
+  left the watch showing the previous walk through an entire run leg, and the saved workout's walk
+  segment covers that run. The phone's screen still said the Watch was recording. The phone now
+  marks the phase unsent, says so on the run screen, and resends the current phase when the next
+  watch status proves the link is back (`WatchLink.phaseUnsent`). Watch → phone sends failed
+  several more times in the run's last 15 minutes; **why the link was patchy then is not known.**
+- **A saved workout's screen kept counting.** The watch saved and stopped its session, but its run
+  screen stayed up and counted the open cooldown up, so it read as a workout still in progress.
+  It now freezes and says "Workout saved" (`WatchWorkoutController.outcome`).
+
 ---
 
 ## Audio cues
@@ -569,6 +590,10 @@ reader. `git grep` on the property name found all five of these in about a minut
 ## Testing
 
 ### One HealthKit test dominates a full run after cycling the simulator (2026-09-23)
+
+**Resolved 2026-09-30:** the test was removed in a test-suite trim — it passed on success and on
+any error, so it could not fail. It had taken 0.4 s to 466 s across runs that day. The suite now
+runs in about 4–7 s. What follows is kept as the record of the measurement.
 
 `ExportPipelineTests.testBuildSurfacesHealthKitFailure` took **348.7 seconds** against a freshly
 cycled iPhone 17 Pro simulator, against ~7 seconds for the other 315 tests put together. Measured
