@@ -64,6 +64,8 @@ final class RunLoggerModel {
             errorMessage = "HealthKit is not available on this device, so workouts cannot be read."
             return
         }
+        // The UI smoke test, Debug builds only: no request, so nothing to read. See `UITesting`.
+        guard !UITesting.skipsHealthAuthorization else { return }
         isLoading = true
         defer { isLoading = false }
 

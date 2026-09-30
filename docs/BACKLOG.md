@@ -166,7 +166,10 @@ removed label; update them in the same change.
   part that matters — the run continues on the phone only — is not visible. The accessibility
   label carries the full sentence, which is why the test passed. `ActiveWorkoutView.watchStatus`,
   not touched by the clean-out. Not yet decided.
-- **The smoke test is flaky on the simulator's Health sheet.** Five runs on 2026-09-30: two passed,
+- **[Fixed 2026-09-30, owner's call: the deeper fix below, as `UITesting.skipsHealthAuthorization`.
+  The test now asserts Today finishes without waiting on Health, which went red before the app
+  code and green after; three consecutive runs passed.]** **The smoke test is flaky on the
+  simulator's Health sheet.** Five runs on 2026-09-30: two passed,
   three failed, every failure in the test's handling of the Health permission sheet
   (`com.apple.HealthPrivacyService`) and none on an app assertion. The sheet arrives an
   unpredictable time after the request, can queue a second one, and can replace itself between
@@ -175,7 +178,8 @@ removed label; update them in the same change.
   a launch argument (say `-uiTestingSkipsHealthAuthorization`) that the app honors by not
   requesting HealthKit access, so the sheet never appears in the smoke test. That is app code
   added for testability, which is the owner's call.
-- **One unit test can stall the suite for minutes.** `ExportPipelineTests.testBuildSurfacesHealthKitFailure`
+- **[Resolved 2026-09-30: the test was removed in the test-suite trim — it could not fail.]**
+  **One unit test can stall the suite for minutes.** `ExportPipelineTests.testBuildSurfacesHealthKitFailure`
   calls the real `builder.build`, which reads the simulator's HealthKit — unlike the other export
   tests, which README says avoid that. Measured on 2026-09-29 across five runs: 0.4 s, 41 s, 87 s,
   under 1 s, and 466 s, with no change to its code path. Cause not established; the slowest run came

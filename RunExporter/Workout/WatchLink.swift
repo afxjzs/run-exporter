@@ -228,8 +228,12 @@ final class WatchLink: NSObject {
         // so. Whether startWatchApp strictly needs it is unmeasured — requesting it keeps that
         // question from masquerading as a launch failure.
         do {
-            try await store.requestAuthorization(toShare: [HKObjectType.workoutType()],
-                                                 read: [HKObjectType.workoutType(), HKQuantityType(.heartRate)])
+            // The UI smoke test, Debug builds only (`UITesting`). The simulator has no Watch, so the
+            // launch below fails either way and the run screen reports it.
+            if !UITesting.skipsHealthAuthorization {
+                try await store.requestAuthorization(toShare: [HKObjectType.workoutType()],
+                                                     read: [HKObjectType.workoutType(), HKQuantityType(.heartRate)])
+            }
         } catch {
             let message = "HealthKit authorization failed: \(error.localizedDescription)"
             log(message, isError: true)

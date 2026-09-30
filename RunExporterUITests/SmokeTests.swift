@@ -14,6 +14,12 @@ import XCTest
 ///
 /// Run it with `scripts/smoke-test.sh`, which starts from a clean install and exports the
 /// screenshots to a folder.
+///
+/// **No Health permission sheet.** The app is launched with `-uiTestingSkipsHealthAuthorization`,
+/// which a Debug build honors by not requesting HealthKit access (`UITesting`). The sheet used to
+/// appear here at an unpredictable time, queue a second one, and replace itself mid-tap; dismissing
+/// it from the test failed three runs in five on 2026-09-30. The test now asserts the sheet never
+/// shows, so a request the flag does not cover fails loudly instead of flaking.
 final class SmokeTests: XCTestCase {
 
     private var app: XCUIApplication!
@@ -22,14 +28,26 @@ final class SmokeTests: XCTestCase {
         super.setUp()
         continueAfterFailure = false
         app = XCUIApplication()
+        app.launchArguments = [
+            "-uiTestingSkipsHealthAuthorization",
+            // Cues off for this launch only, through UserDefaults' argument domain — LoggerDefaults
+            // reads `.standard`, and `cue.source` = `none` is "Play cues" off. The simulator plays
+            // through the Mac's speakers, and every run announced "3, 2, 1, Run" out loud.
+            "-cue.source", "none",
+        ]
     }
 
     func testWalkThroughTheApp() {
         app.launch()
-        dismissHealthSheetIfShown()
 
         step("Today, before any plan") {
             tapTab("Today")
+            // The deterministic check that Health was not asked: while a request is pending, Today
+            // says "Reading Health…" — and whether the system's sheet has appeared yet is not
+            // predictable (a run on 2026-09-30 passed a sheet check while the request sat pending).
+            // With the launch flag honored, the app skips the read and settles on this instead.
+            expect(app.staticTexts["No running or walking workouts found yet."],
+                   "Today finished without waiting on Health")
             expect(app.buttons["Export Data"], "Export Data on Today")
             expect(app.buttons["Shoes"], "Shoes on Today")
             expectAbsent(app.buttons["Send to Apple Watch"], "WorkoutKit send link")
@@ -102,7 +120,6 @@ final class SmokeTests: XCTestCase {
 
         step("Start: the run screen, and the Watch failure reported") {
             app.buttons["Start"].tap()
-            dismissHealthSheetIfShown()
             expect(app.buttons["End Workout"], "End Workout on the run screen")
             // The simulator has no Watch. The launch fails at once or after the 15 s timeout, and
             // either way the screen must say the run carries on without it.
@@ -123,13 +140,20 @@ final class SmokeTests: XCTestCase {
             complete.buttons["Later"].tap()
             expect(app.buttons["Start Workout"], "back on Today after the run")
         }
+
+        // Last, with a wait: the sheet has arrived as late as 27 s after its request, and both
+        // requests — the logger's at launch and the Watch launch's at Start — are behind us now.
+        XCTAssertFalse(healthSheet.waitForExistence(timeout: 5),
+                       "A Health permission sheet appeared despite -uiTestingSkipsHealthAuthorization")
     }
 
     // MARK: - Helpers
 
     /// Runs one named step and attaches a screenshot of where it ended — or where it failed.
     private func step(_ name: String, _ body: () -> Void) {
-        dismissHealthSheetIfShown(timeout: 1)
+        XCTAssertFalse(healthSheet.exists,
+                       "A Health permission sheet is showing before \"\(name)\"; the launch flag "
+                           + "did not cover some HealthKit request")
         XCTContext.runActivity(named: name) { activity in
             defer { activity.add(screenshot(named: name)) }
             body()
@@ -156,13 +180,9 @@ final class SmokeTests: XCTestCase {
         tab.tap()
     }
 
-    /// Waits for `element`. If it is not there, a late Health sheet may be covering the app — so
-    /// that is cleared and the element looked for once more before the step fails.
     private func expect(_ element: XCUIElement, _ what: String,
                         file: StaticString = #filePath, line: UInt = #line) {
-        if element.waitForExistence(timeout: 10) { return }
-        dismissHealthSheetIfShown(timeout: 1)
-        XCTAssertTrue(element.waitForExistence(timeout: 5), "Not found: \(what)",
+        XCTAssertTrue(element.waitForExistence(timeout: 10), "Not found: \(what)",
                       file: file, line: line)
     }
 
@@ -172,34 +192,11 @@ final class SmokeTests: XCTestCase {
                        file: file, line: line)
     }
 
-    /// A fresh install asks for Health access on launch, and Start asks again for workout access.
-    /// Declining is fine here: the simulator has no Health data, and the test is about screens.
-    ///
-    /// The sheet belongs to its own process, `com.apple.HealthPrivacyService` — found by listing the
-    /// simulator's processes while it was up; it is in neither the app's element tree nor
-    /// SpringBoard's. It arrives an unpredictable time after the request — measured at a few
-    /// seconds on one run and about 27 s on another — so it is checked for at launch, at the start
-    /// of every step, and before any `expect` gives up. Checking only once at launch let it arrive
-    /// mid-walkthrough and swallow a tab tap, twice.
-    ///
-    /// More than one can be queued — the logger asks for read access and Start asks for workout
-    /// access — so this keeps declining until none is left, and fails only if the same sheet will
-    /// not go away after several tries.
-    private func dismissHealthSheetIfShown(timeout: TimeInterval = 15) {
-        let sheet = XCUIApplication(bundleIdentifier: "com.apple.HealthPrivacyService")
-        // The system's own identifier, stabler than the label's curly apostrophe.
-        let dontAllow = sheet.buttons["UIA.Health.DoNotAllow.Button"]
-        guard dontAllow.waitForExistence(timeout: timeout) else { return }
-        for _ in 1...4 {
-            // A coordinate tap, not `dontAllow.tap()`: the sheet can replace or dismiss itself
-            // between finding the button and tapping it, and XCTest then refuses an element-based
-            // tap as "no longer valid after interruption handling" (seen 2026-09-30).
-            dontAllow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-            if dontAllow.waitForNonExistence(timeout: 5) {
-                // A queued sheet may follow a moment later; decline that one too.
-                guard dontAllow.waitForExistence(timeout: 2) else { return }
-            }
-        }
-        XCTFail("A Health sheet was still showing after declining four times")
+    /// The Health permission sheet's decline button. The sheet belongs to its own process,
+    /// `com.apple.HealthPrivacyService` — in neither the app's element tree nor SpringBoard's — and
+    /// `UIA.Health.DoNotAllow.Button` is the system's own identifier for it.
+    private var healthSheet: XCUIElement {
+        XCUIApplication(bundleIdentifier: "com.apple.HealthPrivacyService")
+            .buttons["UIA.Health.DoNotAllow.Button"]
     }
 }

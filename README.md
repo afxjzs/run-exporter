@@ -248,8 +248,10 @@ run from Start Workout to End Workout. It checks that removed controls are **abs
 the rest are present. Each run starts from a clean install and writes the result bundle and one
 screenshot per step to `build/smoke-test/<timestamp>/` (git-ignored). The simulator has no Watch,
 so the run screen is expected to report that the run continues on the phone only; the Watch path
-needs the device. The test declines the Health sheet, which is hosted by
-`com.apple.HealthPrivacyService` and arrives a few seconds after the request.
+needs the device. It launches the app with `-uiTestingSkipsHealthAuthorization`, which a **Debug**
+build honors by never requesting HealthKit access (`UITesting`; a Release build ignores it), and
+with cues off so the simulator does not speak through the Mac. Dismissing the simulator's Health
+sheet instead made the test fail three runs in five.
 
 The export tests drive `ExportBuilder.writeFiles` directly with a prepared dataset rather than going
 through `build`, which reads HealthKit — an unauthorized store in the test environment would
