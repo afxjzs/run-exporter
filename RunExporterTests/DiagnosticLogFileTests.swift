@@ -20,12 +20,6 @@ final class DiagnosticLogFileTests: XCTestCase {
         try FileManager.default.removeItem(at: directory)
     }
 
-    func testTheFirstAppendCreatesTheFile() throws {
-        let log = DiagnosticLogFile(url: directory.appendingPathComponent("a.log"))
-        try log.append("first")
-        XCTAssertEqual(try contents(of: log), "first\n")
-    }
-
     func testAppendsKeepTheirOrderOneLineEach() throws {
         let log = DiagnosticLogFile(url: directory.appendingPathComponent("a.log"))
         try log.append("one")

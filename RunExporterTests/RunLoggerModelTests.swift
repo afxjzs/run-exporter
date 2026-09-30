@@ -151,11 +151,21 @@ final class RunLoggerModelTests: XCTestCase {
         XCTAssertNil(execution.matchedHealthKitWorkoutUUID)
     }
 
+    /// A workout with no timer session — the ordinary case, since most workouts were never planned
+    /// in this app — saves without complaint and without an invented plan shape.
     func testALogWithNoTimerSessionAtAllSavesWithoutComplaint() {
-        XCTAssertNil(model.save(draft: completeDraft(), for: workout()))
-        // The ordinary case — most workouts were never planned in this app — so it must not report
-        // anything. A spurious error here would train the user to ignore real ones.
+        let run = workout()
+        XCTAssertNil(model.save(draft: completeDraft(), for: run))
+        // A spurious error here would train the user to ignore real ones.
         XCTAssertNil(model.errorMessage)
+
+        // No session means no plan shape. Filling one in from a nearby run would be inventing
+        // data, which is worse than leaving the column blank.
+        let log = model.runLog(forWorkout: run.uuid)
+        XCTAssertNotNil(log, "precondition: the log itself saved")
+        XCTAssertNil(log?.plannedWorkoutID)
+        XCTAssertNil(log?.runIntervalSeconds)
+        XCTAssertNil(log?.plannedRepetitions)
     }
 
     // MARK: - Backfilling the plan shape a blank form would otherwise erase
@@ -256,20 +266,6 @@ final class RunLoggerModelTests: XCTestCase {
         XCTAssertEqual(log?.walkIntervalSeconds, 90)
         XCTAssertEqual(log?.plannedRepetitions, 3)
         XCTAssertEqual(log?.completedRepetitions, 2)
-    }
-
-    /// No timer session means no plan shape. Filling one in from a nearby run would be inventing
-    /// data, which is worse than leaving the column blank.
-    func testAWorkoutWithNoTimerSessionGetsNoInventedPlanShape() {
-        let run = workout()
-
-        XCTAssertNil(model.save(draft: completeDraft(), for: run))
-
-        let log = model.runLog(forWorkout: run.uuid)
-        XCTAssertNotNil(log, "precondition: the log itself saved")
-        XCTAssertNil(log?.plannedWorkoutID)
-        XCTAssertNil(log?.runIntervalSeconds)
-        XCTAssertNil(log?.plannedRepetitions)
     }
 
     // MARK: - Refusing to guess, and then offering the choice

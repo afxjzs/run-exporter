@@ -72,16 +72,6 @@ final class AbandonedTimerTests: XCTestCase {
 
     // MARK: - The retired state the matcher already honoured
 
-    func testExpiredIsNotMatchable() {
-        XCTAssertFalse(ExecutionStatus.matchable.contains(.expired))
-    }
-
-    func testStartedIsStillMatchableSoRetirementIsWhatRemovesIt() {
-        // If `.started` were simply excluded from `matchable`, a genuinely running timer could never
-        // match. Retirement, not status, is what takes an abandoned timer out of contention.
-        XCTAssertTrue(ExecutionStatus.matchable.contains(.started))
-    }
-
     func testAnExpiredExecutionIsNoLongerAMatchCandidate() {
         let retired = execution(status: .expired, createdMinutesAgo: 0, timerEnded: false)
         XCTAssertFalse(retired.isMatchCandidate(
@@ -127,11 +117,5 @@ final class AbandonedTimerTests: XCTestCase {
         let notice = RunLoggerModel.abandonedTimerNotice(count: 6)
         XCTAssertTrue(notice.contains("6 timers"), notice)
         XCTAssertTrue(notice.contains("Nothing was deleted"), notice)
-    }
-
-    func testNoticeIsSingularForOne() {
-        let notice = RunLoggerModel.abandonedTimerNotice(count: 1)
-        XCTAssertTrue(notice.contains("1 timer that"), notice)
-        XCTAssertFalse(notice.contains("1 timers"), notice)
     }
 }

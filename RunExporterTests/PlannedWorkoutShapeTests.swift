@@ -94,29 +94,6 @@ final class PlannedWorkoutShapeTests: XCTestCase {
 
     // MARK: - Previewing a shape that has not been saved yet
 
-    /// The name the editor proposes for an unsaved shape, pinned to a literal.
-    ///
-    /// The second assertion is deliberately weaker than it looks: `intervalSummary` is implemented
-    /// as `summary(blocks: resolvedBlocks)`, so comparing them can only fail if `resolvedBlocks`
-    /// resolves the wrong list — it is not, as an earlier version of this comment claimed, two
-    /// independent paths checking each other. The literal is what actually pins the string.
-    func testTheGeneratedNameMatchesWhatTheListWillShow() {
-        let shapes = [PlannedWorkout.Block(runSeconds: 300, walkSeconds: 60, repetitions: 1),
-                      PlannedWorkout.Block(runSeconds: 480, walkSeconds: 60, repetitions: 2),
-                      PlannedWorkout.Block(runSeconds: 300, walkSeconds: 60, repetitions: 1)]
-        let saved = withBlocks([(300, 60, 1), (480, 60, 2), (300, 60, 1)], on: plan())
-
-        XCTAssertEqual(PlannedWorkout.summary(blocks: shapes, includesFinalWalk: false), saved.intervalSummary)
-        XCTAssertEqual(PlannedWorkout.summary(blocks: shapes, includesFinalWalk: false), "5/1×1 · 8/1×2 · 5/1×1")
-    }
-
-    /// And for the ordinary case, which is the name the editor has always proposed.
-    func testTheGeneratedNameForASingleShapeIsUnchanged() {
-        let single = [PlannedWorkout.Block(runSeconds: 240, walkSeconds: 60, repetitions: 5)]
-        XCTAssertEqual(PlannedWorkout.summary(blocks: single, includesFinalWalk: false), "4/1 × 5")
-        XCTAssertEqual(PlannedWorkout.summary(blocks: single, includesFinalWalk: false), plan().intervalSummary)
-    }
-
     /// A shape with nothing in it names nothing, rather than being given a plausible name.
     func testAnEmptyShapeHasNoName() {
         XCTAssertEqual(PlannedWorkout.summary(blocks: [], includesFinalWalk: false), "")

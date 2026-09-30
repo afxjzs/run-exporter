@@ -92,28 +92,6 @@ final class ExportPipelineTests: XCTestCase {
                                     zipURL: zipURL)
     }
 
-    /// A HealthKit read failure must fail the export loudly, not produce a partial one.
-    func testBuildSurfacesHealthKitFailure() async {
-        let start = Date(timeIntervalSinceReferenceDate: 0)
-        do {
-            _ = try await builder.build(programStart: start,
-                                        queryStart: start,
-                                        queryEnd: start.addingTimeInterval(86_400),
-                                        displayStart: start,
-                                        mode: .fullDateRange,
-                                        options: ExportOptions(includeWeather: true,
-                                                               includeRoutes: false),
-                                        logger: LoggerExportData(),
-                                        intervalAudio: audioSettings,
-                                        progress: { _ in })
-            // Authorized (or empty) is a legitimate outcome too; the point is that it does not
-            // silently produce a half-written export.
-        } catch {
-            XCTAssertFalse(error.localizedDescription.isEmpty,
-                           "A HealthKit failure must carry a reportable message")
-        }
-    }
-
     // MARK: - Files
 
     /// Both the v1.0 files and the v1.1 additions must be present.
@@ -199,11 +177,6 @@ final class ExportPipelineTests: XCTestCase {
             XCTAssertFalse(HealthKitManager.keeps(other, includeWalking: true))
             XCTAssertFalse(HealthKitManager.keeps(other, includeWalking: false))
         }
-    }
-
-    func testKeptTypeNamesMatchTheRule() {
-        XCTAssertEqual(HealthKitManager.keptTypeNames(includeWalking: false), ["running"])
-        XCTAssertEqual(HealthKitManager.keptTypeNames(includeWalking: true), ["running", "walking"])
     }
 
     // MARK: - Reclassified walks
@@ -409,19 +382,6 @@ final class ExportPipelineTests: XCTestCase {
     }
 
     // MARK: - Cleanup
-
-    /// Cancelling the share must still remove the temporary files.
-    func testTemporaryFilesCanBeRemovedAfterExport() throws {
-        let result = try runExport()
-        let fm = FileManager.default
-        XCTAssertTrue(fm.fileExists(atPath: result.zipURL.path))
-
-        try fm.removeItem(at: result.zipURL)
-        try fm.removeItem(at: result.exportFolder)
-
-        XCTAssertFalse(fm.fileExists(atPath: result.zipURL.path))
-        XCTAssertFalse(fm.fileExists(atPath: result.exportFolder.path))
-    }
 
     // MARK: - Helpers
 

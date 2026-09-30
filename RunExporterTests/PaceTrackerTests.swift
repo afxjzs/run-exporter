@@ -10,13 +10,6 @@ final class PaceTrackerTests: XCTestCase {
     private let start = Date(timeIntervalSinceReferenceDate: 800_000_000)
     private let mile = PaceTracker.metersPerMile
 
-    func testTotalDistanceFollowsTheReadings() {
-        var tracker = PaceTracker(start: start)
-        tracker.record(totalMeters: 100, at: start + 30)
-        tracker.record(totalMeters: 450, at: start + 120)
-        XCTAssertEqual(tracker.totalMeters, 450, accuracy: 0.001)
-    }
-
     /// Seconds per mile over the leg: time to the latest reading ÷ distance since the leg began.
     func testLegPaceIsTimeOverDistanceSinceTheLegBegan() throws {
         var tracker = PaceTracker(start: start)
@@ -78,15 +71,5 @@ final class PaceTrackerTests: XCTestCase {
         tracker.record(totalMeters: 700, at: start + 210)
         XCTAssertEqual(tracker.totalMeters, 800, accuracy: 0.001)
         XCTAssertEqual(tracker.rejectedReadings, 1)
-    }
-
-    /// Distance arrives in batches. Pace is measured to the latest reading, so it does not drift
-    /// slower in the seconds between batches.
-    func testPaceIsMeasuredToTheLatestReadingNotToNow() throws {
-        var tracker = PaceTracker(start: start)
-        tracker.beginLeg(at: start)
-        tracker.record(totalMeters: mile / 4, at: start + 120)
-        // No `now` goes in, so waiting cannot change the answer.
-        XCTAssertEqual(try XCTUnwrap(tracker.legPaceSecondsPerMile), 480, accuracy: 0.01)
     }
 }

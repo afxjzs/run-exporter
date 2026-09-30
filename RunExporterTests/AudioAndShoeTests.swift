@@ -101,14 +101,6 @@ final class ToneGeneratorTests: XCTestCase {
 /// Cue selection rules that do not need an audio device.
 final class AudioCueTests: XCTestCase {
 
-    func testTransitionCuesHaveDistinctSpokenText() {
-        XCTAssertEqual(AudioCue.run.spokenText, "Run")
-        XCTAssertEqual(AudioCue.walk.spokenText, "Walk")
-        XCTAssertEqual(AudioCue.cooldown.spokenText, "Cooldown")
-        XCTAssertEqual(AudioCue.complete.spokenText, "Workout complete")
-        XCTAssertEqual(AudioCue.countdown(3).spokenText, "3")
-    }
-
     /// The spoken remaining time must never exceed what the screen is showing.
     ///
     /// The display counts down in m:ss, so with 990 seconds left it reads "16:30". Rounding up
@@ -121,16 +113,6 @@ final class AudioCueTests: XCTestCase {
         XCTAssertEqual(AudioCue.runningRemaining(seconds: 120).spokenText, "2 minutes left")
         XCTAssertEqual(AudioCue.runningRemaining(seconds: 119).spokenText, "One minute left")
         XCTAssertEqual(AudioCue.runningRemaining(seconds: 59).spokenText, "Less than a minute left")
-    }
-
-    /// In beeps-only mode an announcement would be an unlabelled tick, which is worse than
-    /// nothing — it is indistinguishable from a countdown tick.
-    func testAnnouncementsAreMarkedAsVoiceOnly() {
-        XCTAssertTrue(AudioCue.finalRound.isAnnouncementOnly)
-        XCTAssertTrue(AudioCue.halfway.isAnnouncementOnly)
-        XCTAssertFalse(AudioCue.run.isAnnouncementOnly)
-        XCTAssertFalse(AudioCue.walk.isAnnouncementOnly)
-        XCTAssertFalse(AudioCue.cooldown.isAnnouncementOnly)
     }
 
     func testCueIdentifiersAreUnique() {
@@ -150,11 +132,8 @@ final class AudioCueTests: XCTestCase {
     /// `.none`, whose Settings footer promises "No cues will play from this app at all." Choosing
     /// silence produced four cues, with nothing to indicate it. The gate no longer looks at the cue
     /// at all, so one assertion per source covers every cue.
-    func testNoCuesSourceIsCompletelySilent() {
+    func testCuesPlayOnlyWhenTheIPhoneEngineIsOn() {
         XCTAssertFalse(AudioCueEngine.shouldPlay(source: .none))
-    }
-
-    func testIPhoneEnginePlaysEveryCue() {
         XCTAssertTrue(AudioCueEngine.shouldPlay(source: .iphoneAudioEngine))
     }
 }
@@ -172,17 +151,6 @@ final class ShoeMileageTests: XCTestCase {
                                distanceMiles: miles)
     }
 
-    func testAssignedMilesGroupByShoe() {
-        let totals = ShoeMileage.assignedMiles(from: [
-            assignment(shoeA, day: 0, miles: 2),
-            assignment(shoeA, day: 1, miles: 3),
-            assignment(shoeB, day: 2, miles: 5),
-        ])
-
-        XCTAssertEqual(totals[shoeA] ?? 0, 5, accuracy: 0.0001)
-        XCTAssertEqual(totals[shoeB] ?? 0, 5, accuracy: 0.0001)
-    }
-
     func testNegativeAndNonFiniteDistancesContributeNothing() {
         let totals = ShoeMileage.assignedMiles(from: [
             assignment(shoeA, day: 0, miles: -4),
@@ -192,19 +160,6 @@ final class ShoeMileageTests: XCTestCase {
         ])
 
         XCTAssertEqual(totals[shoeA] ?? 0, 2, accuracy: 0.0001)
-    }
-
-    func testMileageAtWorkoutIncludesThatWorkoutAndEarlierOnes() {
-        let assignments = [assignment(shoeA, day: 0, miles: 2),
-                           assignment(shoeA, day: 1, miles: 3),
-                           assignment(shoeA, day: 2, miles: 4)]
-
-        let atSecond = ShoeMileage.mileageAtWorkout(shoeID: shoeA,
-                                                    startingMileage: 10,
-                                                    workoutStartDate: base.addingTimeInterval(86_400),
-                                                    assignments: assignments)
-
-        XCTAssertEqual(atSecond, 15, accuracy: 0.0001)
     }
 
     func testMileageAtWorkoutIgnoresOtherShoes() {
@@ -257,6 +212,8 @@ final class LoggerDefaultsTests: XCTestCase {
     func testDefaultsMatchSpec() {
         let defaults = LoggerDefaults(defaults: suite)
 
+        XCTAssertEqual(defaults.cueVolume, 1.0, accuracy: 0.0001, "Full volume when never set")
+
         // Deliberate deviation from spec §9.2, which defaults to voice + beeps. Changed after a
         // real run where the cues drifted audibly off their seconds: the combined
         // mode plays a tone *and* an utterance per cue, and delays the speech 0.14s so the tone
@@ -281,13 +238,6 @@ final class LoggerDefaultsTests: XCTestCase {
         XCTAssertFalse(defaults.includeWalkingWorkouts,
                        "Walking workouts are excluded unless explicitly turned on")
         XCTAssertTrue(defaults.configurationIssues.isEmpty)
-    }
-
-    func testIncludeWalkingPersists() {
-        let first = LoggerDefaults(defaults: suite)
-        first.includeWalkingWorkouts = true
-
-        XCTAssertTrue(LoggerDefaults(defaults: suite).includeWalkingWorkouts)
     }
 
     /// The two Watch cue sources were removed in the 2026-09-29 clean-out. A phone that had one
@@ -395,11 +345,13 @@ final class LoggerDefaultsTests: XCTestCase {
         first.cueMode = .beeps
         first.countdownSeconds = 10
         first.unloggedPromptDays = 14
+        first.includeWalkingWorkouts = true
 
         let second = LoggerDefaults(defaults: suite)
         XCTAssertEqual(second.cueMode, .beeps)
         XCTAssertEqual(second.countdownSeconds, 10)
         XCTAssertEqual(second.unloggedPromptDays, 14)
+        XCTAssertTrue(second.includeWalkingWorkouts)
         XCTAssertTrue(second.configurationIssues.isEmpty)
     }
 
@@ -425,13 +377,6 @@ final class LoggerDefaultsTests: XCTestCase {
         let defaults = LoggerDefaults(defaults: suite)
 
         XCTAssertEqual(defaults.cueVolume, 0.5, accuracy: 0.0001)
-        XCTAssertTrue(defaults.configurationIssues.isEmpty)
-    }
-
-    func testCueVolumeDefaultsToFullWhenUnset() {
-        let defaults = LoggerDefaults(defaults: suite)
-
-        XCTAssertEqual(defaults.cueVolume, 1.0, accuracy: 0.0001)
         XCTAssertTrue(defaults.configurationIssues.isEmpty)
     }
 

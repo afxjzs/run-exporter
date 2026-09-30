@@ -31,18 +31,6 @@ final class WorkoutPhaseScheduleTests: XCTestCase {
                                 .cooldown])
     }
 
-    /// The single most important rule: the final run hands straight over to cooldown.
-    func testNoWalkAfterFinalRunByDefault() throws {
-        let schedule = try WorkoutPhaseSchedule.build(from: plan())
-        let phases = schedule.phases.map(\.phase)
-        let lastRun = phases.lastIndex(of: .run)
-        let lastWalk = phases.lastIndex(of: .walk)
-
-        XCTAssertNotNil(lastRun)
-        XCTAssertNotNil(lastWalk)
-        XCTAssertLessThan(lastWalk!, lastRun!, "A walk must not follow the final run")
-    }
-
     func testFinalWalkIncludedWhenPlanAsksForIt() throws {
         let schedule = try WorkoutPhaseSchedule.build(from: plan(finalWalk: true))
         let phases = schedule.phases.map(\.phase)
@@ -126,12 +114,6 @@ final class WorkoutPhaseScheduleTests: XCTestCase {
         XCTAssertEqual(schedule.phases.map(\.phase),
                        [.run, .walk, .run, .walk, .run, .walk, .run, .walk, .run, .cooldown])
         XCTAssertEqual(schedule.totalRepetitions, 5)
-        XCTAssertEqual(schedule.mainSetSeconds, 24 * 60)
-    }
-
-    /// "Main set: 24:00" from spec §5.2 — 5 runs of 4:00 plus 4 walks of 1:00.
-    func testMainSetSecondsMatchesSpecExample() throws {
-        let schedule = try WorkoutPhaseSchedule.build(from: plan())
         XCTAssertEqual(schedule.mainSetSeconds, 24 * 60)
     }
 

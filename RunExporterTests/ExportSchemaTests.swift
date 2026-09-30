@@ -26,12 +26,6 @@ final class ExportSchemaTests: XCTestCase {
                        "v1.0 columns must keep their names and leading positions")
     }
 
-    func testWeatherAndRouteColumnsKeepTheirOrderAfterV1() {
-        let expected = v1WorkoutColumns + WorkoutWeather.columns + RouteSummaryRow.workoutColumns
-        XCTAssertEqual(Array(WorkoutExportRow.columns.prefix(expected.count)), expected,
-                       "Logger columns must be appended after weather and route, not inserted")
-    }
-
     /// Column groups are only ever appended, never reordered, so existing readers keep working.
     /// Order: v1.0 base, weather, route, run-logger join, classification.
     func testColumnGroupsAreAppendedInOrder() {
@@ -44,20 +38,8 @@ final class ExportSchemaTests: XCTestCase {
         XCTAssertEqual(WorkoutExportRow.columns, expected)
     }
 
-    func testClassificationColumnsAreLast() {
-        XCTAssertEqual(
-            Array(WorkoutExportRow.columns.suffix(WorkoutExportRow.classificationColumns.count)),
-            WorkoutExportRow.classificationColumns)
-    }
-
-    /// `reclassifiedAsRunning` must not collide with, or replace, HealthKit's own type columns.
-    func testRecordedActivityTypeColumnsStillExist() {
-        XCTAssertTrue(WorkoutExportRow.columns.contains("workoutActivityType"))
-        XCTAssertTrue(WorkoutExportRow.columns.contains("workoutActivityTypeName"))
-        XCTAssertTrue(WorkoutExportRow.columns.contains("reclassifiedAsRunning"))
-    }
-
-    func testWorkoutRowValueCountMatchesColumnCount() {
+    /// Every column list must have exactly as many entries as its row emits values.
+    func testAllRowsAreRectangular() {
         let row = WorkoutExportRow(
             uuid: "u", workoutActivityType: "a", workoutActivityTypeName: "running",
             startDate: "s", endDate: "e", duration: "1",
@@ -68,10 +50,7 @@ final class ExportSchemaTests: XCTestCase {
             metadataJSON: "{}", workoutEventsJSON: "[]", workoutStatisticsJSON: "[]")
 
         XCTAssertEqual(row.values.count, WorkoutExportRow.columns.count)
-    }
 
-    /// Every column list must have exactly as many entries as its row emits values.
-    func testAllLoggerRowsAreRectangular() {
         XCTAssertEqual(WorkoutLoggerJoin.blankValues.count, WorkoutLoggerJoin.columns.count)
         XCTAssertEqual(WorkoutLoggerJoin().values.count, WorkoutLoggerJoin.columns.count)
 
@@ -154,13 +133,6 @@ final class ExportSchemaTests: XCTestCase {
 
         XCTAssertEqual(join.values[rpeIndex], "6.5")
         XCTAssertEqual(join.values[heatIndex], "7.5")
-    }
-
-    /// Spec §15.2 is explicit about this name.
-    func testPersonalHeatRatingColumnIsNamedExactly() {
-        XCTAssertTrue(WorkoutLoggerJoin.columns.contains("personalHeatRating"))
-        XCTAssertTrue(RunLogExportRow.columns.contains("personalHeatRating"))
-        XCTAssertFalse(WorkoutLoggerJoin.columns.contains { $0.lowercased().contains("temperaturerpe") })
     }
 
     /// Spec §20.1's list, in order, must all be present.

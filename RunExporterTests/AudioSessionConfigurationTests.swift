@@ -15,6 +15,11 @@ import XCTest
 ///
 /// These tests ask AVAudioSession to accept the configuration rather than trusting a reading of
 /// the documentation, which is what went wrong the first time.
+///
+/// **The simulator accepts configurations a device rejects** — including the exact invalid set
+/// above — so the acceptance test can only fail on a device, and the option set is also asserted
+/// directly. (A test that pinned the simulator's leniency was removed on 2026-09-30: it tested
+/// Apple's simulator, not this app.)
 final class AudioSessionConfigurationTests: XCTestCase {
 
     private let session = AVAudioSession.sharedInstance()
@@ -71,27 +76,5 @@ final class AudioSessionConfigurationTests: XCTestCase {
             XCTAssertFalse(options.contains(.allowBluetoothA2DP),
                            "allowBluetoothA2DP cannot be set for playback; it is implicitly true")
         }
-    }
-
-    /// The simulator **accepts** the invalid option set that a real device rejects with -50.
-    ///
-    /// Verified while writing these tests: asserting that the old configuration throws passes on
-    /// hardware and fails in the simulator. So no simulator test can catch this class of mistake,
-    /// and `testOptionsExcludeOnesInvalidForPlayback` above — which checks our own option set
-    /// rather than the platform's reaction to it — is the guard that actually works everywhere.
-    ///
-    /// The wider lesson is the reason spec §26 insists the audio tests run on real hardware: the
-    /// simulator's audio session is not a faithful model of the device's.
-    func testSimulatorAcceptsConfigurationsDeviceMayReject() throws {
-        #if targetEnvironment(simulator)
-        let invalid: AVAudioSession.CategoryOptions = [.mixWithOthers, .allowBluetoothA2DP,
-                                                       .allowAirPlay]
-        // Documenting the divergence, not endorsing it: this is why the option set is asserted
-        // directly instead of being validated by asking the platform.
-        XCTAssertNoThrow(try session.setCategory(.playback, mode: .voicePrompt, options: invalid),
-                         "Simulator behaviour changed; re-check the device assumption")
-        #else
-        throw XCTSkip("Device rejects this configuration; the divergence only matters in the simulator.")
-        #endif
     }
 }

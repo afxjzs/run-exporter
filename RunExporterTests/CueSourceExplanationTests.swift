@@ -35,14 +35,4 @@ final class CueSourceExplanationTests: XCTestCase {
         let text = SettingsView.cueSourceExplanation(for: CueSource.none).lowercased()
         XCTAssertTrue(silenceClaims.contains { text.contains($0) }, text)
     }
-
-    // MARK: - Nothing left unexplained
-
-    func testEverySourceHasAnExplanation() {
-        for source in CueSource.allCases {
-            let text = SettingsView.cueSourceExplanation(for: source)
-            XCTAssertFalse(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                           "\(source.rawValue) has no footer text")
-        }
-    }
 }

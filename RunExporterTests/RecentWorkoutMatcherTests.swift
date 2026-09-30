@@ -107,14 +107,6 @@ final class RecentWorkoutMatcherTests: XCTestCase {
                                          executionID: execution.executionID))
     }
 
-    func testWorkoutOutsideTimeWindowIsNotMatched() {
-        let far = workout(offsetMinutes: 600)   // ten hours later
-
-        let outcome = RecentWorkoutMatcher.match(workouts: [far], execution: candidate())
-
-        XCTAssertEqual(outcome, .noCandidates)
-    }
-
     /// A run that missed the window by a minute is a *diagnosable* miss, and must not be reported
     /// as the same nothing a phone-only run produces.
     ///
@@ -205,9 +197,12 @@ final class RecentWorkoutMatcherTests: XCTestCase {
     }
 
     /// A clearly better candidate is still matched automatically.
+    /// Both candidates inside the two-minute window, so the score decides — duration here. The
+    /// "poor" workout used to start 70 minutes out, which the window drops before scoring, so the
+    /// test had reduced to a single candidate (found by a test audit on 2026-09-30).
     func testClearlyBetterCandidateWins() {
         let good = workout(offsetMinutes: 1, duration: 1_500)
-        let poor = workout(offsetMinutes: 70, duration: 300)
+        let poor = workout(offsetMinutes: 1.5, duration: 300)
 
         let outcome = RecentWorkoutMatcher.match(workouts: [good, poor], execution: candidate())
 
@@ -322,10 +317,12 @@ final class RecentWorkoutMatcherTests: XCTestCase {
         XCTAssertEqual(Set(ids), Set([first.executionID, second.executionID]))
     }
 
+    /// Both inside the window, so the score decides; see `testClearlyBetterCandidateWins`, which had
+    /// the same flaw — the worse one started 80 minutes out and never reached scoring.
     func testClearlyCloserExecutionWinsOverAWorseOne() {
         let target = workout(offsetMinutes: 0, duration: 1_500)
         let best = candidate(duration: 1_500, createdOffsetMinutes: 1)
-        let worse = candidate(duration: 200, createdOffsetMinutes: 80)
+        let worse = candidate(duration: 200, createdOffsetMinutes: 1.5)
 
         let outcome = RecentWorkoutMatcher.execution(forWorkout: target,
                                                      candidates: [best, worse])

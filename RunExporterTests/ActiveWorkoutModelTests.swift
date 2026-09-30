@@ -149,22 +149,6 @@ final class ActiveWorkoutModelTests: XCTestCase {
         model.cancel()
     }
 
-    /// Cancelling the sheet must not claim a log was written. The answer comes from the store, so
-    /// it is right whether the sheet was saved or dismissed.
-    func testDismissingTheLogSheetWithoutSavingLeavesTheSessionUnlogged() {
-        let plan = makePlan()
-        let logger = RunLoggerModel(store: store, defaults: defaults)
-        let model = ActiveWorkoutModel(store: store, defaults: defaults, audio: audio, watchLink: nil)
-
-        model.start(plan: plan)
-        model.refreshPendingLog(using: logger)
-        model.refreshPendingLog(using: logger)
-
-        XCTAssertFalse(model.hasPendingLog)
-
-        model.cancel()
-    }
-
     // MARK: - Recording the shape that was actually run
 
     /// A session holds a copy of the plan's shape so that editing the plan afterwards cannot

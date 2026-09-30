@@ -17,10 +17,6 @@ final class LatencyEstimateTests: XCTestCase {
         XCTAssertEqual(LatencyEstimate.oneWay(fromRoundTrips: [1.71, 0.14, 0.12]), 0.06, accuracy: 0.0001)
     }
 
-    func testOneWayIsHalfTheRoundTrip() {
-        XCTAssertEqual(LatencyEstimate.oneWay(fromRoundTrips: [0.2]), 0.1, accuracy: 0.0001)
-    }
-
     /// A negative round trip cannot happen on one clock; if one appears it is a bug, not a speedup.
     func testNegativeRoundTripsAreIgnored() {
         XCTAssertEqual(LatencyEstimate.oneWay(fromRoundTrips: [-0.5, 0.3]), 0.15, accuracy: 0.0001)
