@@ -178,7 +178,7 @@ final class ActiveWorkoutModel {
             // After the engine, so the Watch is sent a real phase. The run does not wait for it: a
             // Watch that fails to connect leaves the run exactly as it was before the Watch app
             // existed, and the screen says so, with Try again.
-            watchLink?.beginRun { [weak self] latency in
+            watchLink?.beginRun(activityType: activityType) { [weak self] latency in
                 self?.watchAnchor(oneWayLatency: latency)
             }
         } catch {

@@ -37,6 +37,22 @@ final class WatchPhaseSyncTests: XCTestCase {
         }
     }
 
+    /// A run that finished with no execution id — the logger database was unavailable — still asks
+    /// the Watch to **save** its workout, untagged, so the phone can join it by start time. Until
+    /// 2026-09-30 the phone asked the Watch to discard it, throwing away heart rate and the route.
+    func testAnUntaggedFinishSurvivesARoundTrip() throws {
+        let message = WatchLinkMessage.finishWorkout(executionID: nil)
+        XCTAssertEqual(try WatchLinkCodec.decode(WatchLinkCodec.encode(message)), message)
+    }
+
+    /// A tagged finish is byte-for-byte what a version 2 watch already reads, which is why the
+    /// untagged form did not bump the protocol version.
+    func testATaggedFinishStillReadsTheExistingWireFormat() throws {
+        let id = UUID()
+        let data = envelope(kind: "finishWorkout", body: #"{"executionID":"\#(id.uuidString)"}"#)
+        XCTAssertEqual(try WatchLinkCodec.decode(data), .finishWorkout(executionID: id))
+    }
+
     func testAnUnknownPhaseThrows() {
         let body = #"{"phase":"sprint","elapsedAtSend":1,"isPaused":false,"oneWayLatency":0,"sentAt":0}"#
         XCTAssertThrowsError(try WatchLinkCodec.decode(envelope(kind: "phaseBegan", body: body)))

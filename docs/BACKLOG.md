@@ -159,7 +159,9 @@ removed label; update them in the same change.
 
 ### Found by the sweep (2026-09-29), outside the keep-or-go list
 
-- **The run screen's Watch problem line is cut off.** Seen in the smoke test's screenshot on an
+- **[Fixed 2026-09-30: the line wraps; the smoke test's screenshot shows the whole sentence. It now
+  sits close under the status-bar clock, because the run screen's content is taller than the
+  screen — a layout question, not decided.]** **The run screen's Watch problem line is cut off.** Seen in the smoke test's screenshot on an
   iPhone 17 Pro simulator: "The Watch did not respond within 15 s. This run…" on one line, so the
   part that matters — the run continues on the phone only — is not visible. The accessibility
   label carries the full sentence, which is why the test passed. `ActiveWorkoutView.watchStatus`,
@@ -171,11 +173,15 @@ removed label; update them in the same change.
   straight after the smoke test had declined Health access on the same simulator. It also passes
   whether `build` throws or not, so it asserts little. Worth rewriting against a fake store.
 
-- **A walking plan records a running workout on the Watch.** `WatchLink.launchWatchWorkout` always
+- **[Fixed 2026-09-30, test-first: `WatchLink.workoutConfiguration(for:)`, `WatchLaunchConfigurationTests`.
+  Needs the Watch build to reach the device.]** **A walking plan records a running workout on the
+  Watch.** `WatchLink.launchWatchWorkout` always
   sets `activityType = .running` and never reads the plan's `PlannedActivityType`, so a Walking
   plan's Start saves an Outdoor Run to Health and nothing says so. **Owner, 2026-09-29: fix after the
   interview, test-first.**
-- **A finished run with no execution id discards the Watch's workout.** When the logger database
+- **[Fixed 2026-09-30, test-first: `finishWorkout(executionID: UUID?)`, protocol version not bumped
+  — see `WatchLinkCodec.protocolVersion`. Needs both apps installed together.]** **A finished run
+  with no execution id discards the Watch's workout.** When the logger database
   is unavailable, `ActiveWorkoutModel.recordExecution` returns nil, and `WatchLink.finishRun` then
   sends `.endWorkout`: the heart rate and GPS route are thrown away. Its comment says the phone
   "could never join" an untagged workout, but the two-minute window is still the fallback for

@@ -88,6 +88,8 @@ final class WatchLink: NSObject {
     /// latency estimate — so a watch that connects 1.7 s into a phase is sent where the phase is
     /// now, not where it was at the tap. Nil when no run is using the watch.
     @ObservationIgnored private var anchorProvider: ((TimeInterval) -> PhaseAnchor?)?
+    /// The run's plan activity, so a Try again launches the same workout as the first attempt.
+    @ObservationIgnored private var runActivityType: PlannedActivityType = .running
     @ObservationIgnored private var launchTimeout: Task<Void, Never>?
     /// True once the watch's log shows this launch reached its code. See `reportWatchErrorDuringLaunch`.
     @ObservationIgnored private var sawLaunchArriveOnWatch = false
@@ -104,7 +106,10 @@ final class WatchLink: NSObject {
     static let connectPings = 3
 
     /// Starts the watch's workout for a run. Called from the run screen's Start.
-    func beginRun(anchor: @escaping (TimeInterval) -> PhaseAnchor?) {
+    ///
+    /// `activityType` is the plan's, and is kept for Try again: the Watch records exactly this.
+    func beginRun(activityType: PlannedActivityType, anchor: @escaping (TimeInterval) -> PhaseAnchor?) {
+        runActivityType = activityType
         anchorProvider = anchor
         lastRunAskedWatchToSave = false
         log("Run started; connecting to the watch")
@@ -124,7 +129,9 @@ final class WatchLink: NSObject {
         sendCurrentPhase()
     }
 
-    /// The run ended normally: the watch saves its workout, tagged with the phone's execution id.
+    /// The run ended normally: the watch saves its workout, tagged with the phone's execution id —
+    /// or untagged when there is none, in which case the phone joins it by start time, the same
+    /// fallback any untagged workout gets. It used to be discarded instead.
     func finishRun(executionID: UUID?) {
         guard anchorProvider != nil else { return }
         endRun()
@@ -133,13 +140,11 @@ final class WatchLink: NSObject {
             log("Run finished with the watch not connected; the watch saved nothing", isError: true)
             return
         }
-        if let executionID {
-            send(.finishWorkout(executionID: executionID), describe: "Asked the watch to save the workout")
-            lastRunAskedWatchToSave = true
-        } else {
-            // Without an id the phone could never join to the saved workout, so it is not saved.
-            send(.endWorkout, describe: "No execution id to tag it with; asked the watch to discard the workout")
-        }
+        send(.finishWorkout(executionID: executionID),
+             describe: executionID == nil
+                ? "No execution id to tag it with; asked the watch to save the workout untagged"
+                : "Asked the watch to save the workout")
+        lastRunAskedWatchToSave = true
     }
 
     /// The run was abandoned: the watch discards its workout.
@@ -178,7 +183,8 @@ final class WatchLink: NSObject {
         }
         Task { [weak self] in
             guard let self else { return }
-            if let error = await self.launchWatchWorkout(), self.runConnection == .connecting {
+            if let error = await self.launchWatchWorkout(activityType: self.runActivityType),
+               self.runConnection == .connecting {
                 self.launchTimeout?.cancel()
                 self.runConnection = .failed(error)
             }
@@ -196,10 +202,25 @@ final class WatchLink: NSObject {
 
     // MARK: - Actions
 
+    /// The workout the Watch is asked to record: the plan's activity, outdoors.
+    ///
+    /// Was a hardcoded `.running` until 2026-09-30, so a Walking plan was saved to Health as an
+    /// Outdoor Run with nothing on either screen saying so. The `switch` is exhaustive on purpose:
+    /// a new plan activity cannot compile until it is mapped here.
+    nonisolated static func workoutConfiguration(for activityType: PlannedActivityType) -> HKWorkoutConfiguration {
+        let configuration = HKWorkoutConfiguration()
+        switch activityType {
+        case .running: configuration.activityType = .running
+        case .walking: configuration.activityType = .walking
+        }
+        configuration.locationType = .outdoor
+        return configuration
+    }
+
     /// Asks the watch to start its workout. Returns why it failed, or nil once the request has been
     /// **sent** — `startWatchApp` succeeding says nothing about the watch (docs/WATCH_DEVELOPMENT.md).
     @discardableResult
-    func launchWatchWorkout() async -> String? {
+    func launchWatchWorkout(activityType: PlannedActivityType) async -> String? {
         guard !isLaunching else { return nil }
         isLaunching = true
         defer { isLaunching = false }
@@ -216,13 +237,11 @@ final class WatchLink: NSObject {
             return message
         }
 
-        let configuration = HKWorkoutConfiguration()
-        configuration.activityType = .running
-        configuration.locationType = .outdoor
+        let configuration = Self.workoutConfiguration(for: activityType)
 
         let tapped = Date()
         launchTappedAt = tapped
-        log("Asked the watch to start (startWatchApp)")
+        log("Asked the watch to start (startWatchApp), activity \(activityType.rawValue)")
         do {
             try await store.startWatchApp(toHandle: configuration)
             log("startWatchApp returned success after \(Self.seconds(Date().timeIntervalSince(tapped)))")

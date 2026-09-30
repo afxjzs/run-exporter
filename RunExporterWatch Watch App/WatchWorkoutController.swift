@@ -10,9 +10,10 @@ import Observation
 /// the session when told, shows the phase the phone sends, measures what its sensors see, marks each
 /// boundary in the workout, and saves or discards when told.
 ///
-/// - `endWorkout` **discards** — the link test screen, and a run abandoned on the phone.
+/// - `endWorkout` **discards** — a run abandoned on the phone.
 /// - `finishWorkout(executionID:)` **saves** the workout with the GPS route, tagged with the phone's
-///   execution id so the phone can join to it by id instead of by start time.
+///   execution id so the phone can join to it by id instead of by start time — or untagged when the
+///   phone has no id, and it joins by start time.
 @MainActor
 @Observable
 final class WatchWorkoutController: NSObject {
@@ -328,7 +329,8 @@ final class WatchWorkoutController: NSObject {
 
     // MARK: - End
 
-    /// Ends the session and **discards** the workout: the link test, and a run abandoned on the phone.
+    /// Ends the session and **discards** the workout: a run abandoned on the phone, or End on the
+    /// watch's own link screen.
     func end() {
         guard isRunning, let session, let builder else { return }
         stopRoute()
@@ -350,8 +352,9 @@ final class WatchWorkoutController: NSObject {
     }
 
     /// Ends the session and **saves** the workout with its route, tagged with the phone's execution
-    /// id. Every outcome is recorded in `saveResult` and the event log, which reaches the phone.
-    func finish(executionID: UUID) {
+    /// id when the phone has one; untagged otherwise, and the phone joins it by start time. Every
+    /// outcome is recorded in `saveResult` and the event log, which reaches the phone.
+    func finish(executionID: UUID?) {
         guard isRunning, let session, let builder else {
             lastError = "Asked to save a workout, but none is running."
             return
@@ -369,7 +372,9 @@ final class WatchWorkoutController: NSObject {
         Task {
             do {
                 try await builder.endCollection(at: now)
-                try await builder.addMetadata([WorkoutMetadataKeys.executionID: executionID.uuidString])
+                if let executionID {
+                    try await builder.addMetadata([WorkoutMetadataKeys.executionID: executionID.uuidString])
+                }
                 guard let workout = try await builder.finishWorkout() else {
                     // HKWorkoutBuilder.h: nil with no error means it saved but cannot be read while
                     // the device is locked — and the route needs the workout object to attach to.
@@ -391,7 +396,8 @@ final class WatchWorkoutController: NSObject {
                 } else {
                     route = "\(self.routePoints) GPS points handed to HealthKit with the workout"
                 }
-                self.saveResult = "workout \(workout.uuid.uuidString), \(route)"
+                let tag = executionID == nil ? ", untagged (the phone had no execution id)" : ""
+                self.saveResult = "workout \(workout.uuid.uuidString)\(tag), \(route)"
                 self.step = "saved"
             } catch {
                 routeBuilder?.discard()

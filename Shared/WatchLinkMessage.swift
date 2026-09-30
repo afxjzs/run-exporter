@@ -18,15 +18,18 @@ enum WatchLinkMessage: Equatable, Sendable {
     case pong(id: UUID, watchReceivedAt: Date)
     /// Watch → phone, periodically, while the watch's session runs.
     case status(WatchStatus)
-    /// Phone → watch: end the session and **discard** it. The link test screen's End, a run
-    /// abandoned on the phone, and a run that finished with no execution id to tag it with.
+    /// Phone → watch: end the session and **discard** it — a run abandoned on the phone.
     case endWorkout
     /// Phone → watch: a phase has begun (or its pause state changed). Durations, not clock times —
     /// see `PhaseAnchor` and `PhaseClock`.
     case phaseBegan(PhaseAnchor)
     /// Phone → watch: the run is over. End the session and **save** the workout, tagged with the
     /// phone's execution id so the phone can join to it by id rather than by start time.
-    case finishWorkout(executionID: UUID)
+    ///
+    /// `nil` when the phone recorded no execution (its logger database was unavailable): the watch
+    /// saves the workout untagged and the phone joins it by start time instead. Until 2026-09-30
+    /// that case discarded the workout, heart rate and route included.
+    case finishWorkout(executionID: UUID?)
 }
 
 /// A phase as the watch shows it. Separate from the phone's `WorkoutPhase`, which also carries UI
@@ -131,6 +134,11 @@ enum WatchLogTransfer {
 enum WatchLinkCodec {
     /// Bump when a message changes meaning or a new kind is added.
     /// 2 (2026-09-29): `phaseBegan`, `finishWorkout`. Version 1 messages still decode.
+    ///
+    /// **Not** bumped on 2026-09-30, when `finishWorkout`'s execution id became optional. A tagged
+    /// finish is byte-for-byte unchanged, and an older watch refuses only the untagged form, loudly,
+    /// as a decode error. A bump would make an older watch refuse *every* message from a newer phone,
+    /// in the minutes between the two installs that the type's header calls ordinary.
     static let protocolVersion = 2
 
     static func encode(_ message: WatchLinkMessage) throws -> Data {
@@ -199,7 +207,9 @@ enum WatchLinkCodec {
     private struct PingBody: Codable { var id: UUID; var sentAt: Date }
     private struct PongBody: Codable { var id: UUID; var watchReceivedAt: Date }
     private struct EmptyBody: Codable {}
-    private struct FinishBody: Codable { var executionID: UUID }
+    /// `executionID` is omitted from the JSON when nil (synthesized `Codable` uses
+    /// `encodeIfPresent`), so a tagged body is exactly the version 2 shape.
+    private struct FinishBody: Codable { var executionID: UUID? }
 
     private static func envelope<Body: Codable>(_ kind: String, _ body: Body) throws -> Data {
         try encoder.encode(Envelope(version: protocolVersion, kind: kind, body: body))

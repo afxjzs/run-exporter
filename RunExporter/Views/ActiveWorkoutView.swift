@@ -464,11 +464,15 @@ struct ActiveWorkoutView: View {
         reason + " This run continues on the phone only."
     }
 
+    /// Wraps to as many lines as it needs. Without `fixedSize` the run screen, short of height,
+    /// squeezed it to one line — measured in the smoke test as "The Watch did not respond within
+    /// 15 s. This run…", hiding the part that matters: the run continues on the phone only.
     private func watchLine(_ text: String, systemImage: String) -> some View {
         Label(text, systemImage: systemImage)
             .font(.subheadline.weight(.medium))
             .foregroundStyle(.white.opacity(0.85))
             .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     /// One dismissible banner.
