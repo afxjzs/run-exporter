@@ -114,8 +114,11 @@ reasoning lives next to the code; only the parts that are *not* visible from the
 
 ## Clean out the leftovers, and simplify the UI
 
-**Asked for 2026-09-29.** Swept and decided the same day (see *Decisions* below); nothing removed
-yet. The owner's words: the app is *"pretty cluttered"* with things
+**Asked for 2026-09-29**, swept and decided the same day. **Built: twelve of the fourteen decisions
+below are marked [Done], and the two that are not — 11 and 13 — were both decided as "keep", so
+nothing is outstanding.** The removals shipped to the phone and the Watch in build `202609301411`.
+The candidate list that follows is the 2026-09-29 sweep as it stood; read the *Decisions* for what
+each one became. The owner's words: the app is *"pretty cluttered"* with things
 left over from trials and learnings; clean it out, and treat it as a UI update — *"it's all to the same
 effect… making the app easier to use."*
 
@@ -244,8 +247,9 @@ on the removal diff and `/code-review` once on the watch-flow diff (`610fdd2..HE
    `lastError` on the run screen), and the Live Activity's dropped-update detection
    (`droppedUpdates`, `isCardStale`, `recordOutcome`, and the unused `statusDescription`) with
    the four tests that pinned it — resolving item 11's "goes with item 5 or gets a new home".
-   Left for `/simplify`: `AudioCueEngine.isSessionActive` and `isInterrupted` are written but
-   never read, which was already true before the clean-out.
+   ~~Left for `/simplify`: `AudioCueEngine.isSessionActive` and `isInterrupted` are written but
+   never read.~~ **Both are gone**, verified 2026-10-01: neither name appears anywhere in the
+   source, only in this sentence.
 6. **[Done]** **Watch link test** (`WatchLinkTestView`) — **remove it, and move `WatchLink.fileError` to the run
    screen's Watch status.** A real Start and End Workout do the same and log to the same files.
    `fileError` (a diagnostic file could not be written) is shown nowhere else, so dropping the
@@ -343,15 +347,31 @@ records go; whether "on demand" means a button, the export, or both; and whether
 
 ## Swift 6 language mode
 
-**Status:** builds clean today, with warnings that become errors on the move.
+**Status, measured 2026-10-01: no warning left anywhere that the Swift 6 mode turns into an error.**
+The clean build this entry asked for was run, both halves of it, and the one warning it found has
+been fixed.
 
-**Update, 2026-09-29 clean-out:** the two warnings below were in `WorkoutKitService`, which is now
-deleted, so they are gone. An incremental build afterwards still showed one in test code —
-`AbandonedTimerTests` reads the main-actor `RunLoggerModel.abandonedTimerThreshold` from a
-nonisolated context. An incremental build does not re-emit warnings for unchanged files, so a
-**clean** build is needed for a complete list before starting the move.
+Two clean builds, because neither alone covers everything: `scripts/sideload.sh`'s Release build for
+a generic iOS device (the app, the watch app and the Live Activity extension), and
+`clean build-for-testing` against the simulator (the test targets, which the device build never
+compiles). Together they emitted exactly two source warnings:
 
-The original two: `WorkoutKitService.swift:207` and `:340` both read
+- `RunExporter/ExportViewModel.swift`, the export progress closure — `#ImplicitStrongCapture`, a
+  `[weak self]` whose enclosing `Task` already held `self` strongly. Not a Swift 6 error; a claim
+  the surrounding code contradicted. The capture is gone and a comment says why.
+- `RunExporterTests/AbandonedTimerTests.swift` — reading the main-actor
+  `RunLoggerModel.abandonedTimerThreshold` from a nonisolated context, *"an error in the Swift 6
+  language mode"*. **The only real blocker found.** Fixed at the declaration rather than in the
+  test: the constant is now `nonisolated`, which is honest for an immutable `TimeInterval`, and the
+  one in-app reader is unaffected.
+
+A clean build afterwards emits **zero** source warnings; the only three left are
+`appintentsmetadataprocessor` noise from the toolchain. Rerun the check with a clean build and
+`grep "warning:"` — and note that an incremental build does not re-emit warnings for unchanged
+files, which is what hid the test one until now.
+
+**History, kept because WorkoutKit may come back.** The original two warnings, in code deleted by
+the 2026-09-29 clean-out: `WorkoutKitService.swift:207` and `:340` both read
 `WorkoutScheduler.authorizationState` from a main-actor-isolated context:
 
 ```
@@ -360,9 +380,8 @@ warning: non-Sendable type 'WorkoutScheduler.AuthorizationState' of nonisolated 
 Swift 6 language mode
 ```
 
-Not urgent and not a defect in the current language mode — recorded because it is the kind of thing
-discovered at the worst moment, part-way through an unrelated toolchain upgrade. Whoever moves this
-project to Swift 6 should expect these two first.
+Recorded because it is the kind of thing discovered at the worst moment, part-way through an
+unrelated toolchain upgrade. They are gone with the code that held them, not fixed.
 
 **Note the location.** Both were in the `WorkoutScheduler` path, which
 [../LEARNINGS.md](../LEARNINGS.md) records as not delivering on this hardware. If WorkoutKit comes

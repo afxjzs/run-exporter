@@ -41,7 +41,12 @@ final class ExportPipelineTests: XCTestCase {
     ///
     /// Deliberately does not go through `build`, which reads HealthKit: an unauthorized store in
     /// the test environment would fail every one of these for a reason that has nothing to do
-    /// with the file layer under test. `testBuildSurfacesHealthKitFailure` covers that path.
+    /// with the file layer under test.
+    ///
+    /// **Nothing covers the `build` path today.** This comment used to say
+    /// `testBuildSurfacesHealthKitFailure` did, and that test was removed on 2026-09-30 for passing
+    /// whether `build` threw or not — so it never covered the path it was credited with. Covering
+    /// it properly means a fake store; see the entry in `docs/BACKLOG.md`.
     private func runExport(logger: LoggerExportData = LoggerExportData(),
                            workouts: [WorkoutExportRow] = [],
                            includeWalking: Bool = false,

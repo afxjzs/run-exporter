@@ -188,8 +188,12 @@ final class ExportViewModel: ObservableObject {
                                             loggerDefaults?.reclassifiedAsRunning ?? []),
                     logger: loggerData,
                     intervalAudio: audioSettings,
-                    progress: { [weak self] text in
-                        Task { @MainActor in self?.progressText = text }
+                    // Not `[weak self]`: the enclosing Task already holds this view model strongly
+                    // and outlives the build, so a weak capture here promised a lifetime the
+                    // surrounding code contradicts — the compiler says so as #ImplicitStrongCapture.
+                    // The closure cannot outlive `build`, so there is no cycle to break.
+                    progress: { text in
+                        Task { @MainActor in self.progressText = text }
                     }
                 )
 

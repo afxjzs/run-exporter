@@ -633,7 +633,15 @@ day, each preceded by the documented shutdown/`bootstatus` cycle, the suite took
 321 and then 325 tests ran each time.
 
 No mechanism is claimed here; this is an observation that the original number is not reliable, not a
-replacement for it. What would settle it is timing `testBuildSurfacesHealthKitFailure` by itself
-after a cold boot versus after the suite has run once, which nobody has done. **Treat "cycling costs
-you five minutes" as unproven** and do not skip the cycle to avoid a cost that may not be there —
-the hang it prevents is real and was hit again that same day, producing no `Executed` line at all.
+replacement for it. The experiment this paragraph used to ask for — timing
+`testBuildSurfacesHealthKitFailure` alone after a cold boot versus after one suite run — **can no
+longer be run: that test was removed on 2026-09-30**, which is also why the suite now finishes in
+seconds. The question is moot rather than answered, and the slow figure stays unexplained.
+
+**Treat "cycling costs you five minutes" as unproven** and do not skip the cycle to avoid a cost
+that is now demonstrably not there — the hang it prevents is real. **Hit again 2026-10-01**, on a
+run started without the cycle: `xcodebuild` sat at 0.0% CPU for nearly three minutes after
+`PruneExplicitPrecompiledModules`, never reached the test runner, and wrote no `Executed` line. A
+`grep` for the result returned nothing, which reads exactly like a clean run. Cycling first and
+re-running worked. The cost of the cycle is about ten seconds; the cost of skipping it was three
+minutes and a result that could have been misread as success.

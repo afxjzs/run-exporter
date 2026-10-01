@@ -195,7 +195,12 @@ final class RunLoggerModel {
     /// abandoned — both are `.started` with no end recorded — so this has to exceed the longest run
     /// anyone might plausibly be part-way through when the app is reopened. Twelve hours clears an
     /// ultramarathon while still retiring the same evening's test timers by morning.
-    static let abandonedTimerThreshold: TimeInterval = 12 * 60 * 60
+    ///
+    /// `nonisolated` because it is a compile-time constant of a Sendable type: isolating it to the
+    /// main actor bought nothing and made every reader pay for the hop. Reading it from a
+    /// nonisolated context is an error in the Swift 6 language mode, which `AbandonedTimerTests`
+    /// hit; see the Swift 6 entry in `docs/BACKLOG.md`.
+    nonisolated static let abandonedTimerThreshold: TimeInterval = 12 * 60 * 60
 
     /// Retires timers that were started and never stopped, and says so afterwards.
     ///
