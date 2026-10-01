@@ -120,6 +120,25 @@ enum WorkoutMetadataKeys {
     static let phase = "RunExporterPhase"
 }
 
+/// Markers the phone reads back out of the watch's forwarded event log, shared for the same reason
+/// as `WorkoutMetadataKeys`: the watch writes them and the phone matches them, and nothing else
+/// couples the two spellings.
+///
+/// This was a real exposure rather than a tidy-up. `WatchLink.reportWatchErrorDuringLaunch` exists
+/// so a run waiting on the watch shows the watch's *own* reason — measured once arriving 2.5 s after
+/// the tap, against a 15 s timeout that would otherwise say only that the watch had not responded.
+/// It found that reason by matching two literals that the watch produced independently, with no
+/// test on either side. Reword one and the phone goes quiet about watch errors and falls back to
+/// the timeout, which is the failure the method was written to prevent. The compiler holds it now.
+enum WatchLogMarkers {
+    /// Logged by the watch app's `handle(_:)` on every phone-initiated launch, and the first thing
+    /// the phone looks for: lines before it belong to an earlier session, since the log is a queue
+    /// and the two clocks cannot be compared to sort that out.
+    static let launchArrived = "handle(workoutConfiguration) called"
+    /// Prefixes every error the watch records. The phone shows what follows it.
+    static let errorPrefix = "ERROR: "
+}
+
 /// The watch's event log travelling to the phone. Separate from `WatchLinkMessage` because it rides
 /// a different channel: `WCSession.transferUserInfo`, which the system queues and delivers even with
 /// no workout session running — the mirrored session's channel only exists while one is.

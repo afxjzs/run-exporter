@@ -38,7 +38,8 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate {
     func handle(_ workoutConfiguration: HKWorkoutConfiguration) {
         // Recorded synchronously, before any await, so the arrival is on disk even if what follows
         // stalls or the app is closed.
-        WatchEventLog.shared.record("handle(workoutConfiguration) called, activity \(workoutConfiguration.activityType.rawValue)")
+        WatchEventLog.shared.record(
+            "\(WatchLogMarkers.launchArrived), activity \(workoutConfiguration.activityType.rawValue)")
         Task { @MainActor in
             await WatchWorkoutController.shared.start(configuration: workoutConfiguration, origin: .phone)
         }

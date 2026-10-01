@@ -41,7 +41,9 @@ final class WatchWorkoutController: NSObject {
     /// quietly.
     private(set) var lastError: String? {
         didSet {
-            if let lastError { WatchEventLog.shared.record("ERROR: \(lastError)") }
+            if let lastError {
+                WatchEventLog.shared.record("\(WatchLogMarkers.errorPrefix)\(lastError)")
+            }
         }
     }
 
@@ -342,17 +344,29 @@ final class WatchWorkoutController: NSObject {
     /// Ends the session and **discards** the workout: a run abandoned on the phone, or End on the
     /// watch's own link screen.
     func end() {
-        guard isRunning, let session, let builder else { return }
+        guard isRunning, let session, let builder else {
+            // Not an error — the phone can ask twice, or ask after the watch has already finished.
+            // Logged rather than dropped, because "the phone said end and nothing happened" is
+            // otherwise invisible from either side. Same reasoning as the skipped-launch line in
+            // `WatchLink.launchWatchWorkout`.
+            WatchEventLog.shared.record("endWorkout ignored: no session is running")
+            return
+        }
         stopRoute()
         routeBuilder?.discard()
         routeBuilder = nil
         openSegment = nil
-        stopSession(session, at: Date())
+        // One moment, read once. `finish(executionID:)` already does this; here the two `Date()`
+        // calls sat either side of a `Task` boundary, so the second was read whenever that ran.
+        // The workout is discarded, so nothing reached Health either way — but two clocks for one
+        // event is how a later reader learns the wrong lesson from this code.
+        let now = Date()
+        stopSession(session, at: now)
         step = "ended, discarded"
         outcome = .discarded
         Task {
             do {
-                try await builder.endCollection(at: Date())
+                try await builder.endCollection(at: now)
                 builder.discardWorkout()
             } catch {
                 self.lastError = "Ending data collection failed: \(error.localizedDescription)"

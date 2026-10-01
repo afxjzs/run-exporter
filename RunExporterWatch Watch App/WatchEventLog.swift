@@ -68,7 +68,9 @@ final class WatchLogForwarder {
     /// Called once at launch, from the app's `init`.
     func activate() {
         guard WCSession.isSupported() else {
-            WatchEventLog.shared.record("ERROR: WatchConnectivity is not supported; the phone will not receive this log")
+            WatchEventLog.shared.record(
+                "\(WatchLogMarkers.errorPrefix)WatchConnectivity is not supported; "
+                    + "the phone will not receive this log")
             return
         }
         WCSession.default.delegate = bridge
@@ -86,11 +88,14 @@ final class WatchLogForwarder {
     fileprivate func activationCompleted(_ state: WCSessionActivationState, error: String?) {
         if let error {
             // Recorded locally; it cannot be forwarded, which is exactly what it reports.
-            WatchEventLog.shared.record("ERROR: phone log link failed to activate: \(error)")
+            WatchEventLog.shared.record(
+                "\(WatchLogMarkers.errorPrefix)phone log link failed to activate: \(error)")
             return
         }
         guard state == .activated else {
-            WatchEventLog.shared.record("ERROR: phone log link activation ended in state \(state.rawValue)")
+            WatchEventLog.shared.record(
+                "\(WatchLogMarkers.errorPrefix)phone log link activation ended in state "
+                    + "\(state.rawValue)")
             return
         }
         isActivated = true

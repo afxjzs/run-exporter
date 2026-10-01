@@ -49,7 +49,7 @@ struct WatchRunView: View {
                 if let saveResult = controller.saveResult {
                     Text(saveResult)
                         .font(.system(size: 10))
-                        .foregroundStyle(saveResult.contains("FAILED") ? .red : .secondary)
+                        .foregroundStyle(Self.saveStyle(controller.outcome))
                         .fixedSize(horizontal: false, vertical: true)
                 } else if !controller.routeStatus.hasPrefix("recording") {
                     // A run with no route should say so while it can still be fixed, not afterwards.
@@ -136,6 +136,27 @@ struct WatchRunView: View {
     private static func clock(_ seconds: TimeInterval) -> String {
         let whole = Int(seconds.rounded(.down))
         return String(format: "%d:%02d", whole / 60, whole % 60)
+    }
+
+    /// How the save line reads, from the typed outcome rather than from its own words.
+    ///
+    /// This used to be `saveResult.contains("FAILED") ? .red : .secondary`, and the string it
+    /// searched is written three sentences away in `WatchWorkoutController.finish(executionID:)`.
+    /// One of the three says "saved, but not readable while locked; the GPS route could not be
+    /// attached" — a workout that is in Health with its route thrown away. No "FAILED" in it, so it
+    /// drew in `.secondary`, identical to a clean save: the route was lost and the watch looked
+    /// normal. `outcome` was already set on every one of those paths and already observable.
+    ///
+    /// `.savedWithoutRoute` is deliberately neither: orange, like the mid-run no-route warning
+    /// above, because the run was saved and overstating that helps nobody. The switch is
+    /// exhaustive on purpose — a new `Outcome` must choose a style here or the watch app will not
+    /// build, which is the check a test for this would only approximate.
+    private static func saveStyle(_ outcome: WatchWorkoutController.Outcome?) -> Color {
+        switch outcome {
+        case .notSaved: return .red
+        case .savedWithoutRoute: return .orange
+        case .saved, .saving, .discarded, nil: return .secondary
+        }
     }
 
     private func phaseColor(_ phase: WatchPhase) -> Color {

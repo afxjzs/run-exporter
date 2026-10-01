@@ -87,11 +87,13 @@ final class WatchLink: NSObject {
     /// never answered left the test screen stuck with every button disabled.
     static let launchTimeoutSeconds: TimeInterval = 15
 
-    /// Builds the anchor for the phase in progress *at the moment it is called*, given the current
-    /// latency estimate — so a watch that connects 1.7 s into a phase is sent where the phase is
-    /// now, not where it was at the tap. Nil when no run is using the watch.
     /// Guards against a second launch while one is in flight. Not shown anywhere, so not observed.
     @ObservationIgnored private var isLaunching = false
+
+    /// Builds the anchor for the phase in progress *at the moment it is called*, given the current
+    /// latency estimate — so a watch that connects 1.7 s into a phase is sent where the phase is
+    /// now, not where it was at the tap. Nil when no run is using the watch, which is also how
+    /// `retryRun`, `phaseChanged` and `finishRun` tell there is nothing to talk to.
     @ObservationIgnored private var anchorProvider: ((TimeInterval) -> PhaseAnchor?)?
     /// Counts phase sends, so only the latest one's result sets `phaseUnsent`.
     @ObservationIgnored private var phaseSendNumber = 0
@@ -443,11 +445,12 @@ final class WatchLink: NSObject {
     /// after that line, within this connecting window, is about this launch.
     private func reportWatchErrorDuringLaunch(_ line: String) {
         guard runConnection == .connecting else { return }
-        if line.contains("handle(workoutConfiguration) called") {
+        if line.contains(WatchLogMarkers.launchArrived) {
             sawLaunchArriveOnWatch = true
             return
         }
-        guard sawLaunchArriveOnWatch, let range = line.range(of: "ERROR: ") else { return }
+        guard sawLaunchArriveOnWatch,
+              let range = line.range(of: WatchLogMarkers.errorPrefix) else { return }
         let reason = "The Watch reported: " + line[range.upperBound...]
         launchTimeout?.cancel()
         launchTimeout = nil
