@@ -39,7 +39,7 @@ that 67 `spec §…` citations across 39 Swift files point at (counted 2026-09-2
 | [MISTAKES.md](MISTAKES.md) | How past investigations went wrong | Before diagnosing anything |
 | [docs/BACKLOG.md](docs/BACKLOG.md) | Wanted but not built, and things deliberately **not** to build, with reasoning | Before building anything that sounds new |
 | [docs/INSTALLS.md](docs/INSTALLS.md) | Every install; the single home for hardware and OS versions | Before installing, or quoting any version |
-| [docs/CUE_FEASIBILITY_TEST.md](docs/CUE_FEASIBILITY_TEST.md) | Cue test procedures and their dated results | Before changing cues or the Lock Screen card |
+| [docs/CUE_FEASIBILITY_TEST.md](docs/CUE_FEASIBILITY_TEST.md) | Cue feasibility test procedures and their dated results | Before changing cues or the Lock Screen card |
 | [docs/WATCHOS_RECORDER_PLAN.md](docs/WATCHOS_RECORDER_PLAN.md) | The watch plan of record: phone decides, watch records; its steps and what ends each | Before any watch app work |
 | [docs/WATCH_DEVELOPMENT.md](docs/WATCH_DEVELOPMENT.md) | **How** to get the watch app installed, launched from the phone, and its logs read — Developer Mode, the profile, error codes, `WKBackgroundModes` | Before installing on, launching, or diagnosing the Watch |
 | [docs/Native-iOS-Health-Running-Export.md](docs/Native-iOS-Health-Running-Export.md) | The **historical** v1.0 spec | Rarely. It is superseded, and says so at the top |

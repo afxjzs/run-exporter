@@ -102,8 +102,19 @@ final class DocumentationDriftTests: XCTestCase {
     /// Markdown wraps at the column, not at the phrase, so a quoted label is regularly split across
     /// a line break — `README.md` holds `**Start\nnext leg**` today. Comparing raw text would report
     /// that as missing and teach everyone to distrust this test.
+    /// Collapses whitespace so a label that wraps across lines still matches, and drops markdown
+    /// blockquote markers first.
+    ///
+    /// The markers are not prose, and leaving them in broke matching in exactly the place it was
+    /// needed: `docs/CUE_FEASIBILITY_TEST.md`'s header note wraps "Schedule for a time" inside a
+    /// blockquote, which normalized to `Schedule > for a time` and matched nothing. The note
+    /// documenting a retired control was invisible to the test that asks whether the control is
+    /// documented. A label quoted only inside a wrapped blockquote was invisible to the registry
+    /// checks for the same reason.
     private static func normalized(_ text: String) -> String {
-        text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        let unquoted = text.replacingOccurrences(of: "(?m)^[ \\t]*>[ \\t]?", with: "",
+                                                 options: .regularExpression)
+        return unquoted.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 
     private static func document(_ relativePath: String) throws -> String {
@@ -208,6 +219,20 @@ final class DocumentationDriftTests: XCTestCase {
     /// existed, and deleting that would falsify the history. What is not legitimate is naming it
     /// bare, because a reader today goes looking for a control that is not there. Citing the commit
     /// is the cheapest fix that stays true as the code moves on.
+    ///
+    /// **The note must be about this control.** This test used to ask only whether `retiredIn`
+    /// appeared *anywhere in the file*, which made it vacuous: nine of the eleven retired labels
+    /// share `cleanOut`, so one sentence naming the clean-out — about any of them, or about none —
+    /// satisfied the check for all nine. `docs/CUE_FEASIBILITY_TEST.md` passed while two of its
+    /// steps told the reader to press "Start Audio Timer", on the strength of a note at the top of
+    /// the file about two *other*, removed, screens.
+    ///
+    /// So the file must name the label and where it went **close together, at least once**. That is
+    /// what a reader needs and all they need: one note saying "Cue test was removed in the
+    /// 2026-09-29 clean-out" explains every later mention of Cue test in that file, and explains
+    /// nothing about Start Audio Timer. Repeating the citation at every mention is not required —
+    /// `RUNNING_APP_V1_1_SPEC.md` and `MISTAKES.md` are historical records whose bodies must stay
+    /// as written, and a rule demanding edits inside them would be a rule to break.
     func testDocumentsNamingARetiredControlSayWhereItWent() throws {
         let documents = ["README.md", "CLAUDE.md", "LEARNINGS.md", "MISTAKES.md",
                          "docs/BACKLOG.md", "docs/CUE_FEASIBILITY_TEST.md", "docs/INSTALLS.md",
@@ -218,12 +243,47 @@ final class DocumentationDriftTests: XCTestCase {
             let text = try Self.document(path)
             for retired in Self.retiredLabels where text.contains(retired.text) {
                 let wentTo = retired.replacement.map { " It is now \"\($0)\"." } ?? ""
-                XCTAssertTrue(text.contains(retired.retiredIn),
-                              "\(path) names the retired control \"\(retired.text)\" without citing "
-                                  + "\(retired.retiredIn), the commit that retired it.\(wentTo) "
-                                  + "Mentioning it is fine; leaving a reader to hunt for it is not.")
+                XCTAssertTrue(Self.saysWhereItWent(retired, in: text),
+                              "\(path) names the retired control \"\(retired.text)\" but nowhere "
+                                  + "says where it went: no mention of it sits within "
+                                  + "\(Self.citationWindow) characters of \(retired.retiredIn)."
+                                  + "\(wentTo) One note next to one mention is enough; a citation "
+                                  + "elsewhere in the file, about some other control, is not.")
             }
         }
+    }
+
+    /// How close the label and its citation must be to count as one note about one control.
+    ///
+    /// `document(_:)` collapses every run of whitespace to one space, so paragraphs cannot be split
+    /// on blank lines and a character window is what is left.
+    ///
+    /// 600 is about one explanatory paragraph of these documents. It is deliberately generous: the
+    /// discriminator is that the citation must be near **this** label rather than anywhere in the
+    /// file, not how near. 300 was tried and rejected — `MISTAKES.md` explains where "Clear this
+    /// iPhone's queue" went, in good prose, about 326 characters after naming it, and a window that
+    /// rejects that is one that teaches people to chop up paragraphs. The gap this test exists to
+    /// catch was tens of thousands of characters, two orders of magnitude beyond this.
+    private static let citationWindow = 600
+
+    /// Whether the document says, at least once, where this particular control went.
+    ///
+    /// True when some mention of the label has the retiring commit, or the replacement's name,
+    /// within `citationWindow`. Either counts: a reader told `Start Audio Timer (now "Start
+    /// Workout")` has been told where it went, which is the whole point of the rule.
+    private static func saysWhereItWent(_ retired: RetiredLabel, in text: String) -> Bool {
+        var from = text.startIndex
+        while let hit = text.range(of: retired.text, range: from..<text.endIndex) {
+            let start = text.index(hit.lowerBound, offsetBy: -citationWindow,
+                                   limitedBy: text.startIndex) ?? text.startIndex
+            let end = text.index(hit.upperBound, offsetBy: citationWindow,
+                                 limitedBy: text.endIndex) ?? text.endIndex
+            let window = text[start..<end]
+            if window.contains(retired.retiredIn)
+                || (retired.replacement.map(window.contains) ?? false) { return true }
+            from = hit.upperBound
+        }
+        return false
     }
 
     /// A retired label is gone from the app, which is what makes it retired.

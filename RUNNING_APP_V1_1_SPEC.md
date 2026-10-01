@@ -380,6 +380,9 @@ Do not hardcode deprecated APIs.
 
 ## **8.1 Send to Apple Watch**
 
+> **Where it went:** this button was removed in the 2026-09-29 clean-out with the rest of §8. Kept
+> as written, because this file records the v1.1 requirements rather than the app.
+
 Provide a clear action:
 
 ```text
@@ -604,6 +607,11 @@ Flow:
 6. User ends the Apple Watch workout when finished.
 
 This is close to the existing TimerPlus workflow but removes TimerPlus and preserves the app’s planned-workout linkage.
+
+> **Where it went:** the button below was renamed **Start Workout** in the 2026-09-29 clean-out,
+> and the two-tap sequence is gone with it — one Start now launches the Watch's workout and the
+> phone's timer together (`docs/WATCHOS_RECORDER_PLAN.md`). Kept as written, because this file
+> records the v1.1 requirements rather than the app.
 
 UI:
 

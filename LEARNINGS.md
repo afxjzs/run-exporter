@@ -41,8 +41,10 @@ preview sheet, minutes apart, same phone and Watch. Apple documents these as dis
 is "a wrapper around a workout object that your app can use to **open the object in Workout** or
 schedule it for later."
 
-**This is why `SendToWatchView` makes "Add to Apple Watch" the primary action** and demotes
-scheduling. Do not reverse that without re-measuring.
+**This is why `SendToWatchView` made "Add to Apple Watch" the primary action** and demoted
+scheduling. The screen and that button went in the 2026-09-29 clean-out, along with the whole
+WorkoutKit route; the measurement below is why, and still stands if it ever comes back. Do not
+reverse it without re-measuring.
 
 The cost is real and is stated in the UI: Apple's sheet reports nothing back, so the app cannot
 confirm the outcome. An unverifiable action that works beats a verified one that does not.

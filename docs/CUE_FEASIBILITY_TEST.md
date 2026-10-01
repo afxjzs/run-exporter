@@ -261,10 +261,13 @@ The app-owned fallback. Implemented and shipping regardless of Test 1's outcome,
 
 ### Setup
 
-1. Settings › **Cue source: iPhone audio engine**, **Cues: Voice + beeps**.
+1. Settings › **Cue source: iPhone audio engine**, **Cues: Voice + beeps**. The picker became the
+   **Play cues** toggle in the 2026-09-29 clean-out (BACKLOG decision 4); on is what this step
+   means.
 2. AirPods connected to the **iPhone**.
 3. Start music or a podcast.
-4. Today › **Start Audio Timer** on the `1/0:30 × 3` workout. Since `e7f7b96` this only *opens* the
+4. Today › **Start Audio Timer**, renamed **Start Workout** in the 2026-09-29 clean-out (BACKLOG
+   decision 8), on the `1/0:30 × 3` workout. Since `e7f7b96` this only *opens* the
    screen, armed — no timer, no audio session, no Live Activity until you tap **Start** on it. The
    run begins on that second tap, so start counting from there. Since watch plan step 2
    (2026-09-29) that tap also launches a workout on the Watch, which is saved when the run
@@ -373,7 +376,8 @@ Same as Test 2 — Cue source **iPhone audio engine**, AirPods on the **phone**,
 playing. Use the `Cue test 1/0:30 × 3` plan (Settings › Cue test › create it if absent).
 
 Before locking, on Settings › Cue test confirm **Session: active**, **Background capable: yes**, and
-that **Output route** names the AirPods. Then open Today › **Start Audio Timer**, tap **Start** on
+that **Output route** names the AirPods. Then open Today › **Start Audio Timer** — renamed
+**Start Workout** in the 2026-09-29 clean-out — tap **Start** on
 the armed screen — that second tap is what begins the run — press the side button immediately, and
 leave the phone locked and screen-down for the full four minutes.
 

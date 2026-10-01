@@ -220,7 +220,8 @@ on the removal diff and `/code-review` once on the watch-flow diff (`610fdd2..HE
    run screen's READY hint already says Start launches the Watch.
 2. **[Done]** **The WorkoutKit "Send to Apple Watch" route** — `SendToWatchView`, `WorkoutKitService`, the
    links on Today and the plan screen, "Add to Apple Watch", "Schedule for a time", "Clear this
-   iPhone's queue" — **remove it.** Start launches this app's own Watch workout, and using both on
+   iPhone's queue" — **remove it**, which the 2026-09-29 clean-out did. Start launches this app's
+   own Watch workout, and using both on
    one run records two workouts. This reverses the "Kept but known-broken" section on purpose; that
    section is replaced by "WorkoutKit — removed" at the top, and CLAUDE.md's watchOS 10 payload
    rule becomes moot for the phone (the watch app's own API ceiling still applies).
@@ -238,7 +239,8 @@ on the removal diff and `/code-review` once on the watch-flow diff (`610fdd2..HE
    existing values. A phone with a removed value stored reports it under "Settings that could not
    be read" at every launch until "Play cues" is toggled, which stores a current value — by
    design, not a regression. `CueSourceExplanationTests` changes first.
-5. **[Done]** **Cue test** (`CueTestView`, including its Live Activity test buttons) — **remove it.** The
+5. **[Done]** **Cue test** (`CueTestView`, including its Live Activity test buttons) — **remove it**,
+   which the 2026-09-29 clean-out did. The
    on-hardware tests it served are recorded in `CUE_FEASIBILITY_TEST.md`, its Test 1 needs the
    route removed in item 2, and its create button writes a real plan into Plans. Goes with it:
    `latencyDescription` and `CueLatencyTests`, and `AudioCueEngine.playbackLog`, which has no
@@ -251,7 +253,8 @@ on the removal diff and `/code-review` once on the watch-flow diff (`610fdd2..HE
    never read.~~ **Both are gone**, verified 2026-10-01: neither name appears anywhere in the
    source, only in this sentence.
 6. **[Done]** **Watch link test** (`WatchLinkTestView`) — **remove it, and move `WatchLink.fileError` to the run
-   screen's Watch status.** A real Start and End Workout do the same and log to the same files.
+   screen's Watch status.** Both done in the 2026-09-29 clean-out.
+   A real Start and End Workout do the same and log to the same files.
    `fileError` (a diagnostic file could not be written) is shown nowhere else, so dropping the
    screen without moving it would make those failures silent. `reset`, `endWatchWorkout`,
    `clearLog` and the in-memory `events` list serve only this screen and go with it. **As built:**
