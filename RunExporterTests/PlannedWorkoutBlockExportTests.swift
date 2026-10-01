@@ -75,6 +75,41 @@ final class PlannedWorkoutBlockExportTests: XCTestCase {
         XCTAssertEqual(fields(row)["plannedRepetitions"], "")
     }
 
+    /// An open-interval plan blanks them too, for the same reason and a worse consequence.
+    ///
+    /// Its three flat fields are zero *by design* — `OpenIntervalShape` says so and says nothing
+    /// may read them without going through `shape` first. `describableByOneShape` read them
+    /// anyway: an open plan carries no blocks, so `resolvedBlocks` synthesizes one from those
+    /// zeroes, `hasMultipleBlocks` is false, and `hasDamagedShape` is false because the plan is
+    /// healthy. The row then exported `0`, `0`, `0` — "runs for no time, zero rounds" — into the
+    /// columns the multi-block case above goes to such trouble to blank.
+    ///
+    /// Found 2026-10-01 by review. It is the sixth reader to derive a plan's shape from its blocks
+    /// and say something false about an open plan, which `CLAUDE.md` warns about by name.
+    func testOpenIntervalPlanBlanksTheColumnsThatCannotDescribeIt() throws {
+        let context = try XCTUnwrap(store.context)
+        let plan = PlannedWorkout(name: "Open 30 min",
+                                  runIntervalSeconds: 0,
+                                  walkIntervalSeconds: 0,
+                                  plannedRepetitions: 0)
+        plan.openIntervalShape = OpenIntervalShape(targetRunSeconds: 1_800, walkFloorSeconds: 180)
+        context.insert(plan)
+        XCTAssertNil(store.save())
+
+        let data = LoggerExportSnapshot.make(store: store)
+        let row = try XCTUnwrap(data.plannedWorkouts.first)
+
+        XCTAssertEqual(fields(row)["runIntervalSeconds"], "",
+                       "a zero here reads as a measured interval of no time")
+        XCTAssertEqual(fields(row)["walkIntervalSeconds"], "")
+        XCTAssertEqual(fields(row)["plannedRepetitions"], "",
+                       "the round count is the measurement; it is not knowable in advance")
+
+        // The open shape's own columns still carry what is true of this plan.
+        XCTAssertEqual(fields(row)["openIntervalTargetSeconds"], "1800")
+        XCTAssertEqual(fields(row)["openIntervalWalkFloorSeconds"], "180")
+    }
+
     /// An ordinary plan is unchanged — those columns describe it perfectly well.
     func testSingleShapePlanKeepsItsIntervalColumns() throws {
         try insertPlan(name: "4/1 × 5")

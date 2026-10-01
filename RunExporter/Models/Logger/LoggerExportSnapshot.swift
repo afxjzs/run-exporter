@@ -112,7 +112,15 @@ enum LoggerExportSnapshot {
         // A damaged plan (its block rows dropped, flat fields left at zero) is blanked for the same
         // reason a multi-segment one is: exporting a run interval of 0 would put a number that
         // cannot be true into a column an analyst reads as measured.
-        let describableByOneShape = !plan.hasMultipleBlocks && !plan.hasDamagedShape
+        //
+        // Asked of `singleShape`, which answers from `plan.shape`, rather than by combining two
+        // block-derived flags. The old test — `!hasMultipleBlocks && !hasDamagedShape` — was true
+        // for an open-interval plan: it carries no blocks, so one is synthesized from its zeroed
+        // flat fields, and it is not damaged because those zeroes are correct for its kind. Every
+        // open plan therefore exported 0 / 0 / 0 here, which is exactly the "number that cannot be
+        // true" the paragraph above exists to prevent. `OpenIntervalShape` says those fields may
+        // not be read without going through `shape`; this is how.
+        let describableByOneShape = plan.singleShape != nil
 
         return PlannedWorkoutExportRow(
             plannedWorkoutID: plan.id.uuidString,
