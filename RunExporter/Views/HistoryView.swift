@@ -124,9 +124,9 @@ private struct HistoryRow: View {
                 HStack(spacing: 10) {
                     Text("RPE \(Display.rating(log.effortRPE))")
                     Text("Heat \(Display.rating(log.personalHeatRating))")
-                    if let shoeID = log.shoeID, let shoe = logger.shoe(withID: shoeID) {
-                        Text(shoe.displayName).lineLimit(1)
-                    }
+                    // No shoe: hidden 2026-10-01 with the rest of the shoe UI (docs/BACKLOG.md,
+                    // "Hide shoes for now"). New logs still record one, so leaving this would show
+                    // shoes here and nowhere else.
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -417,9 +417,8 @@ struct WorkoutDetailView: View {
                 ForEach(BodyArea.allCases) { area in
                     LabeledContent(area.displayName, value: Display.rating(log.severity(for: area)))
                 }
-                if let shoeID = log.shoeID, let shoe = logger.shoe(withID: shoeID) {
-                    LabeledContent("Shoe", value: shoe.displayName)
-                }
+                // No Shoe row: hidden 2026-10-01 (docs/BACKLOG.md, "Hide shoes for now"). The value
+                // is still recorded and still in the export; only the display is gone.
                 if let notes = log.notes, !notes.isEmpty {
                     Text(notes).font(.callout)
                 }

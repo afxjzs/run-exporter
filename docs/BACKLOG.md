@@ -306,27 +306,32 @@ batched into one Watch install at the end; never install while a run is in progr
 
 ---
 
-## Hide shoes for now
+## Hide shoes for now — **built 2026-10-01**
 
 The owner, 2026-09-30: *"we don't need to list the shoes anymore. i only have one pair of running
 shoes so we can hide all that for now."* **Hide, not remove** — "for now" means the feature may
 come back, so the `Shoe` model, `ShoeMileage` and the export's shoe columns and `shoes.csv` stay.
 
-Where shoes show today, read from the code:
+**Decided 2026-10-01: a new log still records the one shoe, and nothing displays it.**
 
-- Today's **Shoes** row (`HomeView.shoesSection`, opening `ShoesView`).
-- The Shoes section of both run-log forms (`RunLogFormView.shoeSection`, `EarlyRunLogView`), a
-  picker that starts on `logger.defaultShoe()`.
-- The shoe line in History, on the row and the detail (`HistoryView`).
+- **A log still records it.** Both forms keep prefilling `shoeID` from `RunLoggerModel.defaultShoe()`
+  — the draft is built with it, the picker that used to confirm it is gone. Mileage and the
+  export's shoe columns stay continuous, so un-hiding later leaves no gap in the data, and spec
+  §15.4's "default to the most recently used running shoe" is still honored. It is a write the user
+  cannot see, which this project is otherwise hostile to; it is defensible only because the value
+  is the same every time and un-hiding reveals exactly what was recorded.
+- **History hides it too**, both the row and the detail. Both sites were already guarded on
+  `log.shoeID != nil`, so leaving them would have shown a shoe on every *new* log while the picker
+  was hidden everywhere else — visible in exactly one screen, which is the clutter being removed.
 
-To settle before building:
+What was removed: Today's **Shoes** row, `RunLogFormView.shoeSection`, `EarlyRunLogView`'s Shoes
+section, and both `HistoryView` shoe sites. `SmokeTests` asserts the Shoes button is **absent** on
+Today — flipped first, watched fail while the button was still there, then made to pass.
 
-- **Should a log still record the one shoe?** With the picker hidden, a new log could still take
-  `defaultShoe()` without asking, which keeps mileage and the export's shoe columns filled; or it
-  could record none. Spec §15.4 asks for the default shoe.
-- **History:** hide the shoe line too, or keep showing what old logs recorded.
-- `RunExporterUITests/SmokeTests.swift` expects the **Shoes** button on Today and checks for it; the
-  test changes with the screen.
+**`ShoesView` is kept and is now unreachable.** That is the literal reading of "hide, not remove",
+and restoring the feature is one `NavigationLink` again. It is also a screen no code can open,
+which is the species the 2026-09-29 clean-out existed to remove — so if "for now" becomes "no",
+delete it rather than leaving it.
 
 ---
 

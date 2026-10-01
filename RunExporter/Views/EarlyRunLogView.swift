@@ -59,19 +59,8 @@ struct EarlyRunLogView: View {
                     }
                 }
 
-                Section("Shoes") {
-                    let shoes = logger.shoes()
-                    if shoes.isEmpty {
-                        Text("No shoes yet.").foregroundStyle(.secondary)
-                    } else {
-                        Picker("Shoe", selection: binding.shoeID) {
-                            Text("None").tag(UUID?.none)
-                            ForEach(shoes) { shoe in
-                                Text(shoe.displayName).tag(UUID?.some(shoe.id))
-                            }
-                        }
-                    }
-                }
+                // No Shoes section: hidden 2026-10-01 (docs/BACKLOG.md, "Hide shoes for now").
+                // The draft is still created with `defaultShoe()`, so the log records the one pair.
 
                 Section("Notes") {
                     TextField("Anything worth remembering", text: binding.notes, axis: .vertical)

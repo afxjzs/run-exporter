@@ -26,7 +26,9 @@ struct RunLogFormView: View {
             if let binding = draftBinding {
                 requiredSection(binding)
                 if defaults.showBodySignals { bodySignalSection(binding) }
-                shoeSection(binding)
+                // No Shoes section: hidden 2026-10-01 (docs/BACKLOG.md, "Hide shoes for now").
+                // `loadDraft` still prefills `shoeID` from `defaultShoe()`, so the log records the
+                // one pair without asking.
                 notesSection(binding)
             }
         }
@@ -140,23 +142,6 @@ struct RunLogFormView: View {
     }
 
     // MARK: - Shoe
-
-    private func shoeSection(_ draft: Binding<RunLogDraft>) -> some View {
-        Section("Shoes") {
-            let shoes = logger.shoes()
-            if shoes.isEmpty {
-                Text("No shoes yet. Add one from Today › Shoes.")
-                    .foregroundStyle(.secondary)
-            } else {
-                Picker("Shoe", selection: draft.shoeID) {
-                    Text("None").tag(UUID?.none)
-                    ForEach(shoes) { shoe in
-                        Text(shoe.displayName).tag(UUID?.some(shoe.id))
-                    }
-                }
-            }
-        }
-    }
 
     private func notesSection(_ draft: Binding<RunLogDraft>) -> some View {
         Section("Notes") {

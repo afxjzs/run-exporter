@@ -49,7 +49,10 @@ final class SmokeTests: XCTestCase {
             expect(app.staticTexts["No running or walking workouts found yet."],
                    "Today finished without waiting on Health")
             expect(app.buttons["Export Data"], "Export Data on Today")
-            expect(app.buttons["Shoes"], "Shoes on Today")
+            // Hidden, not removed: the owner has one pair, so the picker asked a question with one
+            // answer. A new log still records that shoe through `defaultShoe()` — the data keeps
+            // accruing, so bringing the screens back later leaves no gap.
+            expectAbsent(app.buttons["Shoes"], "Shoes on Today")
             expectAbsent(app.buttons["Send to Apple Watch"], "WorkoutKit send link")
         }
 

@@ -29,7 +29,11 @@ struct HomeView: View {
             exportSection
             unloggedSection
             recentSection
-            shoesSection
+            // No shoes row: hidden 2026-10-01 at the owner's request — one pair of running shoes
+            // makes the picker a question with one answer. `ShoesView` and the model stay, and a
+            // new log still records that shoe through `RunLoggerModel.defaultShoe()`, so mileage
+            // and the export's shoe columns keep accruing and un-hiding leaves no gap.
+            // See "Hide shoes for now" in docs/BACKLOG.md.
         }
         .navigationTitle("Running")
         .refreshable { await logger.refresh() }
@@ -158,15 +162,6 @@ struct HomeView: View {
         }
     }
 
-    private var shoesSection: some View {
-        Section {
-            NavigationLink {
-                ShoesView(logger: logger)
-            } label: {
-                Label("Shoes", systemImage: "shoe")
-            }
-        }
-    }
 }
 
 /// One line of the recent-workouts list (spec §19).
