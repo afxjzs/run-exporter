@@ -1,4 +1,5 @@
 import Foundation
+import HealthKit
 
 /// Everything the iPhone app and the watch app say to each other, carried over the mirrored
 /// workout session's data channel (`HKWorkoutSession.sendToRemoteWorkoutSession`).
@@ -137,6 +138,25 @@ enum WatchLogMarkers {
     static let launchArrived = "handle(workoutConfiguration) called"
     /// Prefixes every error the watch records. The phone shows what follows it.
     static let errorPrefix = "ERROR: "
+
+    /// A session state in words, for both devices' logs.
+    ///
+    /// Shared because those two logs get read side by side when a Watch run is diagnosed, and the
+    /// phone's `watch-link-phone.log` and the watch's `watch-events.log` are only comparable while
+    /// they spell a state the same way. `WatchLink` and `WatchWorkoutController` each held a
+    /// private copy of this, byte for byte; the deleted `BackgroundExecutionProbe` held a third, so
+    /// the 2026-09-29 clean-out took it from three copies to two rather than to one.
+    static func name(for state: HKWorkoutSessionState) -> String {
+        switch state {
+        case .notStarted: return "not started"
+        case .running: return "running"
+        case .ended: return "ended"
+        case .paused: return "paused"
+        case .prepared: return "prepared"
+        case .stopped: return "stopped"
+        @unknown default: return "unknown (\(state.rawValue))"
+        }
+    }
 }
 
 /// The watch's event log travelling to the phone. Separate from `WatchLinkMessage` because it rides
@@ -241,15 +261,17 @@ enum WatchLinkCodec {
     // comes back bit-for-bit. `.secondsSince1970` does not: it adds and removes 978,307,200 s, which
     // costs the low bits, and a test caught a pong that no longer equalled itself. `.iso8601` would
     // drop sub-second precision outright, and the ping round trip is measured in fractions of one.
-    private static var encoder: JSONEncoder {
+    // `let`, not `var`: as computed properties these built a fresh coder for every message, and
+    // both are stateless once configured.
+    private static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .deferredToDate
         return encoder
-    }
+    }()
 
-    private static var decoder: JSONDecoder {
+    private static let decoder: JSONDecoder = {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .deferredToDate
         return decoder
-    }
+    }()
 }

@@ -647,3 +647,14 @@ run started without the cycle: `xcodebuild` sat at 0.0% CPU for nearly three min
 `grep` for the result returned nothing, which reads exactly like a clean run. Cycling first and
 re-running worked. The cost of the cycle is about ten seconds; the cost of skipping it was three
 minutes and a result that could have been misread as success.
+
+**Cycling does not make it impossible.** Later the same day, on a run that *was* preceded by the
+cycle, `xcodebuild clean test` ran the whole suite green — `Executed 317 tests, with 0 failures`,
+then `** TEST SUCCEEDED **` — and then started a second test attempt that reported
+`The test runner hung before establishing connection`, making the overall exit code 65 and printing
+`** TEST FAILED **` *after* the success line. It did not reproduce on an immediate re-run.
+
+Two things follow. **Read the whole tail, not the last line**: a log can hold `TEST SUCCEEDED` and
+`TEST FAILED` in that order, and only the `Executed N tests` line says whether the suite actually
+ran. And **a single exit 65 with a full green suite above it is not evidence of a broken change** —
+re-run before believing it. Cycling remains right; it lowers the rate, not to zero.

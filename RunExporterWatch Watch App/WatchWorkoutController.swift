@@ -62,11 +62,16 @@ final class WatchWorkoutController: NSObject {
     private(set) var phaseClock: PhaseClock?
     /// Leg pace, current mile split and total distance, from this watch's distance readings.
     private(set) var pace = PaceTracker(start: Date())
-    /// The GPS route, in words: recording and how many points, or why not.
+    /// The GPS route, in words: whether it is recording, or why not.
+    ///
+    /// Every assignment logs, so assign only when the answer changes kind — see the note where
+    /// points arrive.
     private(set) var routeStatus = "off" {
         didSet { WatchEventLog.shared.record("route: \(routeStatus)") }
     }
-    private(set) var routePoints = 0
+    /// How many usable GPS points went to the route builder. Not observed: it is read only inside
+    /// this type, to build the save line. Observed, it redrew the watch on every GPS batch.
+    @ObservationIgnored private(set) var routePoints = 0
     /// What happened when the workout was saved: its id and the route, or the error.
     private(set) var saveResult: String? {
         didSet { if let saveResult { WatchEventLog.shared.record("save: \(saveResult)") } }
@@ -274,7 +279,14 @@ final class WatchWorkoutController: NSObject {
             do {
                 try await routeBuilder.insertRouteData(usable)
                 self.routePoints += usable.count
-                self.routeStatus = "recording, \(self.routePoints) points"
+                // Set once, when recording starts — not on every batch. `routeStatus` has one
+                // reader, `WatchRunView`, and it draws the string only when it does NOT begin
+                // "recording", so the count in it was never shown to anyone; `routePoints` is what
+                // the save line reports. Assigning here ran this property's `didSet` at roughly
+                // 1 Hz, and that `didSet` writes the whole log array to UserDefaults and queues one
+                // `WCSession.transferUserInfo` per line — on the order of 1,800 of each in a
+                // half-hour run, on a Series 5 that is also recording the workout.
+                if !self.routeStatus.hasPrefix("recording") { self.routeStatus = "recording" }
             } catch {
                 self.lastError = "Could not add GPS points to the route: \(error.localizedDescription)"
             }
@@ -543,16 +555,9 @@ final class WatchWorkoutController: NSObject {
         }
     }
 
+    /// Shared with the phone, so both devices' logs spell a state the same way.
     private static func name(for state: HKWorkoutSessionState) -> String {
-        switch state {
-        case .notStarted: return "not started"
-        case .running: return "running"
-        case .ended: return "ended"
-        case .paused: return "paused"
-        case .prepared: return "prepared"
-        case .stopped: return "stopped"
-        @unknown default: return "unknown (\(state.rawValue))"
-        }
+        WatchLogMarkers.name(for: state)
     }
 }
 

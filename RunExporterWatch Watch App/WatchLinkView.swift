@@ -157,7 +157,10 @@ struct WatchLinkView: View {
 
     private var heartRateText: String {
         guard let bpm = controller.heartRate else { return "— bpm" }
-        return String(format: "%.0f bpm", bpm)
+        // `Int(rounded())`, not `String(format: "%.0f")`: printf rounds half to even and Swift's
+        // `rounded()` rounds half away from zero, so 72.5 printed as 72 here and 73 on the run
+        // screen and in the phone's `Display.heartRate`. One app, one value, two answers.
+        return "\(Int(bpm.rounded())) bpm"
     }
 
     /// Tenths of a second, so it can be compared with the phone's log by eye.

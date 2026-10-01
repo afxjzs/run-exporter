@@ -462,7 +462,7 @@ struct ActiveWorkoutView: View {
 
     private var watchConnectedText: String {
         guard let bpm = watchLink.latestStatus?.heartRate else { return "Watch recording" }
-        return "Watch recording · \(Int(bpm.rounded())) bpm"
+        return "Watch recording · \(Display.heartRate(bpm))"
     }
 
     /// A system error's text often has no final full stop ("Unable to launch watch app"), which ran it

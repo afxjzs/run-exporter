@@ -25,7 +25,12 @@ final class WatchLink: NSObject {
     /// on the phone saying so.
     private(set) var phaseUnsent = false
     /// Round trips measured on the phone's clock, most recent last.
-    private(set) var roundTrips: [TimeInterval] = []
+    ///
+    /// Not observed: nothing outside this type reads it — the link-test screen removed in the
+    /// 2026-09-29 clean-out was its only display, and `LatencyEstimate.oneWay` takes it as an
+    /// argument. Left observable it invalidated the run screen on every pong, to refresh a number
+    /// nothing draws.
+    @ObservationIgnored private var roundTrips: [TimeInterval] = []
     /// Set when a diagnostic file cannot be written. Shown on the run screen, never swallowed —
     /// those files are how a failed Watch run gets diagnosed afterwards.
     private(set) var fileError: String?
@@ -486,16 +491,9 @@ final class WatchLink: NSObject {
         String(format: "%.2f s", interval)
     }
 
+    /// Shared with the watch, so both devices' logs spell a state the same way.
     private static func name(for state: HKWorkoutSessionState) -> String {
-        switch state {
-        case .notStarted: return "not started"
-        case .running: return "running"
-        case .ended: return "ended"
-        case .paused: return "paused"
-        case .prepared: return "prepared"
-        case .stopped: return "stopped"
-        @unknown default: return "unknown (\(state.rawValue))"
-        }
+        WatchLogMarkers.name(for: state)
     }
 }
 
