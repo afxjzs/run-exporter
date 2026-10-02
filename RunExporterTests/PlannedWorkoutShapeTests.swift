@@ -222,6 +222,23 @@ final class PlannedWorkoutShapeTests: XCTestCase {
         XCTAssertEqual(copy.activityTypeValue, PlannedActivityType.walking)
     }
 
+    /// An open-interval plan's shape lives in `openIntervalShape`, not in `blocks`, and its flat
+    /// fields are zero by design. Copying the blocks alone hands back a plan whose `shape` is
+    /// `.damaged`: the copy sits on the plan list telling its owner to restore it from an export.
+    /// Neither Duplicate button is hidden for open-interval plans.
+    func testDuplicatingAnOpenIntervalPlanKeepsItOpen() {
+        let workout = plan(run: 0, walk: 0, reps: 0)
+        workout.openIntervalShape = OpenIntervalShape(targetRunSeconds: 1800, walkFloorSeconds: 180)
+
+        let copy = workout.duplicate()
+
+        XCTAssertEqual(copy.shape, .openIntervals(target: 1800, walkFloor: 180))
+        XCTAssertFalse(copy.openIntervalShape === workout.openIntervalShape,
+                       "the copy must hold a new record; the original's would be re-parented away")
+        XCTAssertEqual(workout.shape, .openIntervals(target: 1800, walkFloor: 180),
+                       "the original keeps its shape")
+    }
+
     // MARK: - shape
 
     /// A open-interval plan has no run interval and no known leg count — which is precisely the

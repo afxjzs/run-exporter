@@ -398,6 +398,13 @@ final class PlannedWorkout {
                                 walkIntervalSeconds: block.walkIntervalSeconds,
                                 repetitions: block.repetitions)
         }
+        // An open-interval plan's shape is this record, not its blocks, and its flat fields are
+        // zero by design. Without it the copy's `shape` is `.damaged`, and the plan list tells its
+        // owner to restore a plan that was never lost. A new record, for the reason above.
+        copy.openIntervalShape = openIntervalShape.map {
+            OpenIntervalShape(targetRunSeconds: $0.targetRunSeconds,
+                              walkFloorSeconds: $0.walkFloorSeconds)
+        }
         return copy
     }
 
