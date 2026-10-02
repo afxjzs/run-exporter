@@ -41,6 +41,9 @@ struct LoggerExportData {
     private var assignments: [ShoeMileage.Assignment] = []
     private var intervalsByWorkoutUUID: [String: [IntervalLogExportRow]] = [:]
     private var intervalsByExecutionID: [String: [IntervalLogExportRow]] = [:]
+    /// Only executions with at least one leg: `Dictionary(grouping:)` makes no empty groups, so a
+    /// timer that never started has no entry here and its actual* columns stay blank, never zero.
+    private var recordedRunsByExecutionID: [String: RecordedRun] = [:]
 
     /// Builds every lookup and fills in each shoe's assigned mileage.
     ///
@@ -97,6 +100,39 @@ struct LoggerExportData {
         }, by: { $0.0 }).mapValues { $0.map(\.1) }
 
         intervalsByExecutionID = Dictionary(grouping: intervalLogs, by: { $0.executionID })
+
+        // What each run actually ran, derived once from its legs. Both the execution rows and the
+        // workouts.csv join read this one result, so the two files cannot disagree about a run.
+        recordedRunsByExecutionID = [:]
+        for (executionID, rows) in intervalsByExecutionID {
+            do {
+                recordedRunsByExecutionID[executionID] = try RecordedRun(rows: rows)
+            } catch RecordedRun.Failure.unrecognizedPhase(let phase) {
+                issues.append(ExportLogEntry(
+                    level: .warning, category: "run_logger",
+                    message: "Execution \(executionID) has a leg with phase \"\(phase)\", which this "
+                        + "version does not recognize, so what that run actually ran cannot be "
+                        + "derived. Its actual* columns are blank; its legs are in workout_intervals.csv."))
+            } catch {
+                issues.append(ExportLogEntry(
+                    level: .warning, category: "run_logger",
+                    message: "Could not derive what execution \(executionID) ran: \(error). "
+                        + "Its actual* columns are blank."))
+            }
+        }
+        for index in executions.indices {
+            guard let run = recordedRunsByExecutionID[executions[index].executionID] else { continue }
+            executions[index].actualShape = run.shapeDescriptor
+            executions[index].actualRunLegCount = run.runLegCount
+            executions[index].actualRunSeconds = run.totalRunSeconds
+            executions[index].actualWalkSeconds = run.totalWalkSeconds
+        }
+    }
+
+    /// What an execution actually ran, or nil when it recorded no legs or they could not be read
+    /// (the latter reported in `issues`). The seam the aerobic analysis reads legs from.
+    func recordedRun(forExecutionID id: String) -> RecordedRun? {
+        recordedRunsByExecutionID[id]
     }
 
     // MARK: - workouts.csv join
@@ -144,6 +180,12 @@ struct LoggerExportData {
             join.cooldownDurationSeconds = duration(of: intervals) { $0 == .cooldown }
             join.pausedDurationSeconds = duration(of: intervals) { $0 == .paused }
             join.loggedIntervalCount = intervals.count
+        }
+        if let executionID = log.executionID, let run = recordedRunsByExecutionID[executionID] {
+            join.actualShape = run.shapeDescriptor
+            join.actualRunLegCount = run.runLegCount
+            join.actualRunSeconds = run.totalRunSeconds
+            join.actualWalkSeconds = run.totalWalkSeconds
         }
         return join
     }

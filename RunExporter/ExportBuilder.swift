@@ -782,6 +782,17 @@ struct ExportBuilder {
         open cooldown — or a twenty-minute conversation mid-cooldown — cannot distort main-set \
         timing.
 
+        PLANNED vs ACTUAL: runIntervalSeconds, walkIntervalSeconds, plannedRepetitions and \
+        blockShape describe the plan as it stood when a run began. actualShape, actualRunLegCount, \
+        actualRunSeconds and actualWalkSeconds — in pending_workout_executions.csv and \
+        workouts.csv — describe what was actually run, derived from that run's rows in \
+        workout_intervals.csv. actualShape lists one round per run leg, run seconds then the walk \
+        after it, rounds separated by |: 752/181|354/181|209/0. A final 0 is a run with no walk \
+        after it, which is a measured nothing. Paused time is in neither. For an OPEN INTERVAL run, \
+        whose legs the runner ends, the actual columns are the only description of its legs. They \
+        are BLANK when no leg was recorded, and when the legs could not be read, which \
+        export_log.json then names.
+
         CUES: this export was created with cue_source "\(intervalAudio.cueSource)" and cue_mode \
         "\(intervalAudio.cueMode)". See "interval_audio" in manifest.json.
         """

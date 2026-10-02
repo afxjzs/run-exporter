@@ -325,6 +325,15 @@ struct ExecutionExportRow {
     var createdAt: Date
     var updatedAt: Date
 
+    /// What was actually run, from this execution's legs — `RecordedRun`. The columns above are the
+    /// plan as it stood when the run began; these are what happened. Blank when no leg was recorded
+    /// or the legs could not be read (the second is reported in export_log.json). Filled in by
+    /// `LoggerExportData.index()`, which holds the legs.
+    var actualShape: String?
+    var actualRunLegCount: Int?
+    var actualRunSeconds: Double?
+    var actualWalkSeconds: Double?
+
     static let columns = [
         "executionID", "plannedWorkoutID", "plannedWorkoutName",
         "expectedActivityType", "expectedDurationSeconds",
@@ -332,6 +341,8 @@ struct ExecutionExportRow {
         "plannedRepetitions", "completedRepetitions", "blockShape",
         "status", "matchedHealthKitWorkoutUUID",
         "timerStartedAt", "timerEndedAt", "createdAt", "updatedAt",
+        // Appended: what was run, beside what was planned.
+        "actualShape", "actualRunLegCount", "actualRunSeconds", "actualWalkSeconds",
     ]
 
     var values: [String] {
@@ -345,6 +356,8 @@ struct ExecutionExportRow {
             status, matchedHealthKitWorkoutUUID ?? "",
             Fmt.isoString(timerStartedAt), Fmt.isoString(timerEndedAt),
             Fmt.isoString(createdAt), Fmt.isoString(updatedAt),
+            actualShape ?? "", actualRunLegCount.map(String.init) ?? "",
+            Fmt.fixed(actualRunSeconds, places: 3), Fmt.fixed(actualWalkSeconds, places: 3),
         ]
     }
 }
@@ -446,6 +459,12 @@ struct WorkoutLoggerJoin {
     var pausedDurationSeconds: Double?
     var loggedIntervalCount: Int?
 
+    /// The run's execution's `actual*` columns, copied — one derivation, not a second one here.
+    var actualShape: String?
+    var actualRunLegCount: Int?
+    var actualRunSeconds: Double?
+    var actualWalkSeconds: Double?
+
     /// Spec §20.1's list first, then the derived interval columns.
     static let columns = [
         "plannedWorkoutID", "plannedWorkoutName",
@@ -461,6 +480,7 @@ struct WorkoutLoggerJoin {
         "runLogID", "executionID",
         "mainSetDurationSeconds", "cooldownDurationSeconds", "pausedDurationSeconds",
         "loggedIntervalCount",
+        "actualShape", "actualRunLegCount", "actualRunSeconds", "actualWalkSeconds",
     ]
 
     var values: [String] {
@@ -483,6 +503,8 @@ struct WorkoutLoggerJoin {
             Fmt.fixed(cooldownDurationSeconds, places: 3),
             Fmt.fixed(pausedDurationSeconds, places: 3),
             loggedIntervalCount.map(String.init) ?? "",
+            actualShape ?? "", actualRunLegCount.map(String.init) ?? "",
+            Fmt.fixed(actualRunSeconds, places: 3), Fmt.fixed(actualWalkSeconds, places: 3),
         ]
     }
 
