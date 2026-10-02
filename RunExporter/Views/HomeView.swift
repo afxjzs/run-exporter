@@ -251,18 +251,19 @@ struct PlannedWorkoutCard: View {
                         }
                     }
                 }
-                // Both omitted for an open-interval plan. Its round count is the measurement and is
-                // not knowable in advance, so "Rounds 0" would state something false; and its main
-                // set counts only the running, because those walks have no planned length, so the
-                // figure would read as the whole workout and be short by every walk in it.
-                if !plan.isOpenIntervals {
+                // Each shown only when the plan fixes it. An open-interval plan's rounds are decided
+                // during the run and its walks have no planned length, so the plan answers nil for
+                // both — no screen has to know which kinds to hide them for.
+                if let rounds = plan.totalRepetitions {
                     GridRow {
                         Text("Rounds").foregroundStyle(.secondary)
-                        Text("\(plan.totalRepetitions)").monospacedDigit()
+                        Text(String(rounds)).monospacedDigit()
                     }
+                }
+                if let mainSet = plan.mainSetSeconds {
                     GridRow {
                         Text("Main set").foregroundStyle(.secondary)
-                        Text(PlannedWorkout.clockDuration(plan.mainSetSeconds)).monospacedDigit()
+                        Text(PlannedWorkout.clockDuration(mainSet)).monospacedDigit()
                     }
                 }
                 GridRow {

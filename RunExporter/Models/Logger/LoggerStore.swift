@@ -28,6 +28,9 @@ final class LoggerStore {
     private(set) var container: ModelContainer?
     /// Non-nil when the store could not be opened. Surfaced in the UI; never swallowed.
     private(set) var containerError: String?
+    /// Non-nil when `ShapeZeroRepair` failed. The store works, but plans and runs saved by an older
+    /// build may still report a zero where "not set" belongs. Surfaced in the UI; never swallowed.
+    private(set) var repairError: String?
 
     var context: ModelContext? {
         guard let container else { return nil }
@@ -39,7 +42,16 @@ final class LoggerStore {
             let schema = Schema(Self.models)
             let configuration = ModelConfiguration(schema: schema,
                                                    isStoredInMemoryOnly: inMemory)
-            container = try ModelContainer(for: schema, configurations: [configuration])
+            let opened = try ModelContainer(for: schema, configurations: [configuration])
+            container = opened
+            do {
+                _ = try ShapeZeroRepair.run(in: opened.mainContext)
+            } catch {
+                repairError = "Plans and runs saved by an older version could not be updated: "
+                    + "\(error.localizedDescription). Everything still works, but some of them "
+                    + "may show or export 0 where a value is not set. This is tried again at "
+                    + "every launch."
+            }
         } catch {
             container = nil
             containerError = "The run logger database could not be opened: "

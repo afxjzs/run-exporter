@@ -37,9 +37,11 @@ final class ActiveWorkoutModel {
     /// `startToleranceSeconds`. A session opened when the screen appeared would spend that budget
     /// on however long the walk between devices took.
     private(set) var hasStarted = false
-    private(set) var runIntervalSeconds = 0
-    private(set) var walkIntervalSeconds = 0
-    private(set) var plannedRepetitions = 0
+    /// Nil when the plan has no single shape (several segments, or an open-interval plan) or no
+    /// fixed rounds (open-interval).
+    private(set) var runIntervalSeconds: Int?
+    private(set) var walkIntervalSeconds: Int?
+    private(set) var plannedRepetitions: Int?
 
 
     /// A problem the user must see: a plan that cannot be scheduled, audio that will not start,
@@ -161,10 +163,9 @@ final class ActiveWorkoutModel {
         activityType = plan.activityTypeValue ?? .running
         hasPendingLog = false
         // A plan of several segments offers the post-run log form no interval shape, because a
-        // blank field asks the user and a wrong one does not. `logDraftContext` turns these zeros
-        // into nils.
-        runIntervalSeconds = plan.singleShape?.runSeconds ?? 0
-        walkIntervalSeconds = plan.singleShape?.walkSeconds ?? 0
+        // blank field asks the user and a wrong one does not.
+        runIntervalSeconds = plan.singleShape?.runSeconds
+        walkIntervalSeconds = plan.singleShape?.walkSeconds
         plannedRepetitions = plan.totalRepetitions
 
         do {
@@ -214,10 +215,9 @@ final class ActiveWorkoutModel {
             return nil
         }
 
-        // A plan of several segments has no single run or walk length, so it records none — see
-        // `PendingWorkoutExecution.runIntervalSeconds` for why zero rather than the first segment.
-        // `blockShape` carries the whole of it either way, and rounds are well defined for any
-        // plan, so they stay populated.
+        // A plan of several segments, or an open-interval one, has no single run or walk length,
+        // so it records none — never the first segment's. `blockShape` carries the whole of it.
+        // An open plan has no fixed rounds or length either; those come back nil from the plan.
         let singleShape = plan.singleShape
 
         let execution = PendingWorkoutExecution(
@@ -225,8 +225,8 @@ final class ActiveWorkoutModel {
             plannedWorkoutName: plan.name,
             expectedActivityType: activity,
             expectedDurationSeconds: plan.expectedTotalSeconds,
-            runIntervalSeconds: singleShape?.runSeconds ?? 0,
-            walkIntervalSeconds: singleShape?.walkSeconds ?? 0,
+            runIntervalSeconds: singleShape?.runSeconds,
+            walkIntervalSeconds: singleShape?.walkSeconds,
             plannedRepetitions: plan.totalRepetitions,
             status: .started)
         execution.blockShape = plan.blockShapeDescriptor
@@ -529,10 +529,10 @@ final class ActiveWorkoutModel {
     /// The draft values the post-run form should start from.
     var logDraftContext: (plannedWorkoutID: UUID?, executionID: UUID?,
                           run: Int?, walk: Int?, planned: Int?, completed: Int?) {
+        // Straight through. These were zeros turned back into nils here, which also turned a
+        // continuous run's real walk of 0 into "not set".
         (plannedWorkoutID, executionID,
-         runIntervalSeconds > 0 ? runIntervalSeconds : nil,
-         walkIntervalSeconds > 0 ? walkIntervalSeconds : nil,
-         plannedRepetitions > 0 ? plannedRepetitions : nil,
+         runIntervalSeconds, walkIntervalSeconds, plannedRepetitions,
          engine.completedRunIntervals)
     }
 }

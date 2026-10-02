@@ -83,9 +83,13 @@ struct WorkoutPhaseSchedule {
         case nonPositiveRepetitions(Int)
         case missingWarmupDuration
         case missingCooldownDuration
+        /// Nothing describes the plan's intervals: no blocks, and its own fields not set.
+        case missingShape
 
         var errorDescription: String? {
             switch self {
+            case .missingShape:
+                return PlannedWorkout.damagedShapeSummary
             case .unknownWarmupMode(let raw):
                 return "This workout's warmup mode is \"\(raw)\", which this version does not "
                     + "understand. Edit the workout and choose a warmup."
@@ -138,8 +142,19 @@ struct WorkoutPhaseSchedule {
         // `expandedIntervals` skips it, so nothing breaks and the workout is quietly not the one
         // the plan describes.
         //
-        // For a plan with no stored blocks this is exactly the previous check: `resolvedBlocks`
-        // returns one block built from those same three fields.
+        // A plan with no stored blocks is checked from its own three fields. `resolvedBlocks` gives
+        // no block for fields that describe nothing, and a loop over no blocks would pass the plan:
+        // it used to get a `0/0×0` block here, which this loop refused. The editor shows these
+        // errors to say why Save is disabled, so they stay the specific ones.
+        if plan.blocks.isEmpty {
+            guard let run = plan.runIntervalSeconds,
+                  plan.walkIntervalSeconds != nil,
+                  let repetitions = plan.plannedRepetitions else {
+                throw ScheduleError.missingShape
+            }
+            guard run > 0 else { throw ScheduleError.nonPositiveRunInterval(run) }
+            guard repetitions > 0 else { throw ScheduleError.nonPositiveRepetitions(repetitions) }
+        }
         for block in plan.resolvedBlocks {
             guard block.runSeconds > 0 else {
                 throw ScheduleError.nonPositiveRunInterval(block.runSeconds)
@@ -168,7 +183,9 @@ struct WorkoutPhaseSchedule {
         // stored ones. Expanding it a second time here is what would let the schedule and the
         // plan's advertised main set drift apart, and spec §11.1's "no walk after the final run"
         // is applied there, across the whole workout rather than per block.
-        let repetitions = plan.totalRepetitions
+        // From the blocks just validated: the plan's own `totalRepetitions` is optional because an
+        // open-interval plan has none, and that plan is never built here.
+        let repetitions = PlannedWorkout.totalRepetitions(blocks: plan.resolvedBlocks)
         for interval in plan.expandedIntervals {
             append(interval.isRun ? .run : .walk,
                    repetition: interval.repetition,

@@ -504,4 +504,250 @@ final class LoggerStoreMigrationTests: XCTestCase {
         XCTAssertNil(intervals.first?.baselineReachedAt)
         XCTAssertTrue(intervals.first?.signalReadings.isEmpty ?? false)
     }
+
+    // MARK: - Shape fields that may be "not set"
+
+    /// The store as it stands on the owner's phone before shape fields could be "not set": a plan's
+    /// flat run, walk and rounds, and an execution's copies and expected duration, are all `Int`,
+    /// and a plan described elsewhere — by blocks or an open-interval shape — holds `0/0/0` in them.
+    ///
+    /// Frozen copies, like the schemas above. Do **not** add new properties here.
+    enum PreOptionalShapeSchema: VersionedSchema {
+        static var versionIdentifier: Schema.Version { Schema.Version(3, 0, 0) }
+
+        static var models: [any PersistentModel.Type] {
+            [PlannedWorkout.self, PlannedWorkoutBlock.self, OpenIntervalShape.self,
+             PendingWorkoutExecution.self, RunExporter.RunLog.self]
+        }
+
+        @Model
+        final class PlannedWorkout {
+            @Attribute(.unique) var id: UUID
+            var name: String
+            var activityType: String
+            var warmupMode: String
+            var warmupSeconds: Int?
+            var runIntervalSeconds: Int
+            var walkIntervalSeconds: Int
+            var plannedRepetitions: Int
+            var includesFinalWalk: Bool
+            var cooldownMode: String
+            var cooldownSeconds: Int?
+            var countdownSeconds: Int
+            var createdAt: Date
+            var updatedAt: Date
+            var isNextWorkout: Bool
+            var workoutKitIdentifier: String?
+
+            @Relationship(deleteRule: .cascade, inverse: \PlannedWorkoutBlock.plan)
+            var blocks: [PlannedWorkoutBlock] = []
+            @Relationship(deleteRule: .cascade, inverse: \OpenIntervalShape.plan)
+            var openIntervalShape: OpenIntervalShape?
+
+            init(id: UUID = UUID(), name: String,
+                 run: Int, walk: Int, reps: Int) {
+                self.id = id
+                self.name = name
+                self.activityType = "running"
+                self.warmupMode = "none"
+                self.runIntervalSeconds = run
+                self.walkIntervalSeconds = walk
+                self.plannedRepetitions = reps
+                self.includesFinalWalk = false
+                self.cooldownMode = "open"
+                self.countdownSeconds = 0
+                self.createdAt = Date()
+                self.updatedAt = Date()
+                self.isNextWorkout = false
+            }
+        }
+
+        @Model
+        final class PlannedWorkoutBlock {
+            @Attribute(.unique) var id: UUID
+            var orderIndex: Int
+            var runIntervalSeconds: Int
+            var walkIntervalSeconds: Int
+            var repetitions: Int
+            var plan: PlannedWorkout?
+
+            init(orderIndex: Int, run: Int, walk: Int, reps: Int) {
+                self.id = UUID()
+                self.orderIndex = orderIndex
+                self.runIntervalSeconds = run
+                self.walkIntervalSeconds = walk
+                self.repetitions = reps
+            }
+        }
+
+        @Model
+        final class OpenIntervalShape {
+            @Attribute(.unique) var id: UUID
+            var targetRunSeconds: Int
+            var walkFloorSeconds: Int
+            var plan: PlannedWorkout?
+
+            init(target: Int, floor: Int) {
+                self.id = UUID()
+                self.targetRunSeconds = target
+                self.walkFloorSeconds = floor
+            }
+        }
+
+        @Model
+        final class PendingWorkoutExecution {
+            @Attribute(.unique) var id: UUID
+            var plannedWorkoutID: UUID
+            var expectedActivityType: String
+            var createdAt: Date
+            var expectedDurationSeconds: Int
+            var status: String
+            var matchedHealthKitWorkoutUUID: UUID?
+            var plannedWorkoutName: String
+            var runIntervalSeconds: Int
+            var walkIntervalSeconds: Int
+            var plannedRepetitions: Int
+            var blockShape: String?
+            var timerStartedAt: Date?
+            var timerEndedAt: Date?
+            var completedRepetitions: Int?
+            var updatedAt: Date
+
+            init(id: UUID, expected: Int, run: Int, walk: Int, reps: Int, blockShape: String?) {
+                self.id = id
+                self.plannedWorkoutID = UUID()
+                self.expectedActivityType = "running"
+                self.createdAt = Date()
+                self.expectedDurationSeconds = expected
+                self.status = "completed"
+                self.plannedWorkoutName = "plan"
+                self.runIntervalSeconds = run
+                self.walkIntervalSeconds = walk
+                self.plannedRepetitions = reps
+                self.blockShape = blockShape
+                self.completedRepetitions = 3
+                self.updatedAt = Date()
+            }
+        }
+    }
+
+    /// Every kind of plan, execution and run log the phone holds, written with today's zeros,
+    /// opened under the new schema and repaired.
+    ///
+    /// Zeros become "not set" exactly where they stood in for "described elsewhere", and nowhere
+    /// else: a continuous run's walk of 0 is a real value and must survive.
+    func testZeroedShapeFieldsBecomeNotSetAndRealValuesSurvive() throws {
+        // The premise, asserted: the frozen schema really stores these as non-optional integers.
+        let oldPlan = try XCTUnwrap(Schema(PreOptionalShapeSchema.models).entities
+            .first { $0.name == "PlannedWorkout" })
+        XCTAssertEqual(oldPlan.attributes.first { $0.name == "runIntervalSeconds" }?.isOptional, false,
+                       "the frozen schema must store runIntervalSeconds as a plain Int")
+
+        let single = UUID(), multi = UUID(), open = UUID(), damaged = UUID()
+        let singleRun = UUID(), multiRun = UUID(), openRun = UUID(), legacyRun = UUID()
+
+        try autoreleasepool {
+            let old = try container(for: PreOptionalShapeSchema.models)
+            let context = old.mainContext
+            typealias S = PreOptionalShapeSchema
+
+            context.insert(S.PlannedWorkout(id: single, name: "4/1 × 5", run: 240, walk: 60, reps: 5))
+            let multiPlan = S.PlannedWorkout(id: multi, name: "5/1×1 · 8/1×2", run: 0, walk: 0, reps: 0)
+            context.insert(multiPlan)
+            multiPlan.blocks = [S.PlannedWorkoutBlock(orderIndex: 0, run: 300, walk: 60, reps: 1),
+                                S.PlannedWorkoutBlock(orderIndex: 1, run: 480, walk: 60, reps: 2)]
+            let openPlan = S.PlannedWorkout(id: open, name: "Run to 30 min", run: 0, walk: 0, reps: 0)
+            context.insert(openPlan)
+            openPlan.openIntervalShape = S.OpenIntervalShape(target: 1_800, floor: 180)
+            context.insert(S.PlannedWorkout(id: damaged, name: "lost", run: 0, walk: 0, reps: 0))
+
+            context.insert(S.PendingWorkoutExecution(id: singleRun, expected: 1_500, run: 240, walk: 60,
+                                                     reps: 5, blockShape: "240/60x5"))
+            context.insert(S.PendingWorkoutExecution(id: multiRun, expected: 1_380, run: 0, walk: 0,
+                                                     reps: 3, blockShape: "300/60x1|480/60x2"))
+            context.insert(S.PendingWorkoutExecution(id: openRun, expected: 1_800, run: 0, walk: 0,
+                                                     reps: 0, blockShape: "open:1800/180"))
+            context.insert(S.PendingWorkoutExecution(id: legacyRun, expected: 1_500, run: 240, walk: 60,
+                                                     reps: 5, blockShape: nil))
+
+            context.insert(RunLog(healthKitWorkoutUUID: UUID(), workoutStartDate: Date(),
+                                  workoutDistanceMiles: 3, workoutActivityType: "running",
+                                  executionID: openRun, runIntervalSeconds: 0, walkIntervalSeconds: 0,
+                                  plannedRepetitions: 0, completedRepetitions: 5,
+                                  effortRPE: 4, personalHeatRating: 5, notes: "open"))
+            context.insert(RunLog(healthKitWorkoutUUID: UUID(), workoutStartDate: Date(),
+                                  workoutDistanceMiles: 2, workoutActivityType: "running",
+                                  runIntervalSeconds: 1_200, walkIntervalSeconds: 0,
+                                  plannedRepetitions: 1, completedRepetitions: 1,
+                                  effortRPE: 5, personalHeatRating: 5, notes: "continuous"))
+            try context.save()
+        }
+
+        let migrated = try container(for: LoggerStore.models)
+        let context = migrated.mainContext
+        let changed = try ShapeZeroRepair.run(in: context)
+        XCTAssertGreaterThan(changed, 0)
+
+        let plans = Dictionary(uniqueKeysWithValues:
+            try context.fetch(FetchDescriptor<PlannedWorkout>()).map { ($0.id, $0) })
+        let singlePlan = try XCTUnwrap(plans[single])
+        XCTAssertEqual(singlePlan.runIntervalSeconds, 240)
+        XCTAssertEqual(singlePlan.walkIntervalSeconds, 60)
+        XCTAssertEqual(singlePlan.plannedRepetitions, 5)
+
+        for id in [multi, open, damaged] {
+            let plan = try XCTUnwrap(plans[id])
+            XCTAssertNil(plan.runIntervalSeconds, "\(plan.name)")
+            XCTAssertNil(plan.walkIntervalSeconds, "\(plan.name)")
+            XCTAssertNil(plan.plannedRepetitions, "\(plan.name)")
+        }
+        XCTAssertEqual(plans[multi]?.resolvedBlocks.count, 2, "the blocks are the multi-block plan")
+        XCTAssertEqual(plans[open]?.isOpenIntervals, true)
+        XCTAssertEqual(plans[damaged]?.hasDamagedShape, true,
+                       "a plan nothing describes must still raise the data-loss alarm")
+
+        let executions = Dictionary(uniqueKeysWithValues:
+            try context.fetch(FetchDescriptor<PendingWorkoutExecution>()).map { ($0.id, $0) })
+        XCTAssertEqual(executions[singleRun]?.runIntervalSeconds, 240)
+        XCTAssertEqual(executions[legacyRun]?.runIntervalSeconds, 240,
+                       "a session from before blockShape: its own columns are the truth")
+        XCTAssertNil(executions[multiRun]?.runIntervalSeconds)
+        XCTAssertNil(executions[multiRun]?.walkIntervalSeconds)
+        XCTAssertEqual(executions[multiRun]?.plannedRepetitions, 3, "rounds are real for a block plan")
+        let openExecution = try XCTUnwrap(executions[openRun])
+        XCTAssertNil(openExecution.runIntervalSeconds)
+        XCTAssertNil(openExecution.walkIntervalSeconds)
+        XCTAssertNil(openExecution.plannedRepetitions)
+        XCTAssertNil(openExecution.expectedDurationSeconds,
+                     "an open run's length is not known in advance; the target alone is not it")
+        XCTAssertEqual(executions[singleRun]?.expectedDurationSeconds, 1_500)
+
+        let logs = Dictionary(uniqueKeysWithValues:
+            try context.fetch(FetchDescriptor<RunLog>()).map { ($0.notes ?? "", $0) })
+        let openLog = try XCTUnwrap(logs["open"])
+        XCTAssertNil(openLog.runIntervalSeconds)
+        XCTAssertNil(openLog.walkIntervalSeconds)
+        XCTAssertNil(openLog.plannedRepetitions)
+        XCTAssertEqual(openLog.completedRepetitions, 5, "what happened is not touched")
+        XCTAssertEqual(logs["continuous"]?.walkIntervalSeconds, 0,
+                       "a continuous run walks for zero seconds; that zero is real")
+    }
+
+    /// It runs at every launch, so a second pass must find nothing to do — and above all must not
+    /// start rewriting real values on it.
+    func testTheRepairChangesNothingTheSecondTime() throws {
+        try autoreleasepool {
+            let old = try container(for: PreOptionalShapeSchema.models)
+            let plan = PreOptionalShapeSchema.PlannedWorkout(name: "open", run: 0, walk: 0, reps: 0)
+            old.mainContext.insert(plan)
+            plan.openIntervalShape = PreOptionalShapeSchema.OpenIntervalShape(target: 600, floor: 60)
+            old.mainContext.insert(PreOptionalShapeSchema.PlannedWorkout(name: "4/1 × 5",
+                                                                         run: 240, walk: 60, reps: 5))
+            try old.mainContext.save()
+        }
+
+        let migrated = try container(for: LoggerStore.models)
+        XCTAssertEqual(try ShapeZeroRepair.run(in: migrated.mainContext), 1)
+        XCTAssertEqual(try ShapeZeroRepair.run(in: migrated.mainContext), 0)
+    }
 }

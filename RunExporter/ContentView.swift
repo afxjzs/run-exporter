@@ -55,6 +55,10 @@ struct ContentView: View {
                isPresented: .constant(store.containerError != nil),
                actions: { Button("OK", role: .cancel) {} },
                message: { Text(store.containerError ?? "") })
+        .alert("Old records not updated",
+               isPresented: .constant(store.repairError != nil),
+               actions: { Button("OK", role: .cancel) {} },
+               message: { Text(store.repairError ?? "") })
         .alert("Setup problem",
                isPresented: Binding(get: { seedError != nil },
                                     set: { if !$0 { seedError = nil } }),

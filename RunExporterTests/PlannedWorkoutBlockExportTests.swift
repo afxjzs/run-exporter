@@ -101,13 +101,31 @@ final class PlannedWorkoutBlockExportTests: XCTestCase {
 
         XCTAssertEqual(fields(row)["runIntervalSeconds"], "",
                        "a zero here reads as a measured interval of no time")
-        XCTAssertEqual(fields(row)["walkIntervalSeconds"], "")
+        XCTAssertEqual(fields(row)["walkIntervalSeconds"], "180",
+                       "the walk floor is the walk this plan decides in advance (owner, 2026-10-02)")
         XCTAssertEqual(fields(row)["plannedRepetitions"], "",
                        "the round count is the measurement; it is not knowable in advance")
 
         // The open shape's own columns still carry what is true of this plan.
         XCTAssertEqual(fields(row)["openIntervalTargetSeconds"], "1800")
         XCTAssertEqual(fields(row)["openIntervalWalkFloorSeconds"], "180")
+    }
+
+    /// Measured in a real export: every open-interval plan wrote a `0,0,0` row into
+    /// planned_workout_blocks.csv — a segment that runs for no time, which is what a damaged plan
+    /// looks like. An open plan has no segments until it is run, so it writes none.
+    func testAnOpenIntervalPlanWritesNoSegmentRows() throws {
+        let context = try XCTUnwrap(store.context)
+        let plan = PlannedWorkout(name: "Open 30 min", runIntervalSeconds: nil,
+                                  walkIntervalSeconds: nil, plannedRepetitions: nil)
+        plan.openIntervalShape = OpenIntervalShape(targetRunSeconds: 1_800, walkFloorSeconds: 180)
+        context.insert(plan)
+        XCTAssertNil(store.save())
+
+        let data = LoggerExportSnapshot.make(store: store)
+        XCTAssertEqual(data.plannedWorkouts.count, 1)
+        XCTAssertTrue(data.plannedWorkoutBlocks.isEmpty,
+                      "got \(data.plannedWorkoutBlocks.map(\.values))")
     }
 
     /// An ordinary plan is unchanged — those columns describe it perfectly well.
@@ -185,7 +203,7 @@ final class PlannedWorkoutBlockExportTests: XCTestCase {
     }
 
     @discardableResult
-    private func insertExecution(run: Int, walk: Int, reps: Int,
+    private func insertExecution(run: Int?, walk: Int?, reps: Int?,
                                  blockShape: String?) throws -> PendingWorkoutExecution {
         let context = try XCTUnwrap(store.context)
         let execution = PendingWorkoutExecution(plannedWorkoutID: UUID(),
@@ -203,7 +221,8 @@ final class PlannedWorkoutBlockExportTests: XCTestCase {
 
     /// A run of several segments reports its shape, and blanks the two columns that cannot hold it.
     func testAMultiBlockExecutionReportsItsShapeAndBlanksWhatCannotDescribeIt() throws {
-        try insertExecution(run: 0, walk: 0, reps: 4,
+        // Not set, as `ActiveWorkoutModel` now records it and `ShapeZeroRepair` leaves older ones.
+        try insertExecution(run: nil, walk: nil, reps: 4,
                             blockShape: "300/60x1|480/60x2|300/60x1")
 
         let data = LoggerExportSnapshot.make(store: store)

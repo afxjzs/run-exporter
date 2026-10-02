@@ -17,9 +17,17 @@ final class PlannedWorkout {
     var warmupMode: String
     var warmupSeconds: Int?
 
-    var runIntervalSeconds: Int
-    var walkIntervalSeconds: Int
-    var plannedRepetitions: Int
+    /// This plan's one shape, when it has one: set for a plain `4/1 × 5`, **not set** for a plan
+    /// described by its `blocks` or its `openIntervalShape`. Read through `resolvedBlocks` or
+    /// `shape`, never directly.
+    ///
+    /// These held `0/0/0` for a plan described elsewhere until the zeros were found to leak into
+    /// every summary a plan produced — nine readers, an `0/0×0` in each — and became "not set".
+    /// `ShapeZeroRepair` rewrites the zeros an older build stored.
+    var runIntervalSeconds: Int?
+    /// Zero is a real value here: a continuous run walks for no time.
+    var walkIntervalSeconds: Int?
+    var plannedRepetitions: Int?
 
     /// Whether the plan ends with a walk after the final run. Default false: spec §11.1 requires
     /// the last run to hand straight over to cooldown unless the plan explicitly says otherwise.
@@ -60,9 +68,9 @@ final class PlannedWorkout {
          activityType: PlannedActivityType = .running,
          warmupMode: WarmupMode = .none,
          warmupSeconds: Int? = nil,
-         runIntervalSeconds: Int,
-         walkIntervalSeconds: Int,
-         plannedRepetitions: Int,
+         runIntervalSeconds: Int?,
+         walkIntervalSeconds: Int?,
+         plannedRepetitions: Int?,
          includesFinalWalk: Bool = false,
          cooldownMode: CooldownMode = .open,
          cooldownSeconds: Int? = nil,
@@ -143,31 +151,46 @@ final class PlannedWorkout {
     // a plan had exactly one shape — and would have quietly reported the wrong main set the moment
     // blocks arrived, in a number the plan is judged against.
 
+    // Each answers from `shape`, and is nil where the plan does not decide the number in advance —
+    // an open-interval plan's walks and rounds — or where nothing describes the plan at all. They
+    // used to sum a block synthesized from zeroed fields and answer 0, a plausible number in every
+    // column and screen they reached.
+
+    /// The main set's intervals when the plan fixes them in advance; nil otherwise.
+    private var fixedIntervals: [(isRun: Bool, seconds: Int, repetition: Int)]? {
+        switch shape {
+        case .intervals: return expandedIntervals
+        case .openIntervals, .damaged: return nil
+        }
+    }
+
     /// Total planned running time, in seconds.
     ///
     /// For an open-interval plan this is the target: the one duration such a plan does decide in
-    /// advance. Summing its (empty) intervals would report no running planned for a workout whose
-    /// entire definition is how much running it ends at.
-    var totalRunSeconds: Int {
+    /// advance.
+    var totalRunSeconds: Int? {
         switch shape {
         case .openIntervals(let target, _):
             return target
         case .intervals, .damaged:
-            return expandedIntervals.reduce(0) { $0 + ($1.isRun ? $1.seconds : 0) }
+            return fixedIntervals?.reduce(0) { $0 + ($1.isRun ? $1.seconds : 0) }
         }
     }
 
     /// Number of walk intervals in the plan. The walk after the final run only exists when the
     /// plan explicitly asks for it (spec §11.1).
-    var walkIntervalCount: Int { expandedIntervals.count { !$0.isRun } }
+    var walkIntervalCount: Int? { fixedIntervals?.count { !$0.isRun } }
 
     /// Total planned walking time inside the main set, in seconds.
-    var totalWalkSeconds: Int {
-        expandedIntervals.reduce(0) { $0 + ($1.isRun ? 0 : $1.seconds) }
+    var totalWalkSeconds: Int? {
+        fixedIntervals?.reduce(0) { $0 + ($1.isRun ? 0 : $1.seconds) }
     }
 
     /// Total repetitions across every block. Equals `plannedRepetitions` for a single-shape plan.
-    var totalRepetitions: Int { Self.totalRepetitions(blocks: resolvedBlocks) }
+    var totalRepetitions: Int? {
+        guard case .intervals(let blocks) = shape else { return nil }
+        return Self.totalRepetitions(blocks: blocks)
+    }
 
     /// Rounds for a shape that has not been saved yet — the editor counts them while building.
     static func totalRepetitions(blocks: [Block]) -> Int {
@@ -199,12 +222,18 @@ final class PlannedWorkout {
 
     /// Main set only — warmup, countdown and cooldown are excluded by design so a long cooldown
     /// never inflates the number the plan is judged against.
-    var mainSetSeconds: Int { totalRunSeconds + totalWalkSeconds }
+    /// Nil when the walks are not decided in advance — an open-interval plan — so the target alone
+    /// is never passed off as the main set.
+    var mainSetSeconds: Int? {
+        guard let run = totalRunSeconds, let walk = totalWalkSeconds else { return nil }
+        return run + walk
+    }
 
     /// Everything with a known duration: warmup (when timed) + main set + cooldown (when timed).
     /// An open warmup or cooldown contributes nothing because its length is not knowable up front.
-    var expectedTotalSeconds: Int {
-        var total = mainSetSeconds
+    /// Nil when the main set is not known — the matcher then scores on start time alone.
+    var expectedTotalSeconds: Int? {
+        guard var total = mainSetSeconds else { return nil }
         if warmupModeValue == .timed { total += warmupSeconds ?? 0 }
         if cooldownModeValue == .timed { total += cooldownSeconds ?? 0 }
         return total
@@ -242,14 +271,13 @@ final class PlannedWorkout {
     ///
     /// No plan can be saved in this state: `WorkoutPhaseSchedule.build` refuses a run interval of
     /// zero, and the editor refuses to save what the schedule would refuse to run. It appears for
-    /// one reason — the plan's `PlannedWorkoutBlock` rows are gone from the store while the flat
-    /// fields, zeroed on the assumption those rows would always be there, are all that is left.
+    /// one reason — the plan's `PlannedWorkoutBlock` rows are gone from the store, and the flat
+    /// fields, not set because those rows described the plan, are all that is left. Nothing
+    /// describes the plan any more, so `resolvedBlocks` is empty.
     ///
     /// **That happens silently.** Installing an app build whose schema has no `PlannedWorkoutBlock`
-    /// over a store that contains such rows does not fail: SwiftData drops the table, the plan
-    /// reads 0/0×0, and `hasMultipleBlocks` becomes false — so without this check the plan would
-    /// render as "0 continuous" and export a `runIntervalSeconds` of 0 as though it were measured.
-    /// A workout that runs for no time is not a plausible reading of anything, so it is reported.
+    /// over a store that contains such rows does not fail: SwiftData drops the table and the plan
+    /// is left with nothing. Without this check it would render and export as a workout of nothing.
     ///
     /// Answered from `shape`, not from the blocks directly. An open-interval plan has no run
     /// interval and no repetitions **by design**, so it satisfies the raw predicate below exactly —
@@ -261,10 +289,10 @@ final class PlannedWorkout {
         return false
     }
 
-    /// The raw test: every segment this plan describes runs for no time, or no rounds.
+    /// The raw test: no segment, or every segment runs for no time or no rounds.
     ///
     /// Only `shape` may read this, and only after it has ruled out the kinds of plan for which
-    /// zeroed interval fields are correct rather than destroyed.
+    /// flat interval fields that describe nothing are correct rather than destroyed.
     private var blocksDescribeNoWorkout: Bool {
         resolvedBlocks.allSatisfy { $0.runSeconds <= 0 || $0.repetitions <= 0 }
     }
@@ -410,15 +438,14 @@ final class PlannedWorkout {
 
     /// A new open-interval plan, before its editor writes the shape and the rest.
     ///
-    /// The three interval fields stay at zero: this plan has no intervals, and zero is already this
-    /// app's way of saying "the shape is not described here". Nothing may read them without going
-    /// through `shape` first. The countdown is the Settings one, as for every new plan (BACKLOG
+    /// The three interval fields are not set: this plan has no fixed intervals — its legs are
+    /// decided during the run. The countdown is the Settings one, as for every new plan (BACKLOG
     /// Decision 12): it is what gives the Watch time to connect before the first phase.
     static func newOpenIntervalPlan(name: String, defaults: LoggerDefaults) -> PlannedWorkout {
         PlannedWorkout(name: name,
-                       runIntervalSeconds: 0,
-                       walkIntervalSeconds: 0,
-                       plannedRepetitions: 0,
+                       runIntervalSeconds: nil,
+                       walkIntervalSeconds: nil,
+                       plannedRepetitions: nil,
                        countdownSeconds: defaults.countdownSeconds)
     }
 

@@ -26,6 +26,11 @@ APP="$DERIVED/Build/Products/Release-iphoneos/RunExporter.app"
 # table without erroring, and the plan is left reading 0/0x0 with no way back. The only record of the
 # lost shape is planned_workout_blocks.csv in the last export. See LEARNINGS.md.
 echo "==> Note: installing a pre-3069029 build over this one destroys multi-block plans (LEARNINGS.md)"
+# The same door, a second time: builds from before ShapeZeroRepair.swift existed store plan shape
+# fields as plain integers, and this store now holds "not set" in them. What such a build does with
+# that is UNTESTED (deliberately: going back is not part of how this app is installed). Expect the
+# logger store to refuse to open. Check `git log -- RunExporter/Models/Logger/ShapeZeroRepair.swift`.
+echo "==> Note: a build from before ShapeZeroRepair.swift may refuse to open this store (untested)"
 
 # Every build gets its own build number, so the phone (Settings → Version) and the watch app (bottom
 # of its first screen) each say which build they are running. Matching numbers mean matching builds.

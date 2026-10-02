@@ -239,6 +239,37 @@ final class PlannedWorkoutShapeTests: XCTestCase {
                        "the original keeps its shape")
     }
 
+    // MARK: - Nothing invented
+
+    /// `resolvedBlocks` used to synthesize a block from the flat fields whenever a plan stored
+    /// none — `0/0×0` for an open-interval or damaged plan. Nine readers turned that block into
+    /// exported and displayed zeros. A plan the flat fields do not describe has no blocks.
+    func testAPlanTheFlatFieldsDoNotDescribeHasNoBlocks() {
+        let notSet = PlannedWorkout(name: "lost", runIntervalSeconds: nil,
+                                    walkIntervalSeconds: nil, plannedRepetitions: nil)
+        XCTAssertEqual(notSet.resolvedBlocks, [])
+        XCTAssertEqual(notSet.shape, .damaged, "nothing describes it: the data-loss alarm")
+
+        // A store not yet repaired still holds zeros; they describe nothing either.
+        XCTAssertEqual(plan(run: 0, walk: 0, reps: 0).resolvedBlocks, [])
+    }
+
+    /// What an open-interval plan decides in advance is its running target and its walk floor.
+    /// How long its walks add up to, its main set, its total and its rounds are not known until
+    /// it is run, and a number for any of them would be invented.
+    func testAnOpenPlanAnswersOnlyWhatItDecidesInAdvance() {
+        let workout = PlannedWorkout(name: "Run to 30 min", runIntervalSeconds: nil,
+                                     walkIntervalSeconds: nil, plannedRepetitions: nil)
+        workout.openIntervalShape = OpenIntervalShape(targetRunSeconds: 1800, walkFloorSeconds: 180)
+
+        XCTAssertEqual(workout.totalRunSeconds, 1800)
+        XCTAssertNil(workout.totalWalkSeconds)
+        XCTAssertNil(workout.mainSetSeconds)
+        XCTAssertNil(workout.expectedTotalSeconds)
+        XCTAssertNil(workout.totalRepetitions)
+        XCTAssertNil(workout.walkIntervalCount)
+    }
+
     // MARK: - shape
 
     /// A open-interval plan has no run interval and no known leg count — which is precisely the

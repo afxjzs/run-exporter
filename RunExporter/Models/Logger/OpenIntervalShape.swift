@@ -21,8 +21,8 @@ import SwiftData
 /// case per kind and makes a missed one a compile error.
 ///
 /// The fields an open-interval plan does not use — `runIntervalSeconds`, `walkIntervalSeconds`,
-/// `plannedRepetitions` — are left at zero, which already means "this plan's shape is not described
-/// here" for a plan carrying blocks. Nothing may read them without going through `shape` first.
+/// `plannedRepetitions` — are not set, as for a plan carrying blocks. (They were zero until those
+/// zeros were found in every summary an open plan produced; `ShapeZeroRepair` clears old ones.)
 @Model
 final class OpenIntervalShape {
 

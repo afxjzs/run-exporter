@@ -695,25 +695,27 @@ struct ExportBuilder {
         signals, shoe, notes.
         recovery_logs.csv   optional next-day recovery ratings.
         shoes.csv           shoe profiles with derived mileage.
-        planned_workouts.csv the interval plans defined in the app. A plan with \
-        openIntervalTargetSeconds set is an OPEN INTERVAL plan: its running legs end when the \
-        runner ends them, not on a clock, so it has no interval lengths and no round count and \
-        those columns are BLANK. openIntervalWalkFloorSeconds is the shortest recovery walk it \
-        allows. Such a plan's totalRunSeconds is its target, which is the one duration it fixes in \
-        advance; the readings taken at the end of each leg are in workout_intervals.csv. \
+        planned_workouts.csv the interval plans defined in the app — what each plan decides IN \
+        ADVANCE, and nothing else. A plan with openIntervalTargetSeconds set is an OPEN INTERVAL \
+        plan: its running legs end when the runner ends them, not on a clock. What it decides in \
+        advance is its target, as totalRunSeconds, and its walk floor — the shortest recovery walk \
+        it allows — as walkIntervalSeconds and openIntervalWalkFloorSeconds. Its run length, \
+        plannedRepetitions, totalWalkSeconds and mainSetSeconds are BLANK, because they are \
+        decided during the run; what each run actually did is in the actual* columns of \
+        pending_workout_executions.csv and workouts.csv, and leg by leg in workout_intervals.csv. \
         workoutKitIdentifier is set only on plans that were queued for Apple Watch through \
         WorkoutKit. The app no longer does that, so it is no longer written: BLANK means either \
         never queued or created after that route was removed, not proof of either.
         planned_workout_blocks.csv the shape of every plan, one row per segment, in the order the \
         plan runs them. A plan can run segments of differing length — 5/1 x 1, then 8/1 x 2, then \
-        5/1 x 1 — which one run length and one repetition count cannot describe. EVERY plan appears \
-        here, including an ordinary 4/1 x 5, which is a plan of one segment; that way this file is \
-        always the complete answer to what shape a plan is. Join on plannedWorkoutID, order by \
-        orderIndex. NOTE: when a plan has more than one segment, runIntervalSeconds, \
-        walkIntervalSeconds and plannedRepetitions in planned_workouts.csv are BLANK, because there \
-        is no single honest value for them — read this file instead. Blank there does not mean \
-        zero. The totalRunSeconds, totalWalkSeconds and mainSetSeconds columns stay populated for \
-        every plan, because they sum all of its segments.
+        5/1 x 1 — which one run length and one repetition count cannot describe. Every plan with \
+        FIXED segments appears here, including an ordinary 4/1 x 5, which is a plan of one \
+        segment. An OPEN INTERVAL plan has no segments until it is run, so it has NO rows here — \
+        see planned_workouts.csv above. Join on plannedWorkoutID, order by position. NOTE: when a \
+        plan has more than one segment, runIntervalSeconds, walkIntervalSeconds and \
+        plannedRepetitions in planned_workouts.csv are BLANK, because there is no single honest \
+        value for them — read this file instead. Blank there does not mean zero. For such a plan \
+        totalRunSeconds, totalWalkSeconds and mainSetSeconds sum all of its segments.
         workout_intervals.csv actual run/walk/cooldown boundaries recorded by the app's timer. \
         Seven further columns describe a leg of an OPEN INTERVAL workout — one whose running \
         legs end when the runner ends them rather than on a clock — and are BLANK on every other \
@@ -730,15 +732,17 @@ struct ExportBuilder {
         the walk — the walk runs on to its floor and beyond, and the gap between this timestamp \
         and the walk's startDate is the recovery time the protocol exists to measure.
         pending_workout_executions.csv each attempt to perform a plan, and which HealthKit \
-        workout it matched. blockShape records the shape that was actually run, as \
-        300/60x1|480/60x2|300/60x1 — run seconds, walk seconds and repetitions per segment, \
+        workout it matched. blockShape records the plan's shape as it stood when the run began, \
+        as 300/60x1|480/60x2|300/60x1 — run seconds, walk seconds and repetitions per segment, \
         segments separated by |, or as open:1800/180 for an OPEN INTERVAL run — target seconds \
-        then walk floor — which has no segments at all. When it names more than one segment, \
-        runIntervalSeconds and \
+        then walk floor. What was actually run is in the actual* columns (see PLANNED vs ACTUAL \
+        below). When blockShape names more than one segment, runIntervalSeconds and \
         walkIntervalSeconds are BLANK, because no single value is true of that run; blank does not \
-        mean zero. plannedRepetitions stays populated either way, since rounds are well defined \
-        however many segments there were. An EMPTY blockShape means the session was recorded \
-        before that column existed, and its own interval columns are the truth about it.
+        mean zero. plannedRepetitions is well defined however many segments there were. For an \
+        OPEN INTERVAL run, runIntervalSeconds, walkIntervalSeconds, plannedRepetitions and \
+        expectedDurationSeconds are all BLANK: none was decided in advance. An EMPTY blockShape \
+        means the session was recorded before that column existed, and its own interval columns \
+        are the truth about it.
         body_signal_details.csv optional extra context on a body signal (timing, character, note).
         workout_notes.csv   free-text notes typed DURING a workout, one row each, with the phase \
         and repetition they were written in. Distinct from the notes column in run_logs.csv, which \

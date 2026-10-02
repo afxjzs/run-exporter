@@ -105,22 +105,19 @@ enum LoggerExportSnapshot {
         check(plan.activityTypeValue, raw: plan.activityType,
               label: "activity type", subject: "planned workout \(plan.id)", issues: &issues)
 
-        // A plan of several shapes has no single run length, walk length or repetition count, so
-        // those three columns are left blank rather than filled with the first block's numbers as
-        // though they applied to the whole run. `planned_workout_blocks.csv` carries the shape.
-        // The totals below stay populated: they sum every block and are true of any plan.
-        // A damaged plan (its block rows dropped, flat fields left at zero) is blanked for the same
-        // reason a multi-segment one is: exporting a run interval of 0 would put a number that
-        // cannot be true into a column an analyst reads as measured.
-        //
-        // Asked of `singleShape`, which answers from `plan.shape`, rather than by combining two
-        // block-derived flags. The old test — `!hasMultipleBlocks && !hasDamagedShape` — was true
-        // for an open-interval plan: it carries no blocks, so one is synthesized from its zeroed
-        // flat fields, and it is not damaged because those zeroes are correct for its kind. Every
-        // open plan therefore exported 0 / 0 / 0 here, which is exactly the "number that cannot be
-        // true" the paragraph above exists to prevent. `OpenIntervalShape` says those fields may
-        // not be read without going through `shape`; this is how.
-        let describableByOneShape = plan.singleShape != nil
+        // What the plan decided in advance, per kind. A plan of several segments has no single run
+        // length, walk length or rounds — `planned_workout_blocks.csv` carries its segments. An
+        // open-interval plan decides its walk (the floor, the shortest walk it allows) and nothing
+        // else here; its legs and rounds are decided during the run and reported per run. A
+        // damaged plan has nothing. Blank in each of those places, never a zero standing in for it.
+        let decided: (run: Int?, walk: Int?, rounds: Int?)
+        switch plan.shape {
+        case .openIntervals(_, let walkFloor):
+            decided = (nil, walkFloor, nil)
+        case .intervals, .damaged:
+            decided = plan.singleShape.map { ($0.runSeconds, $0.walkSeconds, $0.repetitions) }
+                ?? (nil, nil, nil)
+        }
 
         return PlannedWorkoutExportRow(
             plannedWorkoutID: plan.id.uuidString,
@@ -128,9 +125,9 @@ enum LoggerExportSnapshot {
             activityType: plan.activityType,
             warmupMode: plan.warmupMode,
             warmupSeconds: plan.warmupSeconds,
-            runIntervalSeconds: describableByOneShape ? plan.runIntervalSeconds : nil,
-            walkIntervalSeconds: describableByOneShape ? plan.walkIntervalSeconds : nil,
-            plannedRepetitions: describableByOneShape ? plan.plannedRepetitions : nil,
+            runIntervalSeconds: decided.run,
+            walkIntervalSeconds: decided.walk,
+            plannedRepetitions: decided.rounds,
             includesFinalWalk: plan.includesFinalWalk,
             cooldownMode: plan.cooldownMode,
             cooldownSeconds: plan.cooldownSeconds,
@@ -319,11 +316,10 @@ enum LoggerExportSnapshot {
             plannedWorkoutName: execution.plannedWorkoutName,
             expectedActivityType: execution.expectedActivityType,
             expectedDurationSeconds: execution.expectedDurationSeconds,
-            // A run of several segments records no single interval shape, so these are blanked
-            // rather than exporting the zeros that stand in for "not applicable". Rounds are well
-            // defined for any run and stay populated.
-            runIntervalSeconds: execution.hasMultipleBlocks ? nil : execution.runIntervalSeconds,
-            walkIntervalSeconds: execution.hasMultipleBlocks ? nil : execution.walkIntervalSeconds,
+            // Not set wherever the run had no single shape or fixed rounds — stored that way, or
+            // cleared by `ShapeZeroRepair` — so nothing here needs to know which kinds to blank.
+            runIntervalSeconds: execution.runIntervalSeconds,
+            walkIntervalSeconds: execution.walkIntervalSeconds,
             plannedRepetitions: execution.plannedRepetitions,
             completedRepetitions: execution.completedRepetitions,
             blockShape: execution.blockShape,

@@ -634,6 +634,43 @@ made almost entirely of that. The compiler cannot help, because nothing is ill-t
 grep every existing derivation of the thing the case changes, and convert the ones with a live
 reader. `git grep` on the property name found all five of these in about a minute.
 
+### The readers kept coming because the zeros were stored (2026-10-02)
+
+Converting readers one by one never ended: four more said something false about open plans after
+the five above, including `duplicate()`, the matcher's duration score, and a `0,0,0` row written into
+`planned_workout_blocks.csv` for every open plan in a real export. They had one source. A plan
+described by blocks or an open shape **stored** `0/0/0` in its flat fields to mean "described
+elsewhere", and `resolvedBlocks` turned those zeros back into a `0/0×0` block for anyone who asked.
+Every derivation of a total, a count or a shape started from a block that did not exist.
+
+**What fixed it was the type, not another reader.** The flat fields, an execution's copies and its
+expected duration became `Int?`, `resolvedBlocks` returns no block when nothing describes the plan,
+and the derived totals answer nil where the plan does not decide them in advance.
+`ShapeZeroRepair` clears the zeros older builds stored, at launch. Changing the type made the
+compiler list every reader that had relied on the sentinel, which a grep cannot do.
+
+Two things the compiler did **not** catch, found by reading:
+
+- `WorkoutPhaseSchedule.build` validated a plan by looping over `resolvedBlocks`. Once a plan with no
+  shape produced no blocks, the loop had nothing to refuse and the schedule would have built a
+  workout with no main set. It now checks the flat fields itself; the existing tests that expect
+  `nonPositiveRunInterval(0)` caught the gap.
+- A now-optional `Int` inside `"\(…)"` prints `Optional(5)` with only a warning, and an incremental
+  build shows warnings only for files it recompiled. Grep the interpolations.
+
+**And a 0 is not always a sentinel.** A continuous run walks for 0 seconds. `ActiveWorkoutModel`
+turned every zero back into "not set" for the post-run form, which also erased that real 0.
+
+### A paused leg's recorded window is not its running time (2026-10-02)
+
+On resume, `IntervalTimerEngine` shifts the interrupted leg's start forward by the pause, so its
+duration stays right — and its recorded window overlaps the pause and misses its own first seconds.
+Measured on a real run: a leg stored as starting a second before the pause that interrupted it ended.
+No existing export was wrong, because every one reads durations. Anything that asks what happened
+**between** two timestamps — the aerobic analysis slicing heart rate — would have counted paused
+heart rate as running and dropped real running. `RecordedRun` recovers each leg's active windows
+exactly: the pause rows written just ahead of a leg are the ones it absorbed.
+
 ## Testing
 
 ### One HealthKit test dominates a full run after cycling the simulator (2026-09-23)

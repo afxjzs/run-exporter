@@ -13,23 +13,22 @@ final class PendingWorkoutExecution {
     var plannedWorkoutID: UUID
     var expectedActivityType: String
     var createdAt: Date
-    var expectedDurationSeconds: Int
+    /// The plan's `expectedTotalSeconds` when the run began. Not set for an open-interval run, whose
+    /// length is not known in advance; the matcher then scores on start time alone.
+    var expectedDurationSeconds: Int?
     var status: String
     var matchedHealthKitWorkoutUUID: UUID?
 
     /// Plan shape at execution time, so a later edit to the plan cannot rewrite history.
     var plannedWorkoutName: String
-    /// Zero when the run had no single interval shape — see `blockShape`.
-    ///
-    /// Zero rather than the first segment's length: `WorkoutPhaseSchedule.build` refuses a plan
-    /// whose run interval is zero, so no valid single-shape run can ever record one. A reader that
-    /// forgets to consult `blockShape` therefore gets an obviously broken value instead of a
-    /// plausible and wrong one.
-    var runIntervalSeconds: Int
-    var walkIntervalSeconds: Int
+    /// Not set when the run had no single interval shape — see `blockShape`. Never the first
+    /// segment's length, which would be plausible and wrong. (Stored as 0 until `ShapeZeroRepair`.)
+    var runIntervalSeconds: Int?
+    var walkIntervalSeconds: Int?
     /// Rounds across the whole run. Well defined however many segments there were — four, for
-    /// `5/1×1 → 8/1×2 → 5/1×1` — so this is populated for every session.
-    var plannedRepetitions: Int
+    /// `5/1×1 → 8/1×2 → 5/1×1` — but not set for an open-interval run, whose rounds are decided
+    /// during it. What was actually run is `completedRepetitions` and the run's legs.
+    var plannedRepetitions: Int?
 
     /// The full shape that was run, as `"300/60x1|480/60x2|300/60x1"`.
     ///
@@ -53,10 +52,10 @@ final class PendingWorkoutExecution {
          plannedWorkoutID: UUID,
          plannedWorkoutName: String,
          expectedActivityType: PlannedActivityType,
-         expectedDurationSeconds: Int,
-         runIntervalSeconds: Int,
-         walkIntervalSeconds: Int,
-         plannedRepetitions: Int,
+         expectedDurationSeconds: Int?,
+         runIntervalSeconds: Int?,
+         walkIntervalSeconds: Int?,
+         plannedRepetitions: Int?,
          status: ExecutionStatus = .prepared,
          createdAt: Date = Date()) {
         self.id = id

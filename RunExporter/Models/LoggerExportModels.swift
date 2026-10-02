@@ -61,9 +61,11 @@ struct PlannedWorkoutExportRow {
     var cooldownMode: String
     var cooldownSeconds: Int?
     var countdownSeconds: Int
-    var totalRunSeconds: Int
-    var totalWalkSeconds: Int
-    var mainSetSeconds: Int
+    /// Blank where the plan does not fix the number in advance — an open-interval plan's walks and
+    /// main set — or nothing describes the plan. Blank never means zero.
+    var totalRunSeconds: Int?
+    var totalWalkSeconds: Int?
+    var mainSetSeconds: Int?
     var isNextWorkout: Bool
     var workoutKitIdentifier: String?
     var createdAt: Date
@@ -97,7 +99,9 @@ struct PlannedWorkoutExportRow {
             plannedRepetitions.map(String.init) ?? "",
             includesFinalWalk ? "true" : "false",
             cooldownMode, cooldownSeconds.map(String.init) ?? "", String(countdownSeconds),
-            String(totalRunSeconds), String(totalWalkSeconds), String(mainSetSeconds),
+            totalRunSeconds.map(String.init) ?? "",
+            totalWalkSeconds.map(String.init) ?? "",
+            mainSetSeconds.map(String.init) ?? "",
             isNextWorkout ? "true" : "false", workoutKitIdentifier ?? "",
             Fmt.isoString(createdAt), Fmt.isoString(updatedAt),
             openIntervalTargetSeconds.map(String.init) ?? "",
@@ -307,13 +311,15 @@ struct ExecutionExportRow {
     var plannedWorkoutID: String
     var plannedWorkoutName: String
     var expectedActivityType: String
-    var expectedDurationSeconds: Int
-    /// Blank when this run had segments of differing shape — `blockShape` describes it instead.
-    /// Blank never means zero.
+    /// Blank for an open-interval run, whose length is not known in advance.
+    var expectedDurationSeconds: Int?
+    /// Blank when this run had segments of differing shape, or was open-interval — `blockShape`
+    /// describes it instead. Blank never means zero.
     var runIntervalSeconds: Int?
     var walkIntervalSeconds: Int?
-    /// Populated for every run: rounds are well defined however many segments there were.
-    var plannedRepetitions: Int
+    /// Rounds are well defined however many segments there were; blank for an open-interval run,
+    /// whose rounds were decided during it (see actualRunLegCount).
+    var plannedRepetitions: Int?
     var completedRepetitions: Int?
     /// The shape that was run, as "300/60x1|480/60x2|300/60x1". Blank for a session recorded
     /// before this column existed, whose own interval columns are the truth about it.
@@ -348,10 +354,10 @@ struct ExecutionExportRow {
     var values: [String] {
         [
             executionID, plannedWorkoutID, plannedWorkoutName,
-            expectedActivityType, String(expectedDurationSeconds),
+            expectedActivityType, expectedDurationSeconds.map(String.init) ?? "",
             runIntervalSeconds.map(String.init) ?? "",
             walkIntervalSeconds.map(String.init) ?? "",
-            String(plannedRepetitions), completedRepetitions.map(String.init) ?? "",
+            plannedRepetitions.map(String.init) ?? "", completedRepetitions.map(String.init) ?? "",
             blockShape ?? "",
             status, matchedHealthKitWorkoutUUID ?? "",
             Fmt.isoString(timerStartedAt), Fmt.isoString(timerEndedAt),

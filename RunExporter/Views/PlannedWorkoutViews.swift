@@ -118,9 +118,6 @@ struct PlannedWorkoutListView: View {
                         .background(Color.accentColor.opacity(0.2), in: Capsule())
                 }
             }
-            // An open-interval plan's summary already states its target, and `mainSetSeconds` there
-            // counts only the running — the walks have no planned length. Appending "main set
-            // 30:00" would read as the whole workout and be short by every walk in it.
             Text(planSubtitle(plan))
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -132,14 +129,14 @@ struct PlannedWorkoutListView: View {
     /// Built as its own `String` rather than inline in the view: this project's Release build fails
     /// where Debug passes when interpolation and `+` mix inside a view initialiser, and it is a
     /// Release-only error. See LEARNINGS.md.
+    ///
+    /// The main set appears only when the plan fixes one. An open-interval plan's walks have no
+    /// planned length, and a damaged plan has nothing — `mainSetSeconds` is nil for both, so this
+    /// no longer needs to know which kinds to suppress by hand.
     private func planSubtitle(_ plan: PlannedWorkout) -> String {
-        switch plan.shape {
-        case .openIntervals:
-            return plan.intervalSummary
-        case .intervals, .damaged:
-            let mainSet = PlannedWorkout.clockDuration(plan.mainSetSeconds)
-            return "\(plan.intervalSummary) · main set \(mainSet)"
-        }
+        guard let seconds = plan.mainSetSeconds else { return plan.intervalSummary }
+        let mainSet = PlannedWorkout.clockDuration(seconds)
+        return "\(plan.intervalSummary) · main set \(mainSet)"
     }
 
     private func create(from preset: PlannedWorkoutPreset) {
@@ -468,13 +465,12 @@ struct PlannedWorkoutEditorView: View {
                                 repetitions: block.repetitions)
         }
 
-        // Zeroed rather than left holding the first block's numbers. Nothing reads these for a
-        // plan that carries blocks — every reader goes through `resolvedBlocks` — and if something
-        // ever does, a zero is a value no runnable plan can have, so it fails loudly instead of
-        // quietly running one third of the workout.
-        target.runIntervalSeconds = 0
-        target.walkIntervalSeconds = 0
-        target.plannedRepetitions = 0
+        // Not set, rather than left holding the first block's numbers — the blocks describe this
+        // plan. These were zeros until those zeros were found in every summary a plan produced
+        // (LEARNINGS.md, "The readers kept coming because the zeros were stored").
+        target.runIntervalSeconds = nil
+        target.walkIntervalSeconds = nil
+        target.plannedRepetitions = nil
     }
 
     private func moveBlocks(from source: IndexSet, to destination: Int) {
@@ -553,14 +549,14 @@ struct PlannedWorkoutEditorView: View {
         if let plan {
             target = plan
         } else {
-            // Created with the three interval fields zeroed, because `writeShape` below is the
+            // Created with the three interval fields not set, because `writeShape` below is the
             // only thing that should ever set them. Seeding them from the first segment here made
             // a multi-block plan hold that segment's numbers for a few statements — briefly the
-            // exact "plausible and wrong" state `writeShape` zeroes them to prevent.
+            // exact "plausible and wrong" state `writeShape` clears them to prevent.
             target = PlannedWorkout(name: name,
-                                    runIntervalSeconds: 0,
-                                    walkIntervalSeconds: 0,
-                                    plannedRepetitions: 0)
+                                    runIntervalSeconds: nil,
+                                    walkIntervalSeconds: nil,
+                                    plannedRepetitions: nil)
             context.insert(target)
         }
 

@@ -168,9 +168,8 @@ final class ActiveWorkoutModelTests: XCTestCase {
 
     /// And it must not claim a single interval shape it does not have.
     ///
-    /// Zero rather than the first segment's numbers: a run interval of zero is impossible for a
-    /// plan the timer would agree to run, so a reader that forgets to consult `blockShape` gets an
-    /// obviously broken value instead of a plausible and wrong one.
+    /// Not set rather than the first segment's numbers, which would be plausible and wrong. (It
+    /// was a zero, standing for "not set", until those zeros were found in every summary.)
     func testAMultiBlockSessionClaimsNoSingleIntervalShape() throws {
         let plan = makeBlockPlan()
         let model = ActiveWorkoutModel(store: store, defaults: defaults, audio: audio, watchLink: nil)
@@ -178,8 +177,8 @@ final class ActiveWorkoutModelTests: XCTestCase {
         model.start(plan: plan)
 
         let execution = try XCTUnwrap(executions().first)
-        XCTAssertEqual(execution.runIntervalSeconds, 0)
-        XCTAssertEqual(execution.walkIntervalSeconds, 0)
+        XCTAssertNil(execution.runIntervalSeconds)
+        XCTAssertNil(execution.walkIntervalSeconds)
         XCTAssertTrue(execution.hasMultipleBlocks)
         // Rounds are well defined for any plan — four here, across three segments — so this one
         // stays populated rather than being blanked along with the two that are not.

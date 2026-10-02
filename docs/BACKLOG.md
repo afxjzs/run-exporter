@@ -103,12 +103,16 @@ reasoning lives next to the code; only the parts that are *not* visible from the
      [../LEARNINGS.md](../LEARNINGS.md#run-logging), *"Pressing Lap on the Watch adds nothing to the
      data"*, which has the measurement and the two conditions that would revive the ask.
 
-- **The remaining derived properties still answer from blocks.** `totalWalkSeconds`,
-  `walkIntervalCount`, `expectedTotalSeconds` and `totalRepetitions` return `0` for an open-interval
-  plan, which is honest for the round count — it genuinely is not knowable in advance — and merely
-  unknown for the rest. `singleShape`, `blockShapeDescriptor`, `totalRunSeconds` and
-  `hasDamagedShape` were converted because each had a reader that said something false. The rest
-  have no such reader today. If one appears, convert the property rather than teaching the caller.
+- ~~**The remaining derived properties still answer from blocks.**~~ **Done, and the cause
+  removed.** This entry said four properties "return `0`" for an open plan and had no false
+  reader; both were wrong by the time it was checked — `expectedTotalSeconds` returned the target,
+  and three readers (the matcher's duration score, `planned_workouts.csv`, and
+  `planned_workout_blocks.csv`, which wrote a `0,0,0` row for every open plan in a real export)
+  said something false. The cause was stored zeros standing for "described elsewhere", which
+  `resolvedBlocks` turned into a `0/0×0` block. The shape fields are now optional and a plan's
+  derived totals answer nil where the plan does not decide them in advance; `ShapeZeroRepair`
+  clears the zeros older builds stored. What each run actually ran is reported from its legs
+  (`RecordedRun`, the `actual*` export columns).
 
 ---
 

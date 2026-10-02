@@ -64,11 +64,19 @@ extension PlannedWorkout {
     ///
     /// Falls back to the flat fields when there are no stored blocks, which is what a plan created
     /// before blocks existed looks like, and also what a plain `4/1 × 5` still looks like today.
+    ///
+    /// **Empty when the flat fields describe no workout** — not set, as for an open-interval plan,
+    /// or the zeros an older build stored before `ShapeZeroRepair` ran. This used to synthesize a
+    /// `0/0×0` block from them, and nine readers turned that block into a plausible zero. No
+    /// runnable plan has a run of zero or no rounds: `WorkoutPhaseSchedule.build` refuses both.
     var resolvedBlocks: [Block] {
         guard !blocks.isEmpty else {
-            return [Block(runSeconds: runIntervalSeconds,
-                          walkSeconds: walkIntervalSeconds,
-                          repetitions: plannedRepetitions)]
+            // All three or nothing. A run length with no walk length is not a continuous run — that
+            // is a walk of 0, stored — it is a record that lost a field, and it raises the alarm.
+            guard let run = runIntervalSeconds, run > 0,
+                  let walk = walkIntervalSeconds,
+                  let repetitions = plannedRepetitions, repetitions > 0 else { return [] }
+            return [Block(runSeconds: run, walkSeconds: walk, repetitions: repetitions)]
         }
         return blocks
             .sorted { $0.orderIndex < $1.orderIndex }

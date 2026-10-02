@@ -14,7 +14,8 @@ enum RecentWorkoutMatcher {
         let plannedWorkoutID: UUID
         let plannedWorkoutName: String
         let expectedActivityType: PlannedActivityType
-        let expectedDurationSeconds: Int
+        /// Nil when the run's length was not known in advance — an open-interval run.
+        let expectedDurationSeconds: Int?
         let createdAt: Date
 
         /// When this app's interval timer actually ran, when it ran at all.
@@ -33,7 +34,7 @@ enum RecentWorkoutMatcher {
              plannedWorkoutID: UUID,
              plannedWorkoutName: String,
              expectedActivityType: PlannedActivityType,
-             expectedDurationSeconds: Int,
+             expectedDurationSeconds: Int?,
              createdAt: Date,
              timerStartedAt: Date? = nil,
              timerEndedAt: Date? = nil) {
@@ -285,13 +286,13 @@ enum RecentWorkoutMatcher {
         let startOffset = abs(workout.startDate.timeIntervalSince(execution.createdAt))
         let startScore = startOffset / startScoreReferenceSeconds
 
-        let expected = Double(execution.expectedDurationSeconds)
         let durationScore: Double
-        if expected > 0 {
+        if let seconds = execution.expectedDurationSeconds, seconds > 0 {
+            let expected = Double(seconds)
             durationScore = min(1, abs(workout.duration - expected) / expected)
         } else {
-            // No expected duration to compare against, so it contributes nothing rather than a
-            // fabricated penalty.
+            // No expected duration to compare against — an open-interval run, whose length is
+            // decided during it — so it contributes nothing rather than a fabricated penalty.
             durationScore = 0
         }
 

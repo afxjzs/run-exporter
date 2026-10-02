@@ -204,7 +204,11 @@ final class IntervalTimerEngine {
         guard let first = source.phase(at: 0, accumulatedRunSeconds: 0) else {
             // `totalRepetitions`, not the flat field: for a plan carrying blocks the flat field is
             // not the plan's round count, and this number goes into the message the user reads.
-            throw WorkoutPhaseSchedule.ScheduleError.nonPositiveRepetitions(plan.totalRepetitions)
+            // A plan with no rounds to quote has no shape, and says that instead of quoting a 0.
+            guard let rounds = plan.totalRepetitions else {
+                throw WorkoutPhaseSchedule.ScheduleError.missingShape
+            }
+            throw WorkoutPhaseSchedule.ScheduleError.nonPositiveRepetitions(rounds)
         }
 
         self.source = source
