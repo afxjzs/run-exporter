@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		AA0000000000000000000036 /* PaceTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000035 /* PaceTracker.swift */; };
 		AA0000000000000000000037 /* PaceTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000035 /* PaceTracker.swift */; };
+		AA00000000000000000000F1 /* WatchHealthAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000000F0 /* WatchHealthAccess.swift */; };
+		AA00000000000000000000F2 /* WatchHealthAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000000F0 /* WatchHealthAccess.swift */; };
 		AA0000000000000000000033 /* PhaseClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000032 /* PhaseClock.swift */; };
 		AA0000000000000000000034 /* PhaseClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000032 /* PhaseClock.swift */; };
 		AA000000000000000000002F /* WatchLinkMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000002E /* WatchLinkMessage.swift */; };
@@ -84,6 +86,7 @@
 		AA000000000000000000001E /* RunWorkoutActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunWorkoutActivityAttributes.swift; sourceTree = "<group>"; };
 		AA000000000000000000002E /* WatchLinkMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLinkMessage.swift; sourceTree = "<group>"; };
 		AA0000000000000000000035 /* PaceTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaceTracker.swift; sourceTree = "<group>"; };
+		AA00000000000000000000F0 /* WatchHealthAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchHealthAccess.swift; sourceTree = "<group>"; };
 		AA0000000000000000000032 /* PhaseClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhaseClock.swift; sourceTree = "<group>"; };
 		AA0000000000000000000031 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Shared.xcconfig; path = Config/Shared.xcconfig; sourceTree = SOURCE_ROOT; };
 		AA000000000000000000001F /* RunWorkoutLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunWorkoutLiveActivity.swift; sourceTree = "<group>"; };
@@ -177,6 +180,7 @@
 				AA000000000000000000002E /* WatchLinkMessage.swift */,
 				AA0000000000000000000032 /* PhaseClock.swift */,
 				AA0000000000000000000035 /* PaceTracker.swift */,
+				AA00000000000000000000F0 /* WatchHealthAccess.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -396,6 +400,7 @@
 				AA000000000000000000002F /* WatchLinkMessage.swift in Sources */,
 				AA0000000000000000000033 /* PhaseClock.swift in Sources */,
 				AA0000000000000000000036 /* PaceTracker.swift in Sources */,
+				AA00000000000000000000F1 /* WatchHealthAccess.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -422,6 +427,7 @@
 				AA0000000000000000000030 /* WatchLinkMessage.swift in Sources */,
 				AA0000000000000000000034 /* PhaseClock.swift in Sources */,
 				AA0000000000000000000037 /* PaceTracker.swift in Sources */,
+				AA00000000000000000000F2 /* WatchHealthAccess.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

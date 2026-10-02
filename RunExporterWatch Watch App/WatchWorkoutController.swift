@@ -2,6 +2,7 @@ import CoreLocation
 import Foundation
 import HealthKit
 import Observation
+import WatchKit
 
 /// Runs the watch's workout session and mirrors it to the iPhone (`docs/WATCHOS_RECORDER_PLAN.md`,
 /// plan of record).
@@ -69,9 +70,11 @@ final class WatchWorkoutController: NSObject {
     private(set) var routeStatus = "off" {
         didSet { WatchEventLog.shared.record("route: \(routeStatus)") }
     }
-    /// How many usable GPS points went to the route builder. Not observed: it is read only inside
-    /// this type, to build the save line. Observed, it redrew the watch on every GPS batch.
-    @ObservationIgnored private(set) var routePoints = 0
+    /// What happened to this run's GPS points: stored, and refused. Not observed: it is read only
+    /// inside this type, to build the save line. Observed, it redrew the watch on every GPS batch.
+    @ObservationIgnored private var routeTally = RouteTally()
+    /// The Health sheet in flight, so a second ask waits on it instead of raising another.
+    @ObservationIgnored private var accessRequest: Task<Void, Never>?
     /// What happened when the workout was saved: its id and the route, or the error.
     private(set) var saveResult: String? {
         didSet { if let saveResult { WatchEventLog.shared.record("save: \(saveResult)") } }
@@ -79,7 +82,7 @@ final class WatchWorkoutController: NSObject {
 
     /// How the session ended, for the run screen. Nil while a session runs.
     enum Outcome: Equatable {
-        case saving, saved, savedWithoutRoute, notSaved, discarded
+        case saving, saved, savedWithoutRoute, savedWithIncompleteRoute, notSaved, discarded
     }
     private(set) var outcome: Outcome?
     /// When the session stopped. The run screen freezes its clock here: after the first real outdoor
@@ -116,20 +119,86 @@ final class WatchWorkoutController: NSObject {
 
     // MARK: - Permissions
 
-    /// Asks for everything a run needs, from the foreground, where a permission sheet can appear.
-    /// A launch from the phone may arrive in the background, where a sheet has nowhere to show.
+    /// Asks for whatever is unanswered, every time the app comes on screen — where a permission
+    /// sheet can appear. A launch from the phone may arrive in the background, where it cannot.
+    ///
+    /// Called on every activation, not once per process: a Watch reinstall resets Health access,
+    /// and a process that first started in the background had already spent its one ask where no
+    /// sheet could show.
     func prepareHealthAccess() async {
         locationManager.delegate = locationBridge
         if locationManager.authorizationStatus == .notDetermined {
             locationManager.requestWhenInUseAuthorization()
         }
-        healthAccess = "asking"
+        guard let access = await readHealthAccess() else { return }
+        if access.shouldAskOnScreen {
+            await askForHealthAccess()
+        } else {
+            healthAccess = Self.describe(access)
+        }
+    }
+
+    /// Both of HealthKit's answers, or nil after reporting why they could not be read.
+    private func readHealthAccess() async -> WatchHealthAccess? {
+        let request: WatchHealthAccess.Request
         do {
-            try await store.requestAuthorization(toShare: Self.shareTypes, read: Self.readTypes)
-            healthAccess = "answered"
+            switch try await store.statusForAuthorizationRequest(toShare: Self.shareTypes, read: Self.readTypes) {
+            case .shouldRequest: request = .unanswered
+            case .unnecessary: request = .answered
+            case .unknown: request = .unknown
+            @unknown default: request = .unknown
+            }
         } catch {
             healthAccess = "failed"
-            lastError = "HealthKit authorization failed: \(error.localizedDescription)"
+            lastError = "Could not check Health access: \(error.localizedDescription)"
+            return nil
+        }
+        let access = WatchHealthAccess(request: request,
+                                       workouts: sharing(HKObjectType.workoutType()),
+                                       routes: sharing(HKSeriesType.workoutRoute()))
+        WatchEventLog.shared.record(access.logLine)
+        return access
+    }
+
+    private func sharing(_ type: HKObjectType) -> WatchHealthAccess.Sharing {
+        switch store.authorizationStatus(for: type) {
+        case .sharingAuthorized: return .authorized
+        case .sharingDenied: return .denied
+        case .notDetermined: return .notDetermined
+        @unknown default: return .notDetermined
+        }
+    }
+
+    /// Shows the Health sheet. One request at a time: the screen and a phone launch can both want
+    /// to ask, and the second waits on the first rather than raising another sheet.
+    private func askForHealthAccess() async {
+        if let accessRequest { return await accessRequest.value }
+        let request = Task { @MainActor in
+            healthAccess = "asking"
+            do {
+                try await store.requestAuthorization(toShare: Self.shareTypes, read: Self.readTypes)
+                if let access = await readHealthAccess() { healthAccess = Self.describe(access) }
+            } catch {
+                healthAccess = "failed"
+                lastError = "HealthKit authorization failed: \(error.localizedDescription)"
+            }
+        }
+        accessRequest = request
+        await request.value
+        accessRequest = nil
+    }
+
+    /// The idle screen's one-word answer. "answered" alone said nothing about a route left off.
+    private static func describe(_ access: WatchHealthAccess) -> String {
+        switch access.request {
+        case .unknown: return "could not be checked"
+        case .unanswered: return "not granted yet"
+        case .answered:
+            switch access.launchDecision(canShowSheet: false) {
+            case .start: return "granted"
+            case .startWithoutRoute: return "granted, but Workout Routes is off"
+            case .stop, .ask: return "Workouts is off"
+            }
         }
     }
 
@@ -146,30 +215,40 @@ final class WatchWorkoutController: NSObject {
         saveResult = nil
 
         step = "checking Health access"
-        let status: HKAuthorizationRequestStatus
-        do {
-            status = try await store.statusForAuthorizationRequest(toShare: Self.shareTypes, read: Self.readTypes)
-        } catch {
+        guard var access = await readHealthAccess() else {
             step = "stopped"
-            lastError = "Could not check Health access: \(error.localizedDescription)"
             return
         }
-        WatchEventLog.shared.record("Health access status at launch: \(status.rawValue) (1 = would prompt, 2 = granted)")
-        switch status {
-        case .unnecessary:
-            break
-        case .shouldRequest:
+        var decision = access.launchDecision(canShowSheet: WKApplication.shared().applicationState == .active)
+        if decision == .ask {
+            // The screen is on, so the sheet can appear here rather than stopping the launch. The
+            // phone accepts the session even after its 15 s timeout (`WatchLink.attach`), so taking
+            // longer than that to tap Allow does not lose the run.
+            step = "asking for Health access"
+            await askForHealthAccess()
+            guard let answered = await readHealthAccess() else {
+                step = "stopped"
+                return
+            }
+            access = answered
+            // Never ask twice: a dismissed sheet stops the launch.
+            decision = access.launchDecision(canShowSheet: false)
+        }
+        let recordRoute: Bool
+        switch decision {
+        case .start:
+            recordRoute = true
+        case .startWithoutRoute(let reason):
+            recordRoute = false
+            routeStatus = "no GPS route: \(reason)"
+        case .stop(let reason):
             step = "stopped"
-            lastError = "Health access not granted yet. Open RunExporterWatch, allow Health access, "
-                + "then start again from the phone."
+            lastError = reason
             return
-        case .unknown:
+        case .ask:
+            // Unreachable: the second decision cannot show a sheet. Stopped and said, not assumed.
             step = "stopped"
-            lastError = "HealthKit could not say whether access has been granted."
-            return
-        @unknown default:
-            step = "stopped"
-            lastError = "HealthKit returned an unknown authorization status (\(status.rawValue))."
+            lastError = "Health access is still unanswered after asking. Open RunExporterWatch and allow it."
             return
         }
 
@@ -200,6 +279,9 @@ final class WatchWorkoutController: NSObject {
             outcome = nil
             endedAt = nil
             pace = PaceTracker(start: now)
+            // Here, not in `startRoute`: a run that records no route still needs a fresh tally, or
+            // it would report the last run's points as its own.
+            routeTally = RouteTally()
         } catch {
             step = "stopped"
             lastError = "Could not start the workout session: \(error.localizedDescription)"
@@ -208,7 +290,7 @@ final class WatchWorkoutController: NSObject {
             return
         }
 
-        startRoute()
+        if recordRoute { startRoute() }
         step = "connecting to iPhone"
         await startMirroring()
     }
@@ -238,7 +320,6 @@ final class WatchWorkoutController: NSObject {
     /// "location" background mode, CLLocationManager.h calls setting it "a fatal error".
     private func startRoute() {
         guard let builder else { return }
-        routePoints = 0
         switch locationManager.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways:
             break
@@ -278,17 +359,23 @@ final class WatchWorkoutController: NSObject {
         Task {
             do {
                 try await routeBuilder.insertRouteData(usable)
-                self.routePoints += usable.count
+                self.routeTally.recordInserted(usable.count)
                 // Set once, when recording starts — not on every batch. `routeStatus` has one
                 // reader, `WatchRunView`, and it draws the string only when it does NOT begin
-                // "recording", so the count in it was never shown to anyone; `routePoints` is what
+                // "recording", so the count in it was never shown to anyone; the tally is what
                 // the save line reports. Assigning here ran this property's `didSet` at roughly
                 // 1 Hz, and that `didSet` writes the whole log array to UserDefaults and queues one
                 // `WCSession.transferUserInfo` per line — on the order of 1,800 of each in a
                 // half-hour run, on a Series 5 that is also recording the workout.
                 if !self.routeStatus.hasPrefix("recording") { self.routeStatus = "recording" }
             } catch {
-                self.lastError = "Could not add GPS points to the route: \(error.localizedDescription)"
+                // The same cost as above, on the failure path: a refusal is usually every batch.
+                // The first is logged and shown; the rest are counted and reported at the save.
+                if let first = self.routeTally.recordRefusal(error.localizedDescription) {
+                    self.lastError = "Could not add GPS points to the route: \(first). "
+                        + "Further refusals are counted, not logged."
+                    self.routeStatus = "GPS points refused by HealthKit: \(first)"
+                }
             }
         }
     }
@@ -427,18 +514,35 @@ final class WatchWorkoutController: NSObject {
                 // builder is attached to a workout builder and will be finished with the workout
                 // builder". What this can honestly report is how many points went in; whether they
                 // reached Health is checked from the phone, which reads routes for its export.
+                //
+                // Every route short of complete is an orange outcome. "No GPS points were collected"
+                // once drew as a clean save while HealthKit had refused every point of the run.
+                let tally = self.routeTally
+                let refused = tally.firstRefusal.map {
+                    ", \(tally.refusedBatches) batch(es) refused by HealthKit (\($0))"
+                } ?? ""
                 let route: String
+                let outcome: Outcome
                 if routeBuilder == nil {
                     route = "no route (\(self.routeStatus))"
-                } else if self.routePoints == 0 {
-                    route = "no GPS points were collected"
+                    outcome = .savedWithoutRoute
                 } else {
-                    route = "\(self.routePoints) GPS points handed to HealthKit with the workout"
+                    switch tally.result {
+                    case .none:
+                        route = "no GPS points stored\(refused)"
+                        outcome = .savedWithoutRoute
+                    case .incomplete:
+                        route = "\(tally.pointsInserted) GPS points stored\(refused): the route has gaps"
+                        outcome = .savedWithIncompleteRoute
+                    case .complete:
+                        route = "\(tally.pointsInserted) GPS points handed to HealthKit with the workout"
+                        outcome = .saved
+                    }
                 }
                 let tag = executionID == nil ? ", untagged (the phone had no execution id)" : ""
                 self.saveResult = "workout \(workout.uuid.uuidString)\(tag), \(route)"
                 self.step = "saved"
-                self.outcome = .saved
+                self.outcome = outcome
             } catch {
                 routeBuilder?.discard()
                 self.saveResult = "FAILED: \(error.localizedDescription)"

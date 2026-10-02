@@ -222,6 +222,33 @@ Read from both logs; specifics in `private/run-notes.md`.
 - **Walks recorded as walks: not tested.** The test plan's Activity was Running; both logs agree
   (the phone's `activity running`, the watch's activity 37, which is `HKWorkoutActivityType.running`).
 
+### The first run on build 202610011549 lost its whole GPS route
+
+Read from the Watch's forwarded log; the date and specifics are in `private/run-notes.md`.
+
+- **A Watch reinstall resets its Health access — settled.** The first phone launch stopped at
+  "would prompt", as it had after each of the three installs before it. This build changed neither
+  the Health types nor the plist wording (both diffed against the previous install), which rules out
+  the wording as the cause left open above. Granting now has its own step in the install procedure
+  ([docs/WATCH_DEVELOPMENT.md](docs/WATCH_DEVELOPMENT.md) §2).
+- **"Sheet answered" is not "granted", and the launch check confused them.** After the grant the
+  check logged `2 (… 2 = granted)` and the run started. HealthKit then refused **every** GPS batch
+  for the whole run with "Not authorized". `statusForAuthorizationRequest` answers only whether a
+  sheet would appear; Apple's header says a request's success "does NOT indicate whether the
+  application was granted authorization". Whether this app may write a type is
+  `authorizationStatus(for:)`, per type. The likely reading — **not verified** — is that Workout
+  Routes was left off on the sheet. A type left off is never asked about again.
+- **The lost route drew as a clean save.** `routePoints == 0` fell into the plain `.saved` outcome
+  with "no GPS points were collected", which was also false: points arrived all run and were
+  refused. Yesterday's orange fix covered only the locked-Watch path.
+- **The logging fix did not shrink the log, because the error path logged per batch too.** One line
+  per refused batch was 95% of everything the Watch logged on the run.
+- **Fixed in the next build:** the check reads both answers and logs all of them
+  (`WatchHealthAccess`); a launch with the screen on shows the sheet instead of stopping; the app
+  asks whenever it comes on screen; route sharing refused starts the run without a route and says
+  so first; workout sharing refused stops; any route short of complete saves orange; a refusal is
+  logged once and counted (`RouteTally`). Unmeasured until a run uses it.
+
 ---
 
 ## Audio cues

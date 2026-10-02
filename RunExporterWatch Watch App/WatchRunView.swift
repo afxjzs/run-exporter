@@ -80,6 +80,7 @@ struct WatchRunView: View {
         case .saving: return "Saving…"
         case .saved: return "Workout saved"
         case .savedWithoutRoute: return "Saved, no route"
+        case .savedWithIncompleteRoute: return "Saved, route has gaps"
         case .notSaved: return "Not saved"
         case .discarded: return "Discarded"
         }
@@ -89,7 +90,7 @@ struct WatchRunView: View {
         switch outcome {
         case .saving, .discarded: return .secondary
         case .saved: return .green
-        case .savedWithoutRoute: return .orange
+        case .savedWithoutRoute, .savedWithIncompleteRoute: return .orange
         case .notSaved: return .red
         }
     }
@@ -154,7 +155,7 @@ struct WatchRunView: View {
     private static func saveStyle(_ outcome: WatchWorkoutController.Outcome?) -> Color {
         switch outcome {
         case .notSaved: return .red
-        case .savedWithoutRoute: return .orange
+        case .savedWithoutRoute, .savedWithIncompleteRoute: return .orange
         case .saved, .saving, .discarded, nil: return .secondary
         }
     }

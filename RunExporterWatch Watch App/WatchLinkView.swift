@@ -8,8 +8,8 @@ import SwiftUI
 /// came. With nothing arrived, the idle screen says where a workout starts. (Until the 2026-09-29
 /// clean-out that slot held the stage 2 background-execution probe, which had passed.)
 ///
-/// The Health request below must stay: a launch from the phone may arrive in the background, where
-/// no permission sheet can appear, so access is granted by opening this app by hand.
+/// The Health requests below must stay: a launch from the phone may arrive in the background, where
+/// no permission sheet can appear, so access is asked for whenever this app is on screen.
 ///
 /// Swipe left for the saved event log. The build number sits at the bottom of the first page, so
 /// every test starts by confirming which build is actually on the Watch.
@@ -40,6 +40,12 @@ struct RootView: View {
         .task { await controller.prepareHealthAccess() }
         .onChange(of: scenePhase) { _, phase in
             WatchEventLog.shared.record("screen: \(Self.name(for: phase))")
+            // Every time the app comes on screen, not once per process. A Watch reinstall resets
+            // Health access, and a process the phone started in the background has already spent
+            // its `.task` ask where no sheet could appear.
+            if phase == .active {
+                Task { await controller.prepareHealthAccess() }
+            }
         }
     }
 

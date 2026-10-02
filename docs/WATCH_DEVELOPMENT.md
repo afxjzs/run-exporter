@@ -68,6 +68,14 @@ The script builds **clean** on purpose, stamps `CFBundleVersion` with a timestam
 2. **Confirm the build by looking.** The watch app shows `build 1.0 (<number>)` at the bottom of its
    first screen; the phone shows `1.3.0 (<number>)` in Settings → Version. Same number, same build.
    Do not test until they match.
+3. **Grant Health access on the Watch before the first run.** Every Watch install resets it —
+   measured on four builds in a row, the last of which changed neither the Health types nor the
+   plist wording. Open RunExporterWatch on the Watch and answer the sheet with **every type turned
+   on**, Workout Routes included. The app asks whenever it comes on screen, and a phone launch with
+   the Watch screen on asks too, but a launch with the screen off can only stop and say so.
+   **A type left off is never asked about again**: HealthKit shows the sheet once per type. Turn it
+   on in the Watch's Settings → Health → Apps → RunExporterWatch. The idle screen's "Health access"
+   line says which: "granted", "granted, but Workout Routes is off", "Workouts is off".
 
 **If the install hangs** (spinner never finishes, or it sticks on "Uninstalling…"): collect the
 phone's log first (§4), *then* restart the Watch and install again with it on the wrist. Seen once,
