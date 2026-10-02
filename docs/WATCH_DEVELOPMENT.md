@@ -68,9 +68,12 @@ The script builds **clean** on purpose, stamps `CFBundleVersion` with a timestam
 2. **Confirm the build by looking.** The watch app shows `build 1.0 (<number>)` at the bottom of its
    first screen; the phone shows `1.3.0 (<number>)` in Settings → Version. Same number, same build.
    Do not test until they match.
-3. **Grant Health access on the Watch before the first run.** Every Watch install resets it —
-   measured on four builds in a row, the last of which changed neither the Health types nor the
-   plist wording. Open RunExporterWatch on the Watch and answer the sheet with **every type turned
+3. **Grant Health access on the Watch before the first run.** Every install so far brought the Health
+   sheet back — five builds in a row, the fourth of which changed neither the Health types nor the
+   plist wording. Each was done by turning "Show App on Apple Watch" off and on, which **removes the
+   app and installs it fresh**; whether an in-place update (step 1's Install/Update) keeps the grant
+   is untested, and worth trying first. The removal did not clear everything: after it, the launch
+   check read workouts allowed and routes denied, with only the sheet itself unanswered. Open RunExporterWatch on the Watch and answer the sheet with **every type turned
    on**, Workout Routes included. The app asks whenever it comes on screen, and a phone launch with
    the Watch screen on asks too, but a launch with the screen off can only stop and say so.
    **A type left off is never asked about again**: HealthKit shows the sheet once per type. Turn it
