@@ -205,6 +205,18 @@ The owner cleared the watch's on-screen log before it was read — the log of th
 ever worked. Nothing warned that it was the only copy. It is no longer the only copy: every line is
 forwarded to the phone as it is recorded.
 
+## 2026-10-02 — committing an explanation while the question that settled it was open
+
+The Watch started a new build two minutes after a phone-only install. The explanation written into
+`docs/INSTALLS.md` and committed was that the Watch had updated itself — labelled "inferred from
+timing", which is right — while the owner had already been asked whether he installed it. He had:
+by turning "Show App on Apple Watch" off and on. A second commit corrected the first.
+
+The label was not the problem; the order was. The simplest explanation — the person did it — was
+never listed beside the clever one, and the commit went in before the answer that decided between
+them. **When a question to the owner would settle it, ask, wait, then write it down.** An inference
+in a commit is cheap to make and costs a correction commit to unmake.
+
 ---
 
 ## Code-level slips
