@@ -7,10 +7,17 @@ on the device — no full Apple Health XML export, no Python, no server, no netw
 It writes a small folder of CSV + JSON files, zips it with a standard portable ZIP, and hands
 it to the iOS share sheet. Temporary files are deleted after you share (or cancel).
 
-**v1.1** adds a run/walk workout planner, WorkoutKit sync to Apple Watch, an iPhone-owned interval
-audio cue engine, and a post-run subjective logger (RPE, personal heat rating, body signals, shoes).
-All of it exports alongside the HealthKit data in the same ZIP. See
-[v1.1: planner, cues and logger](#v11-planner-cues-and-logger) below.
+**v1.1** adds a run/walk workout planner, an iPhone-owned interval audio cue engine, and a post-run
+subjective logger (RPE, personal heat rating, body signals, notes). All of it exports alongside the
+HealthKit data in the same ZIP. See [v1.1: planner, cues and logger](#v11-planner-cues-and-logger)
+below.
+
+Two things this sentence used to claim and no longer does. **WorkoutKit sync to Apple Watch** was
+built and then removed in the 2026-09-29 clean-out; the phone's Start now launches this app's own
+watch workout instead (`docs/WATCHOS_RECORDER_PLAN.md`), and `LEARNINGS.md` records why the
+WorkoutKit route was unreliable on this hardware. **Shoes** are still logged, exported and
+mileage-tracked, but every screen that showed them was hidden on 2026-10-01 — a new log records the
+one pair without asking. See "Hide shoes for now" in [docs/BACKLOG.md](docs/BACKLOG.md).
 
 ## What it produces
 
@@ -193,10 +200,12 @@ with `git config core.hooksPath .githooks` and list your own values in `private/
     build/Build/Products/Release-iphoneos/RunExporter.app/Info.plist
   # must print ["audio","workout-processing"]; the second was added for the watch link
   ```
-- **WorkoutKit** — needs no entitlement. Scheduling asks for permission at runtime through
-  `WorkoutScheduler.requestAuthorization()`, which iOS presents itself.
-- **WorkoutKit syncing does not require HealthKit *write* access** (spec §23). The workout-share
-  request added on 2026-09-25 is for the watch link, not for WorkoutKit.
+- **WorkoutKit — no longer used.** Kept here because it needed no entitlement, so its removal in
+  the 2026-09-29 clean-out took nothing out of the project's permissions: scheduling had asked for
+  permission at runtime through `WorkoutScheduler.requestAuthorization()`, which iOS presented
+  itself. Nothing to restore if it ever comes back.
+- **The workout-share request added on 2026-09-25 is for the watch link**, not for WorkoutKit,
+  which never needed HealthKit *write* access (spec §23). It is the one still in use.
 
 ### Added for the watchOS target (v1.2, in progress)
 
@@ -371,7 +380,7 @@ Workout/LiveActivityController  Live Activity lifecycle and stale dates (the car
 Views/*                  Today, Plans (list + detail + editor), OpenIntervalPlanEditorView,
                          active workout, LegEndSheet (annotates a leg that has already ended),
                          SlideToConfirm (the drag behind Pause and Skip), post-run logger,
-                         history, shoes, settings
+                         history, shoes (present but unreachable since 2026-10-01), settings
 
 — shared / other targets —
 Shared/RunWorkoutActivityAttributes  Live Activity state + whole-workout timeline (app + widget)
@@ -454,7 +463,9 @@ reasoning first.
    session are untouched while the sheet is open.
 5. **Open the app afterwards** — the new workout is detected, matched to the plan, and offered for
    logging.
-6. **Log it** — RPE, personal heat rating, body signals, shoe, notes. About 20 seconds.
+6. **Log it** — RPE, personal heat rating, body signals, notes. About 20 seconds. The shoe is
+   recorded too, but no longer asked for: the picker was hidden on 2026-10-01 and the log takes the
+   most recently used pair by itself.
 
 ### Open-interval runs
 
@@ -488,12 +499,20 @@ How it runs:
 Seven columns on `workout_intervals.csv` carry it: `endReason`, `baselineReachedAt`, and one
 severity per body area, named exactly as `run_logs.csv` names them.
 
-**Not sent to the Watch through WorkoutKit, deliberately.** A watchOS 10 `CustomWorkout` is a fixed
-list of blocks and an open-interval plan is an unknown number of legs, so the send action is replaced
-by a line of text. **Start** on the run screen launches the Watch's workout like any other run, and
-while the Watch is connected each phase is written into that workout as a segment; do not start one on the Watch by hand,
-or two are recorded. The plan screen's line still gives the older advice — see "Clean out the
-leftovers" in `docs/BACKLOG.md`.
+**On the Watch, an open-interval run works like any other.** **Start** launches the Watch's workout,
+and while the Watch is connected each phase is written into that workout as a segment. Do not start
+one on the Watch by hand as well, or two are recorded.
+
+The older arrangement is gone on both sides: the WorkoutKit send route was removed from every plan
+in the 2026-09-29 clean-out, and the line of explanatory text that stood in its place on the plan
+screen — which told the reader to start a workout on the Watch and press Lap — went with it. It had
+become wrong twice over, since Start now launches the Watch itself and
+[LEARNINGS.md](LEARNINGS.md#run-logging) records that pressing Lap adds nothing to the data.
+
+The reason an open plan could never have used WorkoutKit is still worth keeping, because
+[docs/BACKLOG.md](docs/BACKLOG.md) holds an open question about sending one some other way: a
+watchOS 10 `CustomWorkout` is a fixed list of blocks, and an open-interval plan is an unknown number
+of legs.
 
 ### Intervals and the workout they belong to
 
@@ -591,11 +610,15 @@ fails three of its fourteen tests, so the harness demonstrably catches what ship
 
 ### Irreversible actions confirm
 
-Deleting a **plan** asks first, from both the list's swipe action and the detail screen, and the
-message says whether the plan will also be unscheduled from the Watch — which matters because the
-Watch offers no way to delete a synced workout by hand. Deleting a **shoe** asks too, and says that
-the runs logged with it are kept but lose their shoe assignment, so mileage totals will change; it
-also points at **Retired** as the option that keeps the history.
+Deleting a **plan** asks first, from both the list's swipe action and the detail screen. The message
+names the plan and says the deletion cannot be undone, and that is all it says: it used to report
+whether the plan would also be unscheduled from the Watch, which stopped being true when the
+WorkoutKit route went in the 2026-09-29 clean-out. Deleting a plan now just deletes it.
+
+Deleting a **shoe** asks too, and says that the runs logged with it are kept but lose their shoe
+assignment, so mileage totals will change; it also points at **Retired** as the option that keeps
+the history. That screen is still in the app but unreachable since shoes were hidden on
+2026-10-01 — the confirmation is described here because the screen comes back if shoes do.
 
 Neither used to ask. `role: .destructive` only colors a button red — it prompts for nothing — so the
 app was confirming *"End this workout?"*, the most recoverable action it has, while deleting plans and
