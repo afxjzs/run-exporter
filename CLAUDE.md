@@ -27,14 +27,15 @@ carry the engineering lesson; the owner's specifics live in git-ignored local fi
 
 ## The documentation, and which file answers what
 
-Twelve committed files (counted 2026-09-29), plus the git-ignored material `private/README.md` indexes. **This table is the index.** Until 2026-09-25 four of these were
+Thirteen committed files (counted 2026-10-03), plus the git-ignored material `private/README.md` indexes. **This table is the index.** Until 2026-09-25 four of these were
 reachable from nothing that loads automatically — 71% of the words in the repo — including the spec
 that 67 `spec §…` citations across 39 Swift files point at (counted 2026-09-29).
 
 | File | Answers | Read it when |
 |---|---|---|
 | [README.md](README.md) | What the app does, produces, and cannot do; architecture; known limitations | Orienting, or before describing the app to anyone |
-| [RUNNING_APP_V1_1_SPEC.md](RUNNING_APP_V1_1_SPEC.md) | **What `spec §…` means.** The v1.1 requirements, and only those — it does **not** cover open-interval runs, which were built later and specified nowhere | Any time source cites a `§` number |
+| [RUNNING_APP_V1_1_SPEC.md](RUNNING_APP_V1_1_SPEC.md) | **What `spec §…` means.** The v1.1 requirements, and only those — it does **not** cover open-interval runs, which were built later and specified nowhere | Any time source cites a bare `spec §` number |
+| [docs/AEROBIC_TRACKING_SPEC.md](docs/AEROBIC_TRACKING_SPEC.md) | **What `aerobic spec §…` means.** The aerobic training and heart-rate tracking requirements (added 2026-10-03): intensity intent, live HR, post-run analysis, export. Its § numbers are its own — cite them as `aerobic spec §N`, never bare `spec §N`, which already means v1.1 | Before any aerobic, heart-rate or analysis work |
 | [LEARNINGS.md](LEARNINGS.md) | Measured facts, each dated | Before trusting any claim about this hardware |
 | [MISTAKES.md](MISTAKES.md) | How past investigations went wrong | Before diagnosing anything |
 | [docs/BACKLOG.md](docs/BACKLOG.md) | Wanted but not built, and things deliberately **not** to build, with reasoning | Before building anything that sounds new |
@@ -98,11 +99,21 @@ entry to `retiredLabels`; any document that still names it must then say where i
   straight from its blocks and each said something false about an open-interval plan, including the
   flag that guards against silent data loss. Grep every derivation before adding a case.
 
+- **Slicing anything by a run's legs, or touching `RecordedRun`, the `actual*` export columns or
+  `ShapeZeroRepair`** → read two [LEARNINGS.md](LEARNINGS.md#adding-a-kind-to-an-existing-model)
+  entries first: *"A paused leg's recorded window is not its running time"* and *"The readers kept
+  coming because the zeros were stored"*. A paused leg's recorded `startDate`/`endDate` overlap
+  the pause and miss its real first seconds, so anything asking what happened **between** two
+  timestamps — heart rate per leg, for one — must use `RecordedRun.Leg.activeWindows`. Shape
+  fields are `Int?` and never store a sentinel zero; a continuous run's walk of 0 is real.
+
 - **Anything involving the paired Apple Watch — installing, launching, payloads, reachability,
   `devicectl`** → [docs/WATCH_DEVELOPMENT.md](docs/WATCH_DEVELOPMENT.md) for this project's
   procedure, then the global Xcode playbook's §3 (listed in `~/.claude/CLAUDE.md`; its title does not
   suggest it). **The Mac cannot reach this Watch**; everything goes through the phone, and the watch
-  app's event log is readable from `Documents/watch-events.log` on the phone.
+  app's event log is readable from `Documents/watch-events.log` on the phone. **Any install, phone
+  or Watch, can turn the Watch's Workout Routes off** (WATCH_DEVELOPMENT.md §2); the Watch's
+  per-type Health check and launch decision are `WatchHealthAccess`.
 
 - **Before putting a build on the phone, and before quoting a device or OS version** →
   [docs/INSTALLS.md](docs/INSTALLS.md). It logs every install with its commit and branch, and it is
