@@ -237,7 +237,15 @@ Read from the Watch's forwarded log; the date and specifics are in `private/run-
   sheet would appear; Apple's header says a request's success "does NOT indicate whether the
   application was granted authorization". Whether this app may write a type is
   `authorizationStatus(for:)`, per type. The likely reading — **not verified** — is that Workout
-  Routes was left off on the sheet. A type left off is never asked about again.
+  Routes was left off on the sheet.
+- **Later measured: an install turns the Watch's Workout Routes off.** After a phone-only install,
+  the Watch app untouched, the new per-type check read `routes denied` where its last check before
+  the install read `routes authorized`, and the sheet was unanswered again; workout sharing
+  survived. The sheet that came back offered routes again, and allowing it restored them. So any
+  install can silently cost the next run its route unless the Watch's sheet is answered — the check
+  added below now asks at once and says so in orange if routes stay off. Why an install does this is
+  not known. (This entry first said a type left off is never offered again; the sheet after this
+  install offered one.)
 - **The lost route drew as a clean save.** `routePoints == 0` fell into the plain `.saved` outcome
   with "no GPS points were collected", which was also false: points arrived all run and were
   refused. Yesterday's orange fix covered only the locked-Watch path.

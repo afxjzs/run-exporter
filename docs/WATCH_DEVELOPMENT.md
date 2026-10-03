@@ -68,17 +68,20 @@ The script builds **clean** on purpose, stamps `CFBundleVersion` with a timestam
 2. **Confirm the build by looking.** The watch app shows `build 1.0 (<number>)` at the bottom of its
    first screen; the phone shows `1.3.0 (<number>)` in Settings → Version. Same number, same build.
    Do not test until they match.
-3. **Grant Health access on the Watch before the first run.** Every install so far brought the Health
-   sheet back — five builds in a row, the fourth of which changed neither the Health types nor the
-   plist wording. Each was done by turning "Show App on Apple Watch" off and on, which **removes the
-   app and installs it fresh**; whether an in-place update (step 1's Install/Update) keeps the grant
-   is untested, and worth trying first. The removal did not clear everything: after it, the launch
-   check read workouts allowed and routes denied, with only the sheet itself unanswered. Open RunExporterWatch on the Watch and answer the sheet with **every type turned
-   on**, Workout Routes included. The app asks whenever it comes on screen, and a phone launch with
-   the Watch screen on asks too, but a launch with the screen off can only stop and say so.
-   **A type left off is never asked about again**: HealthKit shows the sheet once per type. Turn it
-   on in the Watch's Settings → Health → Apps → RunExporterWatch. The idle screen's "Health access"
-   line says which: "granted", "granted, but Workout Routes is off", "Workouts is off".
+3. **After every install — phone or Watch — open RunExporterWatch and allow Health access, with
+   every type on.** Measured: a **phone-only** install, the Watch app untouched, turned the Watch's
+   Workout Routes sharing from authorized to **denied** and its sheet back to unanswered; workout
+   sharing survived, and an app restart changed nothing. Removing and reinstalling the Watch app
+   (the "Show App on Apple Watch" toggle) did the same. Left like that, every run loses its GPS
+   route — the cause, most likely, of the first route lost. Why an install does this is not known;
+   the Watch app and the iPhone app keep separate Health grants (single-target Watch apps; reported
+   by developers, not documented by Apple), so the iPhone's own Allow does not cover the Watch.
+   The app asks whenever it comes on screen, and a phone launch with the Watch screen on asks too;
+   with the screen off a launch stops and says so, and with routes off it runs without a route and
+   says that, in orange, before the run. The sheet that returned after an install offered Workout
+   Routes again, though it had been denied; if it does not, turn it on in the Watch's Settings →
+   Health → Apps → RunExporterWatch. The idle screen's "Health access" line says which: "granted",
+   "granted, but Workout Routes is off", "Workouts is off".
 
 **If the install hangs** (spinner never finishes, or it sticks on "Uninstalling…"): collect the
 phone's log first (§4), *then* restart the Watch and install again with it on the wrist. Seen once,
