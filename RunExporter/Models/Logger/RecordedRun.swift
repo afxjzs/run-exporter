@@ -92,7 +92,7 @@ struct RecordedRun: Equatable {
     }
 
     /// The main set as run, one round per run leg with the walk after it, whole seconds:
-    /// `"752/181|354/181|209/0"`. A last run with nothing after it walked nothing, so its walk is
+    /// `"600/120|240/120|300/0"`. A last run with nothing after it walked nothing, so its walk is
     /// a measured `0`, not a missing one. Nil when no run or walk was recorded at all.
     ///
     /// The same `run/walk` and `|` as `PlannedWorkout.blockShapeDescriptor`, without the `xN`:

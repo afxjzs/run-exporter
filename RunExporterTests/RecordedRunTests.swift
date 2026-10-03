@@ -87,14 +87,14 @@ final class RecordedRunTests: XCTestCase {
     /// and the walk after it, in whole seconds; a last run with no walk after it walked nothing.
     func testAnOpenRunIsDescribedByTheLegsTheRunnerEnded() throws {
         let run = try RecordedRun(rows: [
-            row(0, "run", rep: 1, 0, 752, endReason: .runnerEnded),
-            row(1, "walk", rep: 1, 752, 933),
-            row(2, "run", rep: 2, 933, 1_142, endReason: .targetReached),
-            row(3, "cooldown", 1_142, 1_500),
+            row(0, "run", rep: 1, 0, 600, endReason: .runnerEnded),
+            row(1, "walk", rep: 1, 600, 720),
+            row(2, "run", rep: 2, 720, 960, endReason: .targetReached),
+            row(3, "cooldown", 960, 1_300),
         ])
 
         XCTAssertEqual(run.runLegCount, 2)
-        XCTAssertEqual(run.shapeDescriptor, "752/181|209/0")
+        XCTAssertEqual(run.shapeDescriptor, "600/120|240/0")
         XCTAssertEqual(run.legs.map(\.endReason), [.runnerEnded, nil, .targetReached, nil])
     }
 

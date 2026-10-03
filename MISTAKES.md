@@ -217,6 +217,20 @@ never listed beside the clever one, and the commit went in before the answer tha
 them. **When a question to the owner would settle it, ask, wait, then write it down.** An inference
 in a commit is cheap to make and costs a correction commit to unmake.
 
+## 2026-10-02 — a real run's legs used as a "realistic" example, and pushed
+
+Writing tests and the README.txt text for `RecordedRun`, the example round string was copied from a
+row of the owner's own export — one open run's real leg durations — because it looked realistic.
+It went into test fixtures, a doc comment, the README.txt shipped in every ZIP, and a commit
+message, and was pushed to this public repository. The guard passed every commit: it blocks only
+values on its list, and these were not. Found a day later by a drift check that asked where the
+example came from. The files now use made-up values; the commit message stays in history (the
+owner chose not to rewrite it), and the values are on the guard's list.
+
+**Examples come from nowhere.** Round, obviously invented numbers like `600/120`, and never a value
+read out of `private/`, an export, or a device log, however convenient. The guard is a
+backstop for known values; it cannot recognize a new one.
+
 ---
 
 ## Code-level slips

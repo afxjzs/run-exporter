@@ -48,8 +48,8 @@ final class RecordedRunExportTests: XCTestCase {
 
     /// An open run: two legs the runner ended, a walk between, then cooldown.
     private func openRunLegs() -> [IntervalLogExportRow] {
-        [leg(0, "run", 0, 752), leg(1, "walk", 752, 933), leg(2, "run", 933, 1_142),
-         leg(3, "cooldown", 1_142, 1_500)]
+        [leg(0, "run", 0, 600), leg(1, "walk", 600, 720), leg(2, "run", 720, 960),
+         leg(3, "cooldown", 960, 1_300)]
     }
 
     func testAnOpenRunsExecutionRowReportsTheLegsItRan() throws {
@@ -59,10 +59,10 @@ final class RecordedRunExportTests: XCTestCase {
         data.index()
 
         let row = try XCTUnwrap(data.executions.first)
-        XCTAssertEqual(row.actualShape, "752/181|209/0")
+        XCTAssertEqual(row.actualShape, "600/120|240/0")
         XCTAssertEqual(row.actualRunLegCount, 2)
-        XCTAssertEqual(try XCTUnwrap(row.actualRunSeconds), 961, accuracy: 0.001)
-        XCTAssertEqual(try XCTUnwrap(row.actualWalkSeconds), 181, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(row.actualRunSeconds), 840, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(row.actualWalkSeconds), 120, accuracy: 0.001)
     }
 
     /// One derivation, read twice. A second calculation for the join is how two files come to
@@ -76,7 +76,7 @@ final class RecordedRunExportTests: XCTestCase {
 
         let join = try XCTUnwrap(data.join(forWorkoutUUID: "w1"))
         let row = try XCTUnwrap(data.executions.first)
-        XCTAssertEqual(join.actualShape, "752/181|209/0", "equal-but-both-blank would pass the rest")
+        XCTAssertEqual(join.actualShape, "600/120|240/0", "equal-but-both-blank would pass the rest")
         XCTAssertEqual(join.actualShape, row.actualShape)
         XCTAssertEqual(join.actualRunLegCount, row.actualRunLegCount)
         XCTAssertEqual(join.actualRunSeconds, row.actualRunSeconds)
