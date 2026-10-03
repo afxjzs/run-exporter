@@ -171,6 +171,7 @@ struct ExportBuilder {
         for index in dataset.workouts.indices {
             if let join = logger.join(forWorkoutUUID: dataset.workouts[index].uuid) {
                 dataset.workouts[index].loggerValues = join.values
+                dataset.workouts[index].actualValues = join.actualValues
             } else {
                 unloggedCount += 1
             }

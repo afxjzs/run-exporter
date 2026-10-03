@@ -486,8 +486,23 @@ struct WorkoutLoggerJoin {
         "runLogID", "executionID",
         "mainSetDurationSeconds", "cooldownDurationSeconds", "pausedDurationSeconds",
         "loggedIntervalCount",
+    ]
+
+    /// What the run actually ran — a group of its own, because workouts.csv places it **after** the
+    /// classification column. Appended to `columns` instead, it pushed `reclassifiedAsRunning` out of
+    /// the position it shipped in. See `ExportSchemaTests.shippedWorkoutColumns`.
+    static let actualColumns = [
         "actualShape", "actualRunLegCount", "actualRunSeconds", "actualWalkSeconds",
     ]
+
+    var actualValues: [String] {
+        [
+            actualShape ?? "", actualRunLegCount.map(String.init) ?? "",
+            Fmt.fixed(actualRunSeconds, places: 3), Fmt.fixed(actualWalkSeconds, places: 3),
+        ]
+    }
+
+    static let blankActualValues: [String] = Array(repeating: "", count: actualColumns.count)
 
     var values: [String] {
         [
@@ -509,8 +524,6 @@ struct WorkoutLoggerJoin {
             Fmt.fixed(cooldownDurationSeconds, places: 3),
             Fmt.fixed(pausedDurationSeconds, places: 3),
             loggedIntervalCount.map(String.init) ?? "",
-            actualShape ?? "", actualRunLegCount.map(String.init) ?? "",
-            Fmt.fixed(actualRunSeconds, places: 3), Fmt.fixed(actualWalkSeconds, places: 3),
         ]
     }
 

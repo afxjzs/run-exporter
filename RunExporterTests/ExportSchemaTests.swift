@@ -26,6 +26,40 @@ final class ExportSchemaTests: XCTestCase {
                        "v1.0 columns must keep their names and leading positions")
     }
 
+    /// The whole `workouts.csv` header as it shipped in build 202610011549's exports, verbatim.
+    ///
+    /// The group-order test below cannot catch a column inserted *inside* a group: it builds its
+    /// expected header from the same groups the code does. That is how four `actual*` columns once
+    /// went in at the end of the run-logger group and pushed `reclassifiedAsRunning` out of last
+    /// place — found by comparing two real exports, with every test green. A shipped header is a
+    /// contract; each later one must start with it.
+    private let shippedWorkoutColumns = [
+        "uuid", "workoutActivityType", "workoutActivityTypeName", "startDate", "endDate", "duration",
+        "totalDistance", "totalDistanceUnit", "totalDistanceMeters", "totalEnergyBurned",
+        "totalEnergyBurnedUnit", "totalEnergyKilocalories", "sourceName", "sourceBundleIdentifier",
+        "sourceVersion", "deviceName", "deviceJSON", "metadataJSON", "workoutEventsJSON",
+        "workoutStatisticsJSON", "weatherTemperatureCelsius", "weatherTemperatureFahrenheit",
+        "weatherHumidityPercent", "weatherConditionCode", "weatherConditionName",
+        "barometricPressureHPA", "workoutTimeZone", "isIndoorWorkout", "weatherMetadataAvailable",
+        "routeAvailable", "routeCount", "routePointCount", "routeCSVFile", "routeGPXFile",
+        "routeStartLatitude", "routeStartLongitude", "routeEndLatitude", "routeEndLongitude",
+        "routeCentroidLatitude", "routeCentroidLongitude", "routeMinAltitudeMeters",
+        "routeMaxAltitudeMeters", "routeElevationGainMeters", "routeElevationLossMeters",
+        "routeDistanceFromLocationsMeters", "routeDurationSeconds", "plannedWorkoutID",
+        "plannedWorkoutName", "runIntervalSeconds", "walkIntervalSeconds", "plannedRepetitions",
+        "completedRepetitions", "effortRPE", "personalHeatRating", "lowerBackSeverity",
+        "leftAnkleSeverity", "rightAnkleSeverity", "leftKneeSeverity", "rightKneeSeverity", "shoeID",
+        "shoeName", "shoeMileageAtWorkoutMiles", "userNotes", "nextDayRecovery", "runLogID",
+        "executionID", "mainSetDurationSeconds", "cooldownDurationSeconds", "pausedDurationSeconds",
+        "loggedIntervalCount", "reclassifiedAsRunning",
+    ]
+
+    func testTheShippedWorkoutsHeaderIsStillItsLeadingColumns() {
+        XCTAssertEqual(Array(WorkoutExportRow.columns.prefix(shippedWorkoutColumns.count)),
+                       shippedWorkoutColumns,
+                       "a column was inserted, removed or moved; new columns go after all of these")
+    }
+
     /// Column groups are only ever appended, never reordered, so existing readers keep working.
     /// Order: v1.0 base, weather, route, run-logger join, classification.
     func testColumnGroupsAreAppendedInOrder() {
@@ -34,6 +68,7 @@ final class ExportSchemaTests: XCTestCase {
             + RouteSummaryRow.workoutColumns
             + WorkoutLoggerJoin.columns
             + WorkoutExportRow.classificationColumns
+            + WorkoutLoggerJoin.actualColumns
 
         XCTAssertEqual(WorkoutExportRow.columns, expected)
     }

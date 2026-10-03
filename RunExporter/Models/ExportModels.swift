@@ -257,11 +257,17 @@ struct WorkoutExportRow {
         "metadataJSON", "workoutEventsJSON", "workoutStatisticsJSON",
     ]
 
+    /// What the run actually ran (`WorkoutLoggerJoin.actualColumns`), blank for an unlogged workout.
+    var actualValues: [String] = WorkoutLoggerJoin.blankActualValues
+
+    /// Groups in the order they were added. A new group goes at the END — after every group that
+    /// has shipped — never inside one, or a column that has shipped moves.
     static let columns = baseColumns
         + WorkoutWeather.columns
         + RouteSummaryRow.workoutColumns
         + WorkoutLoggerJoin.columns
         + classificationColumns
+        + WorkoutLoggerJoin.actualColumns
 
     var baseValues: [String] {
         [uuid, workoutActivityType, workoutActivityTypeName,
@@ -274,7 +280,7 @@ struct WorkoutExportRow {
     }
 
     var values: [String] {
-        baseValues + weatherValues + routeValues + loggerValues + classificationValues
+        baseValues + weatherValues + routeValues + loggerValues + classificationValues + actualValues
     }
 }
 
