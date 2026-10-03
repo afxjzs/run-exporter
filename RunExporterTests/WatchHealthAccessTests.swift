@@ -3,8 +3,8 @@ import XCTest
 
 /// What the Watch does about its Health access at launch, and how it reports the route at save.
 ///
-/// From the first run on the build that hid shoes. A Watch reinstall resets Health access, and the launch stopped until
-/// the app was opened by hand. Then the run lost its whole GPS route: HealthKit refused every batch
+/// From the first run on the build that hid shoes. Any install, phone or Watch, resets the Watch's
+/// Health access, and the launch stopped until the app was opened by hand. Then the run lost its whole GPS route: HealthKit refused every batch
 /// with "Not authorized", the log took one line per refusal, and the Watch drew a clean save
 /// reading "no GPS points were collected". The launch check had read `statusForAuthorizationRequest`
 /// — whether a sheet would appear — and logged it as "granted". Whether this app may write routes

@@ -12,8 +12,8 @@ import SwiftData
 /// A plan with an empty `blocks` relationship is not broken or half-migrated: it is a
 /// single-block plan whose one block is described by the flat `runIntervalSeconds` /
 /// `walkIntervalSeconds` / `plannedRepetitions` fields. `PlannedWorkout.resolvedBlocks` reads
-/// either shape and returns the same value type, so everything downstream — the schedule, the
-/// durations, the WorkoutKit payload — has exactly one code path and no notion of "old" plans.
+/// either shape and returns the same value type, so everything downstream — the schedule and the
+/// durations — has exactly one code path and no notion of "old" plans.
 ///
 /// That is deliberate, and it is why this change needs no migration. The same reasoning the
 /// interval-linking fix used: a permanent code path to rewrite a handful of rows is worse than
@@ -52,8 +52,8 @@ extension PlannedWorkout {
 
     /// One segment of a plan, resolved from either the stored blocks or the flat fields.
     ///
-    /// A plain value so the schedule builder, the duration maths and the WorkoutKit payload all
-    /// read the same thing and cannot disagree about a plan's shape.
+    /// A plain value so the schedule builder and the duration maths read the same thing and cannot
+    /// disagree about a plan's shape.
     struct Block: Equatable {
         let runSeconds: Int
         let walkSeconds: Int

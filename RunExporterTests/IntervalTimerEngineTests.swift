@@ -33,15 +33,15 @@ final class IntervalTimerEngineTests: XCTestCase {
                        countdownSeconds: countdown)
     }
 
-    /// A plan whose legs the runner ends. Its flat interval fields are zero, which is
-    /// what `WorkoutPhaseSchedule.build` refuses by design — the engine has to read `shape` first.
+    /// A plan whose legs the runner ends. Its flat interval fields are not set, which
+    /// `WorkoutPhaseSchedule.build` refuses as `missingShape` — the engine has to read `shape` first.
     private func openIntervalPlan(target: Int = 1800,
                                    walkFloor: Int = 180,
                                    countdown: Int = 0) -> PlannedWorkout {
         let workout = PlannedWorkout(name: "signal threshold",
-                                     runIntervalSeconds: 0,
-                                     walkIntervalSeconds: 0,
-                                     plannedRepetitions: 0,
+                                     runIntervalSeconds: nil,
+                                     walkIntervalSeconds: nil,
+                                     plannedRepetitions: nil,
                                      cooldownMode: .open,
                                      countdownSeconds: countdown)
         workout.openIntervalShape = OpenIntervalShape(targetRunSeconds: target,
@@ -286,7 +286,7 @@ final class IntervalTimerEngineTests: XCTestCase {
     ///
     /// Reaching this at all means `start` read the plan's `shape` before trying to build a phase
     /// list, which is the thing `WorkoutPhaseSchedule.build` correctly refuses to do for a plan
-    /// whose run interval is zero.
+    /// whose flat interval fields are not set.
     func testStartingAnOpenIntervalPlanEntersALegCappedByTheTarget() throws {
         let engine = IntervalTimerEngine()
         let start = Date()

@@ -77,21 +77,22 @@ final class PlannedWorkoutBlockExportTests: XCTestCase {
 
     /// An open-interval plan blanks them too, for the same reason and a worse consequence.
     ///
-    /// Its three flat fields are zero *by design* — `OpenIntervalShape` says so and says nothing
-    /// may read them without going through `shape` first. `describableByOneShape` read them
-    /// anyway: an open plan carries no blocks, so `resolvedBlocks` synthesizes one from those
-    /// zeroes, `hasMultipleBlocks` is false, and `hasDamagedShape` is false because the plan is
-    /// healthy. The row then exported `0`, `0`, `0` — "runs for no time, zero rounds" — into the
-    /// columns the multi-block case above goes to such trouble to blank.
+    /// Its three flat fields describe nothing — `OpenIntervalShape` says so and says nothing may
+    /// read them without going through `shape` first. `describableByOneShape` read them anyway:
+    /// they held zeros then, an open plan carries no blocks, so `resolvedBlocks` synthesized one
+    /// from those zeros, `hasMultipleBlocks` was false, and `hasDamagedShape` was false because
+    /// the plan is healthy. The row then exported `0`, `0`, `0` — "runs for no time, zero rounds" —
+    /// into the columns the multi-block case above goes to such trouble to blank. The fields are
+    /// not set now (`aa3226d`), and the walk column carries the plan's walk floor.
     ///
     /// Found 2026-10-01 by review. It is the sixth reader to derive a plan's shape from its blocks
     /// and say something false about an open plan, which `CLAUDE.md` warns about by name.
     func testOpenIntervalPlanBlanksTheColumnsThatCannotDescribeIt() throws {
         let context = try XCTUnwrap(store.context)
         let plan = PlannedWorkout(name: "Open 30 min",
-                                  runIntervalSeconds: 0,
-                                  walkIntervalSeconds: 0,
-                                  plannedRepetitions: 0)
+                                  runIntervalSeconds: nil,
+                                  walkIntervalSeconds: nil,
+                                  plannedRepetitions: nil)
         plan.openIntervalShape = OpenIntervalShape(targetRunSeconds: 1_800, walkFloorSeconds: 180)
         context.insert(plan)
         XCTAssertNil(store.save())

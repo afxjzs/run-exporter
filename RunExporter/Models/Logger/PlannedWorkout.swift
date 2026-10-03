@@ -118,8 +118,8 @@ final class PlannedWorkout {
         /// with at least `walkFloor` seconds of walking between them. Which body signals it asks
         /// about at the end of a leg is not part of the plan — every area is offered.
         case openIntervals(target: Int, walkFloor: Int)
-        /// The plan's `PlannedWorkoutBlock` rows are gone from the store and the zeroed flat fields
-        /// are all that is left. Reported, never rendered as a workout. See `hasDamagedShape`.
+        /// The plan's `PlannedWorkoutBlock` rows are gone from the store and its flat fields, not
+        /// set, are all that is left. Reported, never rendered as a workout. See `hasDamagedShape`.
         case damaged
     }
 
@@ -427,7 +427,7 @@ final class PlannedWorkout {
                                 repetitions: block.repetitions)
         }
         // An open-interval plan's shape is this record, not its blocks, and its flat fields are
-        // zero by design. Without it the copy's `shape` is `.damaged`, and the plan list tells its
+        // not set. Without it the copy's `shape` is `.damaged`, and the plan list tells its
         // owner to restore a plan that was never lost. A new record, for the reason above.
         copy.openIntervalShape = openIntervalShape.map {
             OpenIntervalShape(targetRunSeconds: $0.targetRunSeconds,

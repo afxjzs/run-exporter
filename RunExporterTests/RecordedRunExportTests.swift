@@ -29,8 +29,8 @@ final class RecordedRunExportTests: XCTestCase {
     private func execution(_ id: String) -> ExecutionExportRow {
         ExecutionExportRow(executionID: id, plannedWorkoutID: UUID().uuidString,
                            plannedWorkoutName: "Run to 30 min · 3 min walks",
-                           expectedActivityType: "running", expectedDurationSeconds: 1_800,
-                           runIntervalSeconds: 0, walkIntervalSeconds: 0, plannedRepetitions: 0,
+                           expectedActivityType: "running", expectedDurationSeconds: nil,
+                           runIntervalSeconds: nil, walkIntervalSeconds: nil, plannedRepetitions: nil,
                            completedRepetitions: 2, blockShape: "open:1800/180", status: "matched",
                            matchedHealthKitWorkoutUUID: "w1", timerStartedAt: t0, timerEndedAt: nil,
                            createdAt: t0, updatedAt: t0)

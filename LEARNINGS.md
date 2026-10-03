@@ -339,6 +339,11 @@ find the eight was to search for the three property names directly.
 
 ### What a multi-segment plan stores in the flat fields (2026-09-07)
 
+**Superseded 2026-10-02:** these fields are `Int?` now and hold nil, not zero, for a plan described
+by blocks or an open shape, and `PendingWorkoutExecution` does the same. The zeros below are what
+leaked into every summary — see "The readers kept coming because the zeros were stored". Kept as
+the record of why the zeros were chosen.
+
 **Zero, deliberately**, once a plan carries blocks — not the first segment's numbers. A run interval
 of zero is a value `WorkoutPhaseSchedule.build` refuses outright, so any reader that forgets to go
 through `resolvedBlocks` gets something obviously broken rather than something plausible and wrong.
@@ -363,7 +368,8 @@ schema lacks that model:
 - **It opens.** No error, no `containerError`. CoreData logs only `Persistent History (1) has to be
   truncated due to the following entities being removed: (PlannedWorkoutBlock)` and drops the table.
 - The plan then reads `run=0 walk=0 reps=0`, because `writeShape` zeroes the flat fields for a
-  multi-block plan on the assumption its block rows will always be there.
+  multi-block plan on the assumption its block rows will always be there. (Since 2026-10-02
+  `writeShape` sets them to nil, and the plan reads as not set; the loss is the same.)
 - Reopening under the current schema does not recover it. `blocks` is empty, so `hasMultipleBlocks`
   is **false**, and the plan looks like an ordinary single-shape plan that runs for no time.
 

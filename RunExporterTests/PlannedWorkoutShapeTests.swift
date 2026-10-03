@@ -9,7 +9,7 @@ import XCTest
 /// app doing one thing and saying another, which is the failure mode this project is built around.
 final class PlannedWorkoutShapeTests: XCTestCase {
 
-    private func plan(run: Int = 240, walk: Int = 60, reps: Int = 5,
+    private func plan(run: Int? = 240, walk: Int? = 60, reps: Int? = 5,
                       name: String = "4/1 × 5") -> PlannedWorkout {
         PlannedWorkout(name: name,
                        runIntervalSeconds: run,
@@ -132,10 +132,11 @@ final class PlannedWorkoutShapeTests: XCTestCase {
 
     // MARK: - A shape that was destroyed rather than authored
 
-    /// The state a downgrade leaves behind: block rows dropped from the store, flat fields still
-    /// zeroed. Measured in LEARNINGS.md — SwiftData drops the table without erroring.
+    /// The state a downgrade leaves behind: block rows dropped from the store, flat fields not
+    /// set. Measured in LEARNINGS.md — SwiftData drops the table without erroring. The zeros an
+    /// older build stored instead are covered by `testAPlanTheFlatFieldsDoNotDescribeHasNoBlocks`.
     private func damagedPlan() -> PlannedWorkout {
-        plan(run: 0, walk: 0, reps: 0)
+        plan(run: nil, walk: nil, reps: nil)
     }
 
     /// It must not read as a workout. Rendering "0 continuous" would describe a real plan that runs
@@ -223,11 +224,11 @@ final class PlannedWorkoutShapeTests: XCTestCase {
     }
 
     /// An open-interval plan's shape lives in `openIntervalShape`, not in `blocks`, and its flat
-    /// fields are zero by design. Copying the blocks alone hands back a plan whose `shape` is
+    /// fields are not set. Copying the blocks alone hands back a plan whose `shape` is
     /// `.damaged`: the copy sits on the plan list telling its owner to restore it from an export.
     /// Neither Duplicate button is hidden for open-interval plans.
     func testDuplicatingAnOpenIntervalPlanKeepsItOpen() {
-        let workout = plan(run: 0, walk: 0, reps: 0)
+        let workout = plan(run: nil, walk: nil, reps: nil)
         workout.openIntervalShape = OpenIntervalShape(targetRunSeconds: 1800, walkFloorSeconds: 180)
 
         let copy = workout.duplicate()
@@ -277,7 +278,7 @@ final class PlannedWorkoutShapeTests: XCTestCase {
     /// as a plan in its own right, or a healthy new plan tells its owner to restore from an export
     /// and the warning that guards real data loss stops meaning anything.
     func testBackThresholdPlanIsNotMistakenForADamagedPlan() {
-        let workout = plan(run: 0, walk: 0, reps: 0)
+        let workout = plan(run: nil, walk: nil, reps: nil)
         workout.openIntervalShape = OpenIntervalShape(targetRunSeconds: 1800, walkFloorSeconds: 180)
 
         guard case .openIntervals(let target, let walkFloor) = workout.shape else {
@@ -293,7 +294,7 @@ final class PlannedWorkoutShapeTests: XCTestCase {
     /// `shape` the owner's healthy new plan sits in the list telling him to restore it from an
     /// export. A UI string that promises the wrong thing is a bug here, not a nit.
     func testBackThresholdPlanSummaryDescribesItRatherThanClaimingDamage() {
-        let workout = plan(run: 0, walk: 0, reps: 0)
+        let workout = plan(run: nil, walk: nil, reps: nil)
         workout.openIntervalShape = OpenIntervalShape(targetRunSeconds: 1800, walkFloorSeconds: 180)
 
         XCTAssertEqual(workout.intervalSummary, "Run to 30 min · 3 min walks")
@@ -305,7 +306,7 @@ final class PlannedWorkoutShapeTests: XCTestCase {
     /// `shape`, every healthy open-interval plan trips the alarm. An alarm that cries wolf stops
     /// protecting the thing it exists to guard, which here is silent destruction of block plans.
     func testAnOpenIntervalPlanIsNotReportedAsDamaged() {
-        let workout = plan(run: 0, walk: 0, reps: 0)
+        let workout = plan(run: nil, walk: nil, reps: nil)
         workout.openIntervalShape = OpenIntervalShape(targetRunSeconds: 1800,
                                                       walkFloorSeconds: 180)
 
@@ -313,7 +314,7 @@ final class PlannedWorkoutShapeTests: XCTestCase {
     }
 
     private func openIntervalPlan(target: Int = 1800, walkFloor: Int = 180) -> PlannedWorkout {
-        let workout = plan(run: 0, walk: 0, reps: 0)
+        let workout = plan(run: nil, walk: nil, reps: nil)
         workout.openIntervalShape = OpenIntervalShape(targetRunSeconds: target,
                                                       walkFloorSeconds: walkFloor)
         return workout

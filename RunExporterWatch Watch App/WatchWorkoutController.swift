@@ -122,7 +122,8 @@ final class WatchWorkoutController: NSObject {
     /// Asks for whatever is unanswered, every time the app comes on screen — where a permission
     /// sheet can appear. A launch from the phone may arrive in the background, where it cannot.
     ///
-    /// Called on every activation, not once per process: a Watch reinstall resets Health access,
+    /// Called on every activation, not once per process: any install resets Health access — a
+    /// phone-only install turned Workout Routes off on the Watch, measured —
     /// and a process that first started in the background had already spent its one ask where no
     /// sheet could show.
     func prepareHealthAccess() async {

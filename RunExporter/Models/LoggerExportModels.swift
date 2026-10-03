@@ -54,6 +54,9 @@ struct PlannedWorkoutExportRow {
     /// nothing else. For `5/1×1 → 8/1×2 → 5/1×1` there is no honest value, and reporting the first
     /// block's numbers would state something false about the whole run. The shape of every plan is
     /// in `planned_workout_blocks.csv` instead. Blank here never means zero.
+    ///
+    /// An open-interval plan decides only its walk in advance, so it has a walk and nothing else:
+    /// `walkIntervalSeconds` is its walk floor, the shortest walk it allows.
     var runIntervalSeconds: Int?
     var walkIntervalSeconds: Int?
     var plannedRepetitions: Int?

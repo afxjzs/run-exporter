@@ -146,8 +146,10 @@ enum LoggerExportSnapshot {
     /// A plan's segments, in the order it runs them.
     ///
     /// Built from `resolvedBlocks`, so a plan with no stored blocks contributes exactly one row
-    /// describing its flat fields. Every plan appears, which is what lets this file be read as the
-    /// complete answer to "what shape is this plan" without a rule about when it applies.
+    /// describing its flat fields. Every plan with fixed segments appears, which is what lets this
+    /// file be read as the complete answer to "what segments does this plan run". An open-interval
+    /// plan has no segments, and a damaged plan has lost them, so neither has a row: the first is
+    /// described by `planned_workouts.csv`'s open-interval columns, the second by its warning.
     private static func blockRows(for plan: PlannedWorkout) -> [PlannedWorkoutBlockExportRow] {
         // `position` is the enumeration index, not the stored `orderIndex`: `resolvedBlocks` has
         // already sorted by that field, and renumbering densely here means the exported sequence

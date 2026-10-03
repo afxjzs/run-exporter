@@ -40,9 +40,9 @@ struct RootView: View {
         .task { await controller.prepareHealthAccess() }
         .onChange(of: scenePhase) { _, phase in
             WatchEventLog.shared.record("screen: \(Self.name(for: phase))")
-            // Every time the app comes on screen, not once per process. A Watch reinstall resets
-            // Health access, and a process the phone started in the background has already spent
-            // its `.task` ask where no sheet could appear.
+            // Every time the app comes on screen, not once per process. Any install, phone or
+            // Watch, resets Health access, and a process the phone started in the background has
+            // already spent its `.task` ask where no sheet could appear.
             if phase == .active {
                 Task { await controller.prepareHealthAccess() }
             }

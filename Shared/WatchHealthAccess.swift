@@ -51,8 +51,10 @@ struct WatchHealthAccess: Equatable {
         case .answered:
             break
         }
-        // Once the sheet is answered, HealthKit never shows it again for these types: a type left
-        // off can only be turned on in Settings. So the fix is named, not asked for.
+        // Once the sheet is answered, HealthKit does not show it again for these types until
+        // something resets the answer — measured: an install did, and the sheet came back offering
+        // routes again. Until then a type left off can only be turned on in Settings, so the fix
+        // is named, not asked for.
         guard workouts == .authorized else {
             return .stop("RunExporterWatch may not save workouts. Turn on Workouts in the Watch's "
                          + "Settings → Health → Apps → RunExporterWatch, then start again from the phone.")

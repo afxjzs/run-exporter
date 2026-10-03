@@ -44,7 +44,7 @@ running_health_extract_<start>_to_<taken>/
   recovery_logs.csv               # optional next-day recovery ratings
   shoes.csv                       # shoe profiles with derived mileage
   planned_workouts.csv            # the interval plans defined in the app
-  planned_workout_blocks.csv      # every plan's shape, one row per segment, in order
+  planned_workout_blocks.csv      # every fixed plan's segments, one row each, in order
   workout_intervals.csv           # actual run/walk/cooldown boundaries from the app's timer
   pending_workout_executions.csv  # each attempt at a plan, and the workout it matched
   body_signal_details.csv         # optional extra context on a body signal
@@ -57,8 +57,17 @@ v1.0 spec ([docs/Native-iOS-Health-Running-Export.md](docs/Native-iOS-Health-Run
 the exact column list — historical, and kept for that list and for why v1.0 was scoped as it was.
 
 `workouts.csv` is backward compatible: the original 20 columns are unchanged and in the same
-order, with the weather, route and (v1.1) run-logger columns appended after them, in that order.
-This is enforced by `ExportSchemaTests`, which asserts the v1.0 header verbatim.
+order, with these groups appended after them, in this order: weather, route, (v1.1) run logger,
+`reclassifiedAsRunning`, and the `actual*` columns. A new group goes at the end, never inside one.
+This is enforced by `ExportSchemaTests`, which asserts the v1.0 header verbatim and pins the whole
+shipped header in `shippedWorkoutColumns`.
+
+**Planned versus actual.** `runIntervalSeconds`, `walkIntervalSeconds`, `plannedRepetitions` and
+`blockShape` describe the plan as it stood when a run began. `actualShape`, `actualRunLegCount`,
+`actualRunSeconds` and `actualWalkSeconds` — in `pending_workout_executions.csv` and
+`workouts.csv` — describe what was run, derived from the run's legs in `workout_intervals.csv`
+(`RecordedRun`). For an open-interval run they are the only description of its legs. The
+README.txt in each export explains them under "PLANNED vs ACTUAL".
 
 ## Weather
 
@@ -358,6 +367,9 @@ Models/RouteModels       route point/summary models, route math, diagnostics
 Models/Logger/*          SwiftData models (Shoe, PlannedWorkout, PlannedWorkoutBlock,
                          OpenIntervalShape, RunLog, RecoveryLog, WorkoutIntervalLog, WorkoutNote,
                          PendingWorkoutExecution), BodySignalReadings, store, settings, seeding
+Models/Logger/RecordedRun   what a run actually ran, derived from its legs, never stored; each
+                         leg's active windows with pauses removed (the analysis slices by these)
+Models/Logger/ShapeZeroRepair  at launch, clears the 0/0/0 that older builds stored in shape fields
 Models/LoggerExportModels   CSV row structs for the subjective files + workouts.csv join
 Workout/WorkoutPhaseSchedule pure run/walk/cooldown sequencing (no clock, no I/O); declares the
                          WorkoutPhaseSource protocol that both schedules answer
@@ -388,10 +400,12 @@ Shared/WatchLinkMessage      the phone<->watch wire format, versioned; also Phas
                              WorkoutMetadataKeys (phone + watch)
 Shared/PhaseClock            a PhaseAnchor turned into a countdown on the watch's own clock
 Shared/PaceTracker           the watch's leg pace, current mile split and total distance
+Shared/WatchHealthAccess     the watch's Health access, per type (workouts, routes), and the
+                             launch decision; RouteTally reports a route short of complete
 RunExporterLiveActivity/     widget extension: Lock Screen card and Dynamic Island
 RunExporterWatch Watch App/  watchOS companion; ships embedded at RunExporter.app/Watch/
   RootView                   picks the screen: run, link diagnostics, or idle; asks for Health
-                             access when opened by hand
+                             access every time the app comes on screen
   WatchRunView               the run screen: phase, time left, heart rate, pace, distance
   WatchLinkView              a run until its first phase arrives, and why a start failed
   WatchIdleView              "Start a workout from your iPhone" and the Health access status
