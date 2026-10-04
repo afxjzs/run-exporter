@@ -26,9 +26,14 @@ struct QuantitySpec {
 
 enum HealthKitError: Error, LocalizedError {
     case notAvailable
+    /// A quantity came back in a unit that cannot be converted to the one asked for. Converting
+    /// anyway would trap; guessing would put a wrong number in the export.
+    case incompatibleUnit(type: String, unit: String)
     var errorDescription: String? {
         switch self {
         case .notAvailable: return "HealthKit is not available on this device."
+        case .incompatibleUnit(let type, let unit):
+            return "A \(type) sample could not be read in \(unit)."
         }
     }
 }
@@ -420,6 +425,50 @@ final class HealthKitManager {
             ))
         }
         return rows
+    }
+
+    // MARK: - One workout's own samples (aerobic spec, Decisions D1)
+
+    /// The heart-rate and distance samples HealthKit associates with `workout`: its own recording,
+    /// not every source that wrote during its window. Measured on a real export, the iPhone writes
+    /// a second, partial distance series inside most runs (LEARNINGS.md), which a time-window query
+    /// would add to the Watch's.
+    ///
+    /// **Not yet verified on the device:** that this returns exactly the Watch's samples for this
+    /// app's workouts and for older ones.
+    func fetchWorkoutSamples(for workout: HKWorkout) async throws -> WorkoutSamples {
+        let predicate = HKQuery.predicateForObjects(from: workout)
+        let heartRate = try await associatedQuantities(.heartRate, predicate: predicate,
+                                                       unit: HKUnit.count().unitDivided(by: .minute()))
+        let distance = try await associatedQuantities(.distanceWalkingRunning, predicate: predicate,
+                                                      unit: .meter())
+        return WorkoutSamples(heartRate: heartRate, distance: distance)
+    }
+
+    private func associatedQuantities(_ identifier: HKQuantityTypeIdentifier,
+                                      predicate: NSPredicate,
+                                      unit: HKUnit) async throws -> [WorkoutSample] {
+        let type = HKQuantityType(identifier)
+        let sort = [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
+        let samples: [HKSample] = try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(sampleType: type, predicate: predicate,
+                                      limit: HKObjectQueryNoLimit,
+                                      sortDescriptors: sort) { _, samples, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: samples ?? [])
+                }
+            }
+            store.execute(query)
+        }
+        return try samples.compactMap { $0 as? HKQuantitySample }.map { sample in
+            guard sample.quantity.is(compatibleWith: unit) else {
+                throw HealthKitError.incompatibleUnit(type: identifier.rawValue, unit: unit.unitString)
+            }
+            return WorkoutSample(start: sample.startDate, end: sample.endDate,
+                                 value: sample.quantity.doubleValue(for: unit))
+        }
     }
 
     // MARK: - Activity summaries

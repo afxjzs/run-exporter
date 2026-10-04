@@ -340,6 +340,22 @@ struct ActivitySummaryExportRow {
     }
 }
 
+/// One HealthKit quantity sample, as a number in the analysis's unit: beats per minute for heart
+/// rate, meters for distance. A heart-rate sample is an instant (`start == end`); a distance sample
+/// spans the time it was measured over.
+struct WorkoutSample: Equatable {
+    let start: Date
+    let end: Date
+    let value: Double
+}
+
+/// The samples HealthKit associates with one workout (aerobic spec, Decisions D1): the workout's
+/// own recording, not every source that wrote during its window.
+struct WorkoutSamples: Equatable {
+    var heartRate: [WorkoutSample]
+    var distance: [WorkoutSample]
+}
+
 /// Everything the export pipeline produces, handed from HealthKitManager to ExportBuilder.
 struct ExportDataset {
     var workouts: [WorkoutExportRow] = []
@@ -368,6 +384,10 @@ struct ExportDataset {
 
     // Run logger (v1.1): the subjective side of the export, snapshotted before the export ran.
     var logger = LoggerExportData()
+
+    /// Each workout's own heart-rate and distance samples, by workout UUID, as numbers — what the
+    /// aerobic analysis reads (aerobic spec, Decisions D1). A workout with no entry was not read.
+    var workoutSamples: [String: WorkoutSamples] = [:]
 
     var issues: [String] = []                    // legacy flat strings for export_log.json
     var logEntries: [ExportLogEntry] = []        // structured entries for export_log.json

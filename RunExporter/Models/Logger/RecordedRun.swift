@@ -19,6 +19,8 @@ struct RecordedRun: Equatable {
     }
 
     struct Leg: Equatable {
+        /// The `workout_intervals.csv` row this leg was read from, so a per-leg figure lands on it.
+        let intervalLogID: String
         let phase: WorkoutPhase
         let repetition: Int?
         /// The time actually spent in this leg, in order. One window unless a pause interrupted it.
@@ -59,7 +61,8 @@ struct RecordedRun: Equatable {
             }
             let shift = absorbed.reduce(0) { $0 + $1.duration }
             let realStart = row.startDate.addingTimeInterval(-shift)
-            legs.append(Leg(phase: phase,
+            legs.append(Leg(intervalLogID: row.intervalLogID,
+                            phase: phase,
                             repetition: row.repetitionNumber,
                             activeWindows: Self.windows(from: realStart, to: row.endDate, removing: absorbed),
                             endReason: row.endReason.flatMap(LegEndReason.init(rawValue:))))

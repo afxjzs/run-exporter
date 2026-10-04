@@ -181,6 +181,16 @@ struct RunLogExportRow {
     var workoutDistanceMiles: Double?
     var workoutActivityType: String
 
+    /// The run's intended intensity and the post-run talk test (aerobic spec §1, §7, §17), stored
+    /// raw. Blank for a log written before these existed: not recorded, which is not `none` or
+    /// `notRecorded` (Decisions D18).
+    var intensityMode: String?
+    var targetRPEMin: Double?
+    var targetRPEMax: Double?
+    var targetHeartRateMin: Int?
+    var targetHeartRateMax: Int?
+    var talkTest: String?
+
     static let columns = [
         "runLogID", "healthKitWorkoutUUID", "plannedWorkoutID", "executionID",
         "createdAt", "updatedAt",
@@ -191,10 +201,25 @@ struct RunLogExportRow {
         "shoeID", "shoeName", "notes",
         // Beyond the spec's column list, appended so the file is self-contained.
         "workoutStartDate", "workoutDistanceMiles", "workoutActivityType",
+    ] + aerobicColumns
+
+    /// A group of its own, after every column that has shipped.
+    static let aerobicColumns = [
+        "intensityMode", "targetRPEMin", "targetRPEMax",
+        "targetHeartRateMin", "targetHeartRateMax", "talkTest",
     ]
 
-    var values: [String] {
+    var aerobicValues: [String] {
         [
+            intensityMode ?? "",
+            Fmt.fixed(targetRPEMin, places: 1), Fmt.fixed(targetRPEMax, places: 1),
+            targetHeartRateMin.map(String.init) ?? "", targetHeartRateMax.map(String.init) ?? "",
+            talkTest ?? "",
+        ]
+    }
+
+    var values: [String] {
+        let shipped: [String] = [
             runLogID, healthKitWorkoutUUID, plannedWorkoutID ?? "", executionID ?? "",
             Fmt.isoString(createdAt), Fmt.isoString(updatedAt),
             runIntervalSeconds.map(String.init) ?? "",
@@ -212,6 +237,7 @@ struct RunLogExportRow {
             Fmt.fixed(workoutDistanceMiles, places: 4),
             workoutActivityType,
         ]
+        return shipped + aerobicValues
     }
 }
 

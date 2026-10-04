@@ -138,6 +138,20 @@ struct ExportBuilder {
             }
         }
 
+        // 3b. Each workout's own heart rate and distance, as numbers, for the aerobic analysis
+        // (aerobic spec, Decisions D1). records.csv above keeps every source; this does not.
+        progress("Reading each workout's heart rate…")
+        for workout in workouts {
+            do {
+                dataset.workoutSamples[workout.uuid.uuidString] =
+                    try await health.fetchWorkoutSamples(for: workout)
+            } catch {
+                dataset.log(.warning, "aerobic", workoutUUID: workout.uuid.uuidString,
+                            "Could not read this workout's own heart rate and distance: "
+                                + "\(error.localizedDescription)")
+            }
+        }
+
         // 4. Activity summaries (optional / best effort)
         progress("Reading activity summaries…")
         do {
@@ -351,6 +365,14 @@ struct ExportBuilder {
                     intervalAudio: IntervalAudioSettings,
                     createdAt: Date) throws {
 
+        // The aerobic analysis (aerobic spec §9–§17) runs here, from the dataset, so the file layer
+        // its tests drive is the one that produces the numbers. Its issues join export_log.json.
+        var dataset = dataset
+        let aerobic = AerobicExport.make(workouts: dataset.workouts,
+                                         logger: dataset.logger,
+                                         samples: dataset.workoutSamples)
+        for issue in aerobic.issues { dataset.append(issue) }
+
         // --- CSV files ---
 
         var workoutsCSV = CSVWriter(columns: WorkoutExportRow.columns)
@@ -392,9 +414,16 @@ struct ExportBuilder {
         try writeCSV(columns: ShoeExportRow.columns,
                      rows: dataset.logger.shoes.map { $0.values },
                      "shoes.csv", folder)
-        try writeCSV(columns: IntervalLogExportRow.columns,
-                     rows: dataset.logger.intervalLogs.map { $0.values },
+        // The per-leg heart-rate columns are a group of their own after every shipped column.
+        try writeCSV(columns: IntervalLogExportRow.columns + AerobicExport.intervalColumns,
+                     rows: dataset.logger.intervalLogs.map {
+                         $0.values + (aerobic.intervalValues[$0.intervalLogID]
+                             ?? AerobicExport.blankIntervalValues)
+                     },
                      "workout_intervals.csv", folder)
+        try writeCSV(columns: AerobicExport.summaryColumns,
+                     rows: aerobic.summaryRows,
+                     AerobicExport.summaryFileName, folder)
         try writeCSV(columns: ExecutionExportRow.columns,
                      rows: dataset.logger.executions.map { $0.values },
                      "pending_workout_executions.csv", folder)

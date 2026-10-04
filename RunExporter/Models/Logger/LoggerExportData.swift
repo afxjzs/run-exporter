@@ -135,6 +135,32 @@ struct LoggerExportData {
         recordedRunsByExecutionID[id]
     }
 
+    /// The run log joined to a workout — the one `join(forWorkoutUUID:)` reads.
+    func runLog(forWorkoutUUID uuid: String) -> RunLogExportRow? {
+        runLogsByWorkoutUUID[uuid]
+    }
+
+    /// Which execution's legs belong to a workout: the one matched to it, or the one whose legs
+    /// were stamped with it. A run log is not needed — the aerobic analysis covers unlogged runs
+    /// too (aerobic spec §26).
+    enum ExecutionMatch {
+        case none
+        /// `row` is nil when legs name an execution whose record is gone; the legs are still the
+        /// run, and the columns only the record could fill stay blank.
+        case one(executionID: String, row: ExecutionExportRow?)
+        /// More than one execution claims the workout. Picking one would put a guess in the
+        /// export, so the caller reports it instead.
+        case ambiguous([String])
+    }
+
+    func execution(forWorkoutUUID uuid: String) -> ExecutionMatch {
+        var ids = Set(executions.filter { $0.matchedHealthKitWorkoutUUID == uuid }.map(\.executionID))
+        ids.formUnion((intervalsByWorkoutUUID[uuid] ?? []).map(\.executionID))
+        guard ids.count <= 1 else { return .ambiguous(ids.sorted()) }
+        guard let id = ids.first else { return .none }
+        return .one(executionID: id, row: executions.first { $0.executionID == id })
+    }
+
     // MARK: - workouts.csv join
 
     /// The subjective columns for one exported workout, or `nil` when it has no run log.

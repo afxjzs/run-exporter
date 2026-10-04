@@ -1004,3 +1004,83 @@ When complete, provide:
 12. Example `aerobic_workout_summary.csv` row
 13. Confirmation that old workouts and all three workout-plan shapes still work
 14. Confirmation that Watch HR failure cannot stop or corrupt the phone interval workout
+
+---
+
+# Decisions
+
+Everything above is the spec as received. This section records how its open choices were settled,
+each approved by the owner, so the code, the export's methodology section (§18) and the tests all
+answer to one place. Cite these as `aerobic spec, Decisions D<n>`.
+
+## Data sources (2026-10-02 and 2026-10-03)
+
+- **D1. Heart rate and distance come from HealthKit's samples associated with the matched
+  workout**, not from a time window over every source. Measured on a real export: the iPhone writes
+  a second, partial distance series inside most runs, which a window over all sources would add to
+  the Watch's (LEARNINGS.md, "The iPhone writes a second distance series inside most runs").
+- **D2. Legs are sliced by `RecordedRun.Leg.activeWindows`**, never by a leg's recorded start and
+  end, which overlap any pause the leg absorbed (LEARNINGS.md, "A paused leg's recorded window is
+  not its running time").
+- **D3. Live `WatchStatus` heart rate is for display (§3–§6) and diagnostics (§22) only.** No live
+  sample series is stored.
+- **D4. Column and file names in §17 are final as written.** Tests assert them.
+
+## Thresholds and formulas (2026-10-03)
+
+Based on the Watch's sampling, measured on a real export: heart-rate samples arrive a median 5 s
+apart, 99% within 9 s, and fewer than 0.5% of gaps exceed 10 s. Distance samples each span 3 s or
+less.
+
+- **D5. One tolerance, 5 s.** A heart-rate sample stands for the moments within 5 s either side of
+  it. Used for coverage, for start and end readings, and for recovery readings.
+- **D6. `runningHRCoveragePercent`** = the share of running time (pauses removed) that lies within
+  5 s of a heart-rate sample.
+- **D7. `largestHRSampleGapSeconds`** = the longest stretch of running time with no heart-rate
+  sample, measured inside running legs only. A walk or pause between two runs is not a gap; the
+  time from a leg's start to its first sample, and from its last sample to its end, is.
+- **D8. `insufficientHRData` = true** when running coverage is under 80%, or either half's coverage
+  is. Then the half-by-half heart rate, heart-rate drift and efficiency columns are blank. Running
+  average, median, minimum and maximum are still written whenever any sample exists, and so are the
+  speed and pace columns, which do not depend on heart rate.
+- **D9. Per leg:** `hrSampleCount` is always written; 0 is a true count. The leg's other heart-rate
+  columns are blank unless it has at least 2 samples and 80% coverage.
+- **D10. `startHR` / `endHR`** = the sample nearest the leg's real start or end, within 5 s, from
+  any leg — a point reading, like D11's; blank otherwise. A leg's real start and end are the first
+  and last moments of its active windows (D2).
+- **D11. Recovery drops** (`heartRateDrop30s`, `60s`, `120s`) = the preceding run's `endHR` minus
+  the sample nearest 30, 60 or 120 s of wall-clock time after that run ended, within 5 s. Positive
+  means heart rate fell. Written for a walk **or a cooldown** that directly follows a run. Blank if
+  that moment is past the end of the walk or cooldown, if no sample is close enough, or if the run
+  has no reading within 5 s of its end. Wall-clock, because recovery continues through a pause.
+  These are point readings, so they use the nearest sample from any leg, and D9's gate does not
+  apply to them.
+- **D12. Averages are time-weighted:** every moment of the window is credited to the nearest
+  heart-rate sample *inside the window* within 5 s, and a sample's weight is the time credited to
+  it. A moment with no such sample is uncovered and counts toward no average. Median, minimum and
+  maximum are over the samples inside the window. "Inside" is start-inclusive, end-exclusive, so a
+  sample on the boundary between two legs belongs to the later one. Samples outside the window —
+  a walk's, a pause's — never reach its metrics; coverage (D6) uses the same rule.
+- **D13. The first and second halves split at half the cumulative running time**, pauses and walks
+  excluded. The leg containing that moment is cut at it; its heart rate and distance go to each half
+  by time.
+- **D14. Distance in a window** = the distance samples overlapping it, each prorated by the share of
+  its span inside the window. No samples means blank, never 0.
+- **D15. Speed** = distance ÷ running seconds (m/s). **Pace** = 1609.344 ÷ speed (seconds per mile).
+- **D16. Efficiency** = meters per heartbeat = speed ÷ (heart rate ÷ 60). This is §14's speed ÷ heart
+  rate, scaled by 60 so it reads as a distance.
+- **D17. Signs.** `heartRateDriftBPM` = second half − first half. Every `…Percent` change =
+  (second − first) ÷ first × 100. `paceOrSpeedDriftPercent` is computed on speed, so negative means
+  slower in the second half. Negative `efficiencyChangePercent` means fewer meters per beat in the
+  second half.
+
+## Which rows (2026-10-03, proposed; owner to confirm)
+
+- **D18. A run log written before this feature exports `intensityMode`, the four target columns and
+  `talkTest` blank**, not `none` and `notRecorded`. Blank means "not recorded", as `blockShape`
+  does (LEARNINGS.md, "`blockShape == nil` means not recorded"). `none` and `notRecorded` are what
+  a log written after the feature says.
+- **D19. `aerobic_workout_summary.csv` has one row per exported workout that joins to recorded
+  legs**, logged or not, aerobic or not (§26). A workout with no legs — recorded by another app, or
+  before the app recorded legs — has no running phases to analyze and gets no row; the export log
+  counts them.

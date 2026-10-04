@@ -685,6 +685,28 @@ No existing export was wrong, because every one reads durations. Anything that a
 heart rate as running and dropped real running. `RecordedRun` recovers each leg's active windows
 exactly: the pause rows written just ahead of a leg are the ones it absorbed.
 
+## Health samples
+
+### The iPhone writes a second distance series inside most runs (2026-10-03)
+
+Measured on a real export, by source and by device model in `records.csv`. Inside the window of
+most running workouts there are **two** `distanceWalkingRunning` series: the Watch's and the
+iPhone's. The Watch's samples sum to the workout's own `totalDistance` exactly, in every run that
+has distance. The iPhone's are a partial second copy, short of the real distance by anywhere from a
+few percent to more than half.
+
+So **anything that sums distance over a time window, from every source, double-counts**, by an
+amount that varies from run to run — plausible numbers, no error. Pace and the spec's
+speed-per-heartbeat efficiency (aerobic spec §14) would both be wrong. Heart rate has a third
+source, an Oura ring, but none of its samples fell inside a run in that export.
+
+What the aerobic analysis does about it: it asks HealthKit for the samples associated with the
+matched workout, not for a time window (the owner's choice, 2026-10-03). **Not yet verified on the
+device:** that this returns exactly the Watch's samples. The exact match between the Watch's sum and
+the workout's total makes it likely; a device run would settle it.
+
+Some runs in the same export have no distance from any source; why is not known.
+
 ## Testing
 
 ### One HealthKit test dominates a full run after cycling the simulator (2026-09-23)
