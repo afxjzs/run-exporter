@@ -209,28 +209,11 @@ final class ActiveWorkoutModel {
                 + "will not be recorded. The timer and cues still work."
             return nil
         }
-        guard let activity = plan.activityTypeValue else {
+        guard let execution = PendingWorkoutExecution.started(from: plan) else {
             errorMessage = "This workout's activity type is \"\(plan.activityType)\", which this "
                 + "version does not recognize. Edit the workout and choose an activity."
             return nil
         }
-
-        // A plan of several segments, or an open-interval one, has no single run or walk length,
-        // so it records none — never the first segment's. `blockShape` carries the whole of it.
-        // An open plan has no fixed rounds or length either; those come back nil from the plan.
-        let singleShape = plan.singleShape
-
-        let execution = PendingWorkoutExecution(
-            plannedWorkoutID: plan.id,
-            plannedWorkoutName: plan.name,
-            expectedActivityType: activity,
-            expectedDurationSeconds: plan.expectedTotalSeconds,
-            runIntervalSeconds: singleShape?.runSeconds,
-            walkIntervalSeconds: singleShape?.walkSeconds,
-            plannedRepetitions: plan.totalRepetitions,
-            status: .started)
-        execution.blockShape = plan.blockShapeDescriptor
-        execution.timerStartedAt = Date()
         context.insert(execution)
 
         if let error = store.save() {

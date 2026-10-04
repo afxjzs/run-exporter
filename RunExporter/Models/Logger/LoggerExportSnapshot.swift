@@ -205,7 +205,7 @@ enum LoggerExportSnapshot {
 
     private static func row(for log: RunLog, shoeNames: [String: String]) -> RunLogExportRow {
         let shoeID = log.shoeID?.uuidString
-        return RunLogExportRow(
+        var row = RunLogExportRow(
             runLogID: log.id.uuidString,
             // Blank while a mid-workout log is still waiting to be matched to a HealthKit
             // workout. `executionID` identifies it until then.
@@ -231,6 +231,14 @@ enum LoggerExportSnapshot {
             workoutStartDate: log.workoutStartDate,
             workoutDistanceMiles: log.workoutDistanceMiles,
             workoutActivityType: log.workoutActivityType)
+        // Raw, like every stored enum here: a value this build does not know is exported as it is.
+        row.intensityMode = log.intensityMode
+        row.targetRPEMin = log.targetRPEMin
+        row.targetRPEMax = log.targetRPEMax
+        row.targetHeartRateMin = log.targetHeartRateMin
+        row.targetHeartRateMax = log.targetHeartRateMax
+        row.talkTest = log.talkTest
+        return row
     }
 
     private static func row(for detail: BodySignalDetail, log: RunLog) -> BodySignalDetailExportRow {

@@ -238,6 +238,7 @@ struct PlannedWorkoutEditorView: View {
     @State private var cooldownMinutes = 5
     @State private var countdownSeconds = 0
     @State private var isNextWorkout = true
+    @State private var intensity = IntensityChoice()
     @State private var errorMessage: String?
     @State private var didLoad = false
 
@@ -318,6 +319,8 @@ struct PlannedWorkoutEditorView: View {
             } footer: {
                 Text(blocksExplanation)
             }
+
+            IntensitySection(mode: $intensity.mode)
 
             Section("Warmup") {
                 Picker("Warmup", selection: $warmupMode) {
@@ -536,6 +539,7 @@ struct PlannedWorkoutEditorView: View {
         cooldownMinutes = max(1, (plan.cooldownSeconds ?? 300) / 60)
         countdownSeconds = plan.countdownSeconds
         isNextWorkout = plan.isNextWorkout
+        intensity = IntensityChoice(plan: plan)
     }
 
     private func save() {
@@ -569,6 +573,7 @@ struct PlannedWorkoutEditorView: View {
         target.cooldownMode = cooldownMode.rawValue
         target.cooldownSeconds = cooldownMode == .timed ? cooldownMinutes * 60 : nil
         target.countdownSeconds = countdownSeconds
+        intensity.write(to: target, isNew: plan == nil)
         target.updatedAt = Date()
 
         if isNextWorkout {

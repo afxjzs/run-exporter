@@ -73,12 +73,25 @@ final class SmokeTests: XCTestCase {
             app.navigationBars.buttons.firstMatch.tap()
         }
 
-        step("Plans: create an open-interval plan") {
+        step("Plans: create an easy aerobic open-interval plan") {
             app.navigationBars["Plans"].buttons["Add"].tap()
             let openIntervals = app.buttons["Open intervals"]
             expect(openIntervals, "the Open intervals menu item")
             openIntervals.tap()
             expect(app.buttons["Save"], "Save in the open-interval editor")
+            // An ordinary plan asks nothing about intensity beyond the one picker (aerobic spec §25).
+            let target = app.staticTexts["Target effort"]
+            expectAbsent(target, "the aerobic target before Easy aerobic is chosen")
+            let intensity = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@",
+                                                             "Intensity")).firstMatch
+            expect(intensity, "the Intensity picker")
+            intensity.tap()
+            let aerobic = app.buttons["Easy aerobic"]
+            expect(aerobic, "Easy aerobic in the Intensity picker")
+            aerobic.tap()
+            expect(target, "the aerobic target once Easy aerobic is chosen")
+            snapshot("Open-interval editor with Easy aerobic chosen")
+            // No scrolling in this editor: a swipe lands on its duration wheels and changes the plan.
             app.buttons["Save"].tap()
         }
 
@@ -89,7 +102,22 @@ final class SmokeTests: XCTestCase {
             expect(app.buttons["Start Workout"], "Start Workout on the open-interval plan screen")
             let lap = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "use Lap")).firstMatch
             expectAbsent(lap, "the retired 'use Lap' instruction")
-            snapshot("Open-interval plan detail, before going back")
+            snapshot("Open-interval plan detail")
+        }
+
+        step("Run the aerobic plan; its log asks the talk test") {
+            app.buttons["Start Workout"].tap()
+            expect(app.staticTexts["READY"], "the READY screen for the aerobic plan")
+            app.buttons["Start"].tap()
+            expect(app.buttons["End Workout"], "End Workout on the aerobic run")
+            endRunAndOpenLog()
+            // Offered because the run was easy aerobic (aerobic spec §7), and unanswered until chosen.
+            expect(talkTestPicker, "the Talk test picker on the aerobic run's log")
+            XCTAssertTrue(talkTestPicker.label.contains("Not recorded"),
+                          "The talk test should start at Not recorded; it reads \"\(talkTestPicker.label)\"")
+            snapshot("Aerobic run log with the talk test")
+            app.navigationBars["Log Run"].buttons["Cancel"].tap()
+            expect(app.buttons["Start Workout"], "back on the plan screen after the aerobic run")
             app.navigationBars.buttons.firstMatch.tap()
         }
 
@@ -133,14 +161,13 @@ final class SmokeTests: XCTestCase {
             expect(app.buttons["Try again"], "Try again after the Watch failed")
         }
 
-        step("End the workout") {
-            app.buttons["End Workout"].tap()
-            let endAlert = app.alerts["End this workout?"]
-            expect(endAlert, "the end confirmation")
-            endAlert.buttons["End workout"].tap()
-            let complete = app.alerts["Workout complete"]
-            expect(complete, "the workout-complete prompt")
-            complete.buttons["Later"].tap()
+        step("End the ordinary run; its log does not ask the talk test") {
+            endRunAndOpenLog()
+            // The rating row renders in the same pass as the talk test would, so waiting for it
+            // first means the absence below is a fact about the form, not about timing.
+            expect(app.staticTexts["Effort (RPE)"], "the form's required ratings")
+            expectAbsent(talkTestPicker, "the talk test on an ordinary run's log (§7)")
+            app.navigationBars["Log Run"].buttons["Cancel"].tap()
             expect(app.buttons["Start Workout"], "back on Today after the run")
         }
         // No closing "no sheet appeared" wait: the sheet has arrived as late as 27 s after its
@@ -149,6 +176,26 @@ final class SmokeTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    /// Ends the run on screen and opens its log. The simulator has no Watch workout to match, so
+    /// the run is logged without one, through "Log it anyway".
+    private func endRunAndOpenLog() {
+        app.buttons["End Workout"].tap()
+        let endAlert = app.alerts["End this workout?"]
+        expect(endAlert, "the end confirmation")
+        endAlert.buttons["End workout"].tap()
+        let complete = app.alerts["Workout complete"]
+        expect(complete, "the workout-complete prompt")
+        complete.buttons["Log it now"].tap()
+        let noWorkout = app.alerts["No Apple Watch workout found"]
+        expect(noWorkout, "the no-workout prompt")
+        noWorkout.buttons["Log it anyway"].tap()
+        expect(app.navigationBars["Log Run"], "the run log form")
+    }
+
+    private var talkTestPicker: XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Talk test")).firstMatch
+    }
 
     /// Runs one named step and attaches a screenshot of where it ended — or where it failed.
     private func step(_ name: String, _ body: () -> Void) {

@@ -46,6 +46,14 @@ final class PendingWorkoutExecution {
     /// Repetitions the timer actually completed. Nil when this app did not run the timer.
     var completedRepetitions: Int?
 
+    /// The plan's intent when the run began (aerobic spec §1), copied for the same reason as its
+    /// shape. Not set for a run recorded before intent existed — "not recorded", not `none`.
+    var intensityMode: String?
+    var targetRPEMin: Double?
+    var targetRPEMax: Double?
+    var targetHeartRateMin: Int?
+    var targetHeartRateMax: Int?
+
     var updatedAt: Date
 
     init(id: UUID = UUID(),
@@ -69,6 +77,40 @@ final class PendingWorkoutExecution {
         self.status = status.rawValue
         self.createdAt = createdAt
         self.updatedAt = createdAt
+    }
+
+    /// A run of `plan` starting now on the phone's timer, with a copy of everything the plan
+    /// decided in advance.
+    ///
+    /// Nil when the plan's activity type is not one this build recognizes; the caller says so.
+    static func started(from plan: PlannedWorkout, at date: Date = Date()) -> PendingWorkoutExecution? {
+        guard let activity = plan.activityTypeValue else { return nil }
+
+        // A plan of several segments, or an open-interval one, has no single run or walk length,
+        // so it records none — never the first segment's. `blockShape` carries the whole of it.
+        // An open plan has no fixed rounds or length either; those come back nil from the plan.
+        let singleShape = plan.singleShape
+
+        let execution = PendingWorkoutExecution(
+            plannedWorkoutID: plan.id,
+            plannedWorkoutName: plan.name,
+            expectedActivityType: activity,
+            expectedDurationSeconds: plan.expectedTotalSeconds,
+            runIntervalSeconds: singleShape?.runSeconds,
+            walkIntervalSeconds: singleShape?.walkSeconds,
+            plannedRepetitions: plan.totalRepetitions,
+            status: .started,
+            createdAt: date)
+        execution.blockShape = plan.blockShapeDescriptor
+        execution.timerStartedAt = date
+        // Written for every new run, `none` included, so not set keeps meaning "recorded before
+        // intent existed". A plan that predates the field has no intent, and says `none`.
+        execution.intensityMode = plan.intensityMode ?? WorkoutIntensityMode.notSpecified.rawValue
+        execution.targetRPEMin = plan.targetRPEMin
+        execution.targetRPEMax = plan.targetRPEMax
+        execution.targetHeartRateMin = plan.targetHeartRateMin
+        execution.targetHeartRateMax = plan.targetHeartRateMax
+        return execution
     }
 
     // MARK: - Typed accessors

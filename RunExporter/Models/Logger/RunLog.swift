@@ -52,6 +52,17 @@ final class RunLog {
     var shoeID: UUID?
     var notes: String?
 
+    /// The run's intent (aerobic spec §1), copied from its timer session at save, as the plan
+    /// shape is. Not set for a log written before intent existed, or one with no timer session.
+    var intensityMode: String?
+    var targetRPEMin: Double?
+    var targetRPEMax: Double?
+    var targetHeartRateMin: Int?
+    var targetHeartRateMax: Int?
+    /// `TalkTest`'s raw value (§7). Set only when the form asked — an aerobic run's — so not set
+    /// means the question was never put, and `notRecorded` means it was put and left.
+    var talkTest: String?
+
     @Relationship(deleteRule: .cascade, inverse: \BodySignalDetail.runLog)
     var bodySignalDetails: [BodySignalDetail] = []
 

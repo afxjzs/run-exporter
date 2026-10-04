@@ -252,6 +252,60 @@ enum BodyArea: String, CaseIterable, Identifiable {
     }
 }
 
+/// What a planned run sets out to train (aerobic spec §1).
+///
+/// The case for "no intent" is `notSpecified`, stored and exported as `"none"` as the spec names
+/// it. It is not called `none`: on an optional, `.none` means nil, so `mode == .none` would quietly
+/// ask whether the value is missing.
+enum WorkoutIntensityMode: String, CaseIterable, Identifiable {
+    case notSpecified = "none"
+    /// Easy running by feel: RPE 3–4, conversational. Heart rate is recorded, not prescribed.
+    case easyAerobicObservation
+    /// A heart-rate range. Modeled for later (§20); nothing offers it yet.
+    case heartRateRange
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .notSpecified: return "None"
+        case .easyAerobicObservation: return "Easy aerobic"
+        case .heartRateRange: return "Heart-rate range"
+        }
+    }
+
+    /// The modes a plan editor offers today. `heartRateRange` waits until a range is chosen from
+    /// collected data (§20); offering it now would invite exactly the guessed range §1 rules out.
+    static let offered: [WorkoutIntensityMode] = [.notSpecified, .easyAerobicObservation]
+
+    /// The aerobic target (§1): RPE 3–4.
+    static let easyAerobicRPE: ClosedRange<Double> = 3...4
+}
+
+/// How talking felt during the run — the post-run talk test (aerobic spec §7). Stored and exported
+/// as the raw values the spec names.
+enum TalkTest: String, CaseIterable, Identifiable {
+    case comfortable
+    case shortSentences
+    case fewWords
+    case veryDifficult
+    /// Offered and left unanswered. A run whose form never asked has no value at all (Decisions
+    /// D18) — that is "not asked", and this is "asked, not answered".
+    case notRecorded
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .comfortable: return "Comfortable conversation"
+        case .shortSentences: return "Short sentences"
+        case .fewWords: return "Few words"
+        case .veryDifficult: return "Very difficult"
+        case .notRecorded: return "Not recorded"
+        }
+    }
+}
+
 /// Why a running leg in an open-interval workout stopped.
 ///
 /// Recorded rather than inferred. A leg's duration cannot tell these apart, and the difference is

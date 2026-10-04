@@ -18,6 +18,7 @@ struct RunLogFormView: View {
     @State private var draft: RunLogDraft?
     @State private var errorMessage: String?
     @State private var isEditingExisting = false
+    @State private var offersTalkTest = false
 
     var body: some View {
         Form {
@@ -25,6 +26,7 @@ struct RunLogFormView: View {
 
             if let binding = draftBinding {
                 requiredSection(binding)
+                if offersTalkTest { TalkTestSection(talkTest: binding.talkTest) }
                 if defaults.showBodySignals { bodySignalSection(binding) }
                 // No Shoes section: hidden 2026-10-01 (docs/BACKLOG.md, "Hide shoes for now").
                 // `loadDraft` still prefills `shoeID` from `defaultShoe()`, so the log records the
@@ -154,7 +156,16 @@ struct RunLogFormView: View {
 
     private func loadDraft() {
         guard draft == nil else { return }
+        loadUnaskedDraft()
+        // Asked for an easy aerobic run only (§7). Its session is the draft's, or the one `save`
+        // will resolve from the workout — the same resolution, so the two cannot disagree.
+        let executionID = draft?.executionID ?? context?.executionID
+            ?? logger.execution(forWorkout: workout)
+        offersTalkTest = logger.offersTalkTest(executionID: executionID)
+        if offersTalkTest && draft?.talkTest == nil { draft?.talkTest = .notRecorded }
+    }
 
+    private func loadUnaskedDraft() {
         if let existing = logger.runLog(forWorkout: workout.uuid) {
             draft = RunLogDraft(log: existing)
             isEditingExisting = true

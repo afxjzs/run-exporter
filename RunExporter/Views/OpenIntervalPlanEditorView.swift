@@ -30,6 +30,7 @@ struct OpenIntervalPlanEditorView: View {
     @State private var cooldownMode: CooldownMode = .open
     @State private var cooldownMinutes = 10
     @State private var isNextWorkout = false
+    @State private var intensity = IntensityChoice()
     @State private var errorMessage: String?
     @State private var hasLoaded = false
 
@@ -87,6 +88,8 @@ struct OpenIntervalPlanEditorView: View {
             } footer: {
                 Text(footerText)
             }
+
+            IntensitySection(mode: $intensity.mode)
 
             Section("Warmup") {
                 Picker("Warmup", selection: $warmupMode) {
@@ -146,6 +149,7 @@ struct OpenIntervalPlanEditorView: View {
         cooldownMode = plan.cooldownModeValue ?? .open
         cooldownMinutes = max(1, (plan.cooldownSeconds ?? 600) / 60)
         isNextWorkout = plan.isNextWorkout
+        intensity = IntensityChoice(plan: plan)
 
         if let shape = plan.openIntervalShape {
             targetMinutes = shape.targetRunSeconds / 60
@@ -171,6 +175,7 @@ struct OpenIntervalPlanEditorView: View {
         target.warmupSeconds = warmupMode == .timed ? warmupMinutes * 60 : nil
         target.cooldownMode = cooldownMode.rawValue
         target.cooldownSeconds = cooldownMode == .timed ? cooldownMinutes * 60 : nil
+        intensity.write(to: target, isNew: plan == nil)
         target.updatedAt = Date()
 
         writeShape(to: target)

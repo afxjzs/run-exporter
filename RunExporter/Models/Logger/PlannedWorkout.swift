@@ -63,6 +63,17 @@ final class PlannedWorkout {
     @Relationship(deleteRule: .cascade, inverse: \OpenIntervalShape.plan)
     var openIntervalShape: OpenIntervalShape?
 
+    /// What this plan sets out to train (aerobic spec §1), as `WorkoutIntensityMode`'s raw value.
+    /// Read through `intensity`. Not set on a plan made before the field existed, which means no
+    /// intent: such a plan behaves exactly as it always has.
+    var intensityMode: String?
+    /// The effort to aim for, for `easyAerobicObservation`. Not set otherwise.
+    var targetRPEMin: Double?
+    var targetRPEMax: Double?
+    /// For `heartRateRange`, which nothing offers yet (§20). Not set otherwise.
+    var targetHeartRateMin: Int?
+    var targetHeartRateMax: Int?
+
     init(id: UUID = UUID(),
          name: String,
          activityType: PlannedActivityType = .running,
@@ -102,6 +113,13 @@ final class PlannedWorkout {
     var activityTypeValue: PlannedActivityType? { PlannedActivityType(rawValue: activityType) }
     var warmupModeValue: WarmupMode? { WarmupMode(rawValue: warmupMode) }
     var cooldownModeValue: CooldownMode? { CooldownMode(rawValue: cooldownMode) }
+
+    /// This plan's intent. Not set is `notSpecified` — a plan from before intent existed had none.
+    /// A stored string this build does not know is nil, reported rather than read as no intent.
+    var intensity: WorkoutIntensityMode? {
+        guard let intensityMode else { return .notSpecified }
+        return WorkoutIntensityMode(rawValue: intensityMode)
+    }
 
     // MARK: - Shape
 
@@ -415,6 +433,13 @@ final class PlannedWorkout {
         copy.warmupSeconds = warmupSeconds
         copy.cooldownMode = cooldownMode
         copy.cooldownSeconds = cooldownSeconds
+        // Raw, like the modes above. Dropped, a copy of an aerobic plan would record every run of
+        // it as having no intent.
+        copy.intensityMode = intensityMode
+        copy.targetRPEMin = targetRPEMin
+        copy.targetRPEMax = targetRPEMax
+        copy.targetHeartRateMin = targetHeartRateMin
+        copy.targetHeartRateMax = targetHeartRateMax
 
         // New records, never the originals. `PlannedWorkoutBlock.plan` is the inverse of `blocks`,
         // so assigning the original's blocks re-parents them: the plan being copied is left with

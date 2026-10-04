@@ -750,4 +750,242 @@ final class LoggerStoreMigrationTests: XCTestCase {
         XCTAssertEqual(try ShapeZeroRepair.run(in: migrated.mainContext), 1)
         XCTAssertEqual(try ShapeZeroRepair.run(in: migrated.mainContext), 0)
     }
+
+    // MARK: - Aerobic intent and the talk test
+
+    /// The store as it stands before aerobic intent (aerobic spec §1) and the talk test (§7): every
+    /// model that gains a field, frozen as it was. `RunLog` and `BodySignalDetail` are frozen here
+    /// too — `PreOptionalShapeSchema` borrows the live `RunLog`, so it cannot stand in.
+    ///
+    /// Frozen copies, like the schemas above. Do **not** add new properties here.
+    enum PreAerobicSchema: VersionedSchema {
+        static var versionIdentifier: Schema.Version { Schema.Version(4, 0, 0) }
+
+        static var models: [any PersistentModel.Type] {
+            [PlannedWorkout.self, PlannedWorkoutBlock.self, OpenIntervalShape.self,
+             PendingWorkoutExecution.self, RunLog.self, BodySignalDetail.self]
+        }
+
+        @Model
+        final class PlannedWorkout {
+            @Attribute(.unique) var id: UUID
+            var name: String
+            var activityType: String
+            var warmupMode: String
+            var warmupSeconds: Int?
+            var runIntervalSeconds: Int?
+            var walkIntervalSeconds: Int?
+            var plannedRepetitions: Int?
+            var includesFinalWalk: Bool
+            var cooldownMode: String
+            var cooldownSeconds: Int?
+            var countdownSeconds: Int
+            var createdAt: Date
+            var updatedAt: Date
+            var isNextWorkout: Bool
+            var workoutKitIdentifier: String?
+
+            @Relationship(deleteRule: .cascade, inverse: \PlannedWorkoutBlock.plan)
+            var blocks: [PlannedWorkoutBlock] = []
+            @Relationship(deleteRule: .cascade, inverse: \OpenIntervalShape.plan)
+            var openIntervalShape: OpenIntervalShape?
+
+            init(id: UUID, name: String, run: Int?, walk: Int?, reps: Int?) {
+                self.id = id
+                self.name = name
+                self.activityType = "running"
+                self.warmupMode = "none"
+                self.runIntervalSeconds = run
+                self.walkIntervalSeconds = walk
+                self.plannedRepetitions = reps
+                self.includesFinalWalk = false
+                self.cooldownMode = "open"
+                self.countdownSeconds = 0
+                self.createdAt = Date()
+                self.updatedAt = Date()
+                self.isNextWorkout = false
+            }
+        }
+
+        @Model
+        final class PlannedWorkoutBlock {
+            @Attribute(.unique) var id: UUID
+            var orderIndex: Int
+            var runIntervalSeconds: Int
+            var walkIntervalSeconds: Int
+            var repetitions: Int
+            var plan: PlannedWorkout?
+
+            init(orderIndex: Int, run: Int, walk: Int, reps: Int) {
+                self.id = UUID()
+                self.orderIndex = orderIndex
+                self.runIntervalSeconds = run
+                self.walkIntervalSeconds = walk
+                self.repetitions = reps
+            }
+        }
+
+        @Model
+        final class OpenIntervalShape {
+            @Attribute(.unique) var id: UUID
+            var targetRunSeconds: Int
+            var walkFloorSeconds: Int
+            var plan: PlannedWorkout?
+
+            init(target: Int, floor: Int) {
+                self.id = UUID()
+                self.targetRunSeconds = target
+                self.walkFloorSeconds = floor
+            }
+        }
+
+        @Model
+        final class PendingWorkoutExecution {
+            @Attribute(.unique) var id: UUID
+            var plannedWorkoutID: UUID
+            var expectedActivityType: String
+            var createdAt: Date
+            var expectedDurationSeconds: Int?
+            var status: String
+            var matchedHealthKitWorkoutUUID: UUID?
+            var plannedWorkoutName: String
+            var runIntervalSeconds: Int?
+            var walkIntervalSeconds: Int?
+            var plannedRepetitions: Int?
+            var blockShape: String?
+            var timerStartedAt: Date?
+            var timerEndedAt: Date?
+            var completedRepetitions: Int?
+            var updatedAt: Date
+
+            init(id: UUID, planID: UUID) {
+                self.id = id
+                self.plannedWorkoutID = planID
+                self.expectedActivityType = "running"
+                self.createdAt = Date()
+                self.expectedDurationSeconds = 1_500
+                self.status = "completed"
+                self.plannedWorkoutName = "4/1 × 5"
+                self.runIntervalSeconds = 240
+                self.walkIntervalSeconds = 60
+                self.plannedRepetitions = 5
+                self.blockShape = "240/60x5"
+                self.completedRepetitions = 5
+                self.updatedAt = Date()
+            }
+        }
+
+        @Model
+        final class RunLog {
+            @Attribute(.unique) var id: UUID
+            var healthKitWorkoutUUID: UUID?
+            var plannedWorkoutID: UUID?
+            var executionID: UUID?
+            var createdAt: Date
+            var updatedAt: Date
+            var workoutStartDate: Date
+            var workoutDistanceMiles: Double?
+            var workoutActivityType: String
+            var runIntervalSeconds: Int?
+            var walkIntervalSeconds: Int?
+            var plannedRepetitions: Int?
+            var completedRepetitions: Int?
+            var effortRPE: Double
+            var personalHeatRating: Double
+            var lowerBackSeverity: Double
+            var leftAnkleSeverity: Double
+            var rightAnkleSeverity: Double
+            var leftKneeSeverity: Double
+            var rightKneeSeverity: Double
+            var shoeID: UUID?
+            var notes: String?
+
+            @Relationship(deleteRule: .cascade, inverse: \BodySignalDetail.runLog)
+            var bodySignalDetails: [BodySignalDetail] = []
+
+            init(executionID: UUID) {
+                self.id = UUID()
+                self.healthKitWorkoutUUID = UUID()
+                self.executionID = executionID
+                self.createdAt = Date()
+                self.updatedAt = Date()
+                self.workoutStartDate = Date()
+                self.workoutDistanceMiles = 2
+                self.workoutActivityType = "running"
+                self.effortRPE = 4
+                self.personalHeatRating = 5
+                self.lowerBackSeverity = 1
+                self.leftAnkleSeverity = 0
+                self.rightAnkleSeverity = 0
+                self.leftKneeSeverity = 0
+                self.rightKneeSeverity = 0
+                self.notes = "before aerobic"
+            }
+        }
+
+        @Model
+        final class BodySignalDetail {
+            @Attribute(.unique) var id: UUID
+            var area: String
+            var timing: String?
+            var character: String?
+            var note: String?
+            var createdAt: Date
+            var runLog: RunLog?
+
+            init() {
+                self.id = UUID()
+                self.area = "lowerBack"
+                self.createdAt = Date()
+            }
+        }
+    }
+
+    /// A plan, a run of it and its log, written before aerobic intent existed, open under the new
+    /// schema with everything they held, and read as "not set" for the new fields (D18) — not as
+    /// `none` or `notRecorded`, which say something was decided or asked.
+    func testAStoreFromBeforeAerobicIntentOpensAndKeepsEverything() throws {
+        // The premise, asserted: the frozen schema really lacks the new attributes.
+        let entities = Schema(PreAerobicSchema.models).entities
+        for (entity, attribute) in [("PlannedWorkout", "intensityMode"),
+                                    ("PendingWorkoutExecution", "intensityMode"),
+                                    ("RunLog", "talkTest")] {
+            let model = try XCTUnwrap(entities.first { $0.name == entity })
+            XCTAssertFalse(model.attributes.contains { $0.name == attribute },
+                           "the pre-aerobic \(entity) must not have \(attribute)")
+        }
+
+        let planID = UUID(), executionID = UUID()
+        try autoreleasepool {
+            let old = try container(for: PreAerobicSchema.models)
+            let context = old.mainContext
+            typealias S = PreAerobicSchema
+            context.insert(S.PlannedWorkout(id: planID, name: "4/1 × 5", run: 240, walk: 60, reps: 5))
+            context.insert(S.PendingWorkoutExecution(id: executionID, planID: planID))
+            let log = S.RunLog(executionID: executionID)
+            context.insert(log)
+            log.bodySignalDetails = [S.BodySignalDetail()]
+            try context.save()
+        }
+
+        let migrated = try container(for: LoggerStore.models)
+        let context = migrated.mainContext
+
+        let plan = try XCTUnwrap(try context.fetch(FetchDescriptor<PlannedWorkout>()).first)
+        XCTAssertEqual(plan.intervalSummary, "4/1 × 5", "the plan still runs as it did")
+        XCTAssertNil(plan.intensityMode)
+        XCTAssertEqual(plan.intensity, .notSpecified,
+                       "an old plan behaves exactly as before: no intent (§1)")
+
+        let execution = try XCTUnwrap(try context.fetch(FetchDescriptor<PendingWorkoutExecution>()).first)
+        XCTAssertEqual(execution.blockShape, "240/60x5")
+        XCTAssertNil(execution.intensityMode, "an old run recorded no intent; that is not `none`")
+
+        let log = try XCTUnwrap(try context.fetch(FetchDescriptor<RunLog>()).first)
+        XCTAssertEqual(log.notes, "before aerobic")
+        XCTAssertEqual(log.lowerBackSeverity, 1)
+        XCTAssertEqual(log.bodySignalDetails.count, 1, "body signals are kept (§8)")
+        XCTAssertNil(log.intensityMode)
+        XCTAssertNil(log.talkTest, "the talk test was never asked; that is not `notRecorded`")
+    }
 }

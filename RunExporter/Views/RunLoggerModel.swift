@@ -527,6 +527,7 @@ final class RunLoggerModel {
         // Applied on this path too, so "a save never blanks the plan shape" holds for every write
         // rather than only the one where the loss was observed.
         backfillPlanShape(on: log, fromExecution: executionID)
+        copyIntent(on: log, fromExecution: executionID)
         log.updatedAt = Date()
 
         if let error = saveAndRecord() { return error }
@@ -670,6 +671,34 @@ final class RunLoggerModel {
         log.walkIntervalSeconds = draft.walkIntervalSeconds
         log.plannedRepetitions = draft.plannedRepetitions
         log.completedRepetitions = draft.completedRepetitions
+        applyTalkTest(draft, to: log)
+    }
+
+    /// Writes the talk test when the form asked it. A draft that never offered it carries nil, and
+    /// nil never overwrites an answer already saved — the blank-form loss this file guards against
+    /// elsewhere.
+    private func applyTalkTest(_ draft: RunLogDraft, to log: RunLog) {
+        if let talkTest = draft.talkTest { log.talkTest = talkTest.rawValue }
+    }
+
+    /// Copies the run's intent from its timer session (aerobic spec §1). The form does not edit
+    /// intent, so the session — which copied it from the plan as the run began — is the authority,
+    /// and a later edit to the plan cannot reach it. With no session nothing is written: a log of
+    /// a run never planned in this app has no intent to report.
+    private func copyIntent(on log: RunLog, fromExecution executionID: UUID?) {
+        guard let executionID, let execution = executionRecord(id: executionID) else { return }
+        log.intensityMode = execution.intensityMode
+        log.targetRPEMin = execution.targetRPEMin
+        log.targetRPEMax = execution.targetRPEMax
+        log.targetHeartRateMin = execution.targetHeartRateMin
+        log.targetHeartRateMax = execution.targetHeartRateMax
+    }
+
+    /// The intent of the run a timer session recorded, for the forms: they offer the talk test for
+    /// an aerobic run only (§7). Nil when the session is unknown or predates intent.
+    func intensity(forExecution executionID: UUID?) -> WorkoutIntensityMode? {
+        guard let executionID, let execution = executionRecord(id: executionID) else { return nil }
+        return execution.intensityMode.flatMap(WorkoutIntensityMode.init(rawValue:))
     }
 
     /// Fills the plan shape from the timer session when the draft does not carry it.
@@ -783,7 +812,9 @@ final class RunLoggerModel {
         log.walkIntervalSeconds = draft.walkIntervalSeconds
         log.plannedRepetitions = draft.plannedRepetitions
         log.completedRepetitions = draft.completedRepetitions
+        applyTalkTest(draft, to: log)
         backfillPlanShape(on: log, fromExecution: executionID)
+        copyIntent(on: log, fromExecution: executionID)
         log.updatedAt = Date()
 
         if let error = saveAndRecord() { return error }
@@ -1066,6 +1097,9 @@ struct RunLogDraft {
     var plannedRepetitions: Int?
     var completedRepetitions: Int?
 
+    /// Nil until the form offers the talk test, which it does for an aerobic run only (§7).
+    var talkTest: TalkTest?
+
     func severity(for area: BodyArea) -> Double { severities[area] ?? 0 }
 
     var isComplete: Bool { effortRPE != nil && personalHeatRating != nil }
@@ -1083,6 +1117,7 @@ struct RunLogDraft {
         walkIntervalSeconds = log.walkIntervalSeconds
         plannedRepetitions = log.plannedRepetitions
         completedRepetitions = log.completedRepetitions
+        talkTest = log.talkTest.flatMap(TalkTest.init(rawValue:))
     }
 
     /// A fresh draft. Body signals start at zero (spec §15.3); the two ratings start unset.
