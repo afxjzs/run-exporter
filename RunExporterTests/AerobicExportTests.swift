@@ -281,6 +281,36 @@ final class AerobicExportTests: XCTestCase {
         try assertNumber(row, "runningAverageHR", 140)
     }
 
+    // MARK: - JSON (§18)
+
+    /// The summary again as JSON, with numbers as numbers and blanks as null, and the methodology
+    /// that produced it — so an analysis can tell which rules made a number after they change.
+    func testTheJSONExportCarriesTheSummaryAndHowItWasMade() throws {
+        try export(legs: [Leg("run", 0, 1_800)],
+                   heartRate: grid(0, 1_800) { _ in 140 },
+                   distance: [])
+
+        let data = try Data(contentsOf: exportFolder.appendingPathComponent("aerobic_analysis.json"))
+        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        let method = try XCTUnwrap(json["methodology"] as? [String: Any], "no methodology section")
+        XCTAssertEqual(method["analysisVersion"] as? String, "1")
+        for key in ["runningOnlySplit", "liveHeartRateSmoothing", "heartRateDrift", "efficiency",
+                    "heartRateDataQuality", "paceDistanceSource"] {
+            let text = try XCTUnwrap(method[key] as? String, "methodology has no \(key)")
+            XCTAssertFalse(text.isEmpty, "\(key) is empty")
+        }
+
+        let workouts = try XCTUnwrap(json["workouts"] as? [[String: Any]])
+        let row = try XCTUnwrap(workouts.first { $0["healthKitWorkoutUUID"] as? String == workoutUUID })
+        XCTAssertEqual(try XCTUnwrap(row["runningAverageHR"] as? Double), 140, accuracy: 0.001)
+        XCTAssertEqual(row["insufficientHRData"] as? Bool, false)
+        XCTAssertTrue(row["totalRunningDistanceMeters"] is NSNull,
+                      "no distance is null in JSON, never 0 (§17)")
+        XCTAssertEqual(Set(row.keys), Set(AerobicExport.summaryColumns),
+                       "the JSON carries exactly the CSV's columns")
+    }
+
     // MARK: - Building a run
 
     /// One leg as the app records it. `pauses` are absolute times inside the leg; they become pause

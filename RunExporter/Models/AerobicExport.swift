@@ -32,6 +32,75 @@ enum AerobicExport {
 
     static let blankIntervalValues = Array(repeating: "", count: intervalColumns.count)
 
+    // MARK: - JSON (§18)
+
+    static let jsonFileName = "aerobic_analysis.json"
+
+    /// How these numbers were made, written into every export (§18), because the formulas will
+    /// change and an old export must still say which ones produced it. Each line restates a
+    /// Decision in `docs/AEROBIC_TRACKING_SPEC.md`; change both together, and raise
+    /// `AerobicAnalysis.analysisVersion`.
+    static var methodology: [String: Any] {
+        [
+            "analysisVersion": AerobicAnalysis.analysisVersion,
+            "decisions": "docs/AEROBIC_TRACKING_SPEC.md, Decisions D1-D19",
+            "runningOnlySplit": "Running legs only, sliced by each leg's active windows (pauses "
+                + "removed). The halves split at half the cumulative running time; walks, cooldown "
+                + "and pauses do not count, and the leg containing that moment is cut at it (D2, D13).",
+            "liveHeartRateSmoothing": "Not used here. Every figure in this file comes from the "
+                + "workout's own HealthKit samples after the run, never from the live display.",
+            "heartRateDrift": "heartRateDriftBPM = secondHalfAverageHR - firstHalfAverageHR; "
+                + "heartRateDriftPercent = that / firstHalfAverageHR x 100. Averages are "
+                + "time-weighted: each moment is credited to the nearest sample within 5 s inside "
+                + "the window (D12, D17).",
+            "efficiency": "Meters per heartbeat = speed (m/s) / (heart rate / 60). "
+                + "efficiencyChangePercent = (second - first) / first x 100; negative means fewer "
+                + "meters per beat in the second half. A longitudinal comparison, not a measure of "
+                + "fitness (D16, D17).",
+            "heartRateDataQuality": "Coverage = share of running time within 5 s of a sample. "
+                + "insufficientHRData when running coverage, or either half's, is under 80%; then "
+                + "half-by-half heart rate, drift and efficiency are null. A leg's heart-rate "
+                + "figures need 2 samples and 80% coverage (D5-D9).",
+            "paceDistanceSource": "The workout's own distance samples (HealthKit's samples "
+                + "associated with the workout, not every source in its window), each prorated by "
+                + "its overlap with the window. No samples means null, never 0 (D1, D14, D15).",
+            "recovery": "heartRateDrop30s/60s/120s = the preceding run's end reading minus the "
+                + "reading 30/60/120 s of wall-clock time after it ended, each the nearest sample "
+                + "within 5 s; written for a walk or cooldown that directly follows a run (D11).",
+        ]
+    }
+
+    /// Columns that hold text in the JSON; every other column is a number or, for
+    /// `insufficientHRData`, a boolean.
+    private static let textColumns: Set<String> = [
+        "healthKitWorkoutUUID", "runLogID", "executionID", "plannedWorkoutID", "startDate",
+        "intensityMode", "talkTest", "analysisVersion",
+    ]
+
+    /// The summary rows as JSON objects, made from the very cells the CSV writes so the two files
+    /// cannot disagree. Blank is null, never 0.
+    static func jsonRows(_ rows: [[String]]) -> [[String: Any]] {
+        rows.map { values in
+            var object: [String: Any] = [:]
+            for (column, cell) in zip(summaryColumns, values) {
+                if cell.isEmpty {
+                    object[column] = NSNull()
+                } else if textColumns.contains(column) {
+                    object[column] = cell
+                } else if column == "insufficientHRData" {
+                    object[column] = cell == "true"
+                } else if let number = Double(cell) {
+                    object[column] = number
+                } else {
+                    // A cell this writer produced should always parse. Keep the text rather than
+                    // drop or zero it, so the JSON still says what the CSV says.
+                    object[column] = cell
+                }
+            }
+            return object
+        }
+    }
+
     struct Output {
         var summaryRows: [[String]] = []
         /// Each analyzed leg's values for `intervalColumns`, by `intervalLogID`. A leg with no entry

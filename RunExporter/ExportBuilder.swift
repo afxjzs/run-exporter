@@ -452,6 +452,10 @@ struct ExportBuilder {
         ]
         try writeJSON(recordsByType, "records_by_type.json", folder)
 
+        try writeJSON(["methodology": AerobicExport.methodology,
+                       "workouts": AerobicExport.jsonRows(aerobic.summaryRows)],
+                      AerobicExport.jsonFileName, folder)
+
         // `issues` keeps the v1 flat-string shape; `entries` adds the structured form.
         let log: [String: Any] = [
             "issues": dataset.issues,
@@ -826,6 +830,24 @@ struct ExportBuilder {
         whose legs the runner ends, the actual columns are the only description of its legs. They \
         are BLANK when no leg was recorded, and when the legs could not be read, which \
         export_log.json then names.
+
+        AEROBIC: aerobic_workout_summary.csv has one row per workout that joins legs recorded by \
+        this app, whether or not it was logged or planned as aerobic. Its heart rate and distance \
+        are the workout's OWN HealthKit samples — not every source that wrote during it — sliced \
+        by the app's legs with pauses removed, so walks, cooldown and pauses never reach the \
+        running figures. The first and second halves split at half the cumulative RUNNING time, \
+        not the clock. Every formula and threshold is in aerobic_analysis.json under \
+        "methodology", with the analysisVersion that produced it; the same rows are there with \
+        null for blank. BLANK means not measurable, never zero. insufficientHRData = true means \
+        heart-rate coverage was too thin to compare halves, so drift and efficiency are blank. \
+        Efficiency is meters per heartbeat, a longitudinal comparison between runs, not a \
+        measure of fitness or anything medical. workout_intervals.csv ends with each leg's heart \
+        rate (hrSampleCount to endHR) and, on a walk or cooldown straight after a run, \
+        heartRateDrop30s/60s/120s: heart rate at the run's end minus heart rate that long after. \
+        run_logs.csv ends with the run's intent — intensityMode (none, easyAerobicObservation) \
+        and its targets, copied from the plan as the run began — and talkTest, asked only after \
+        an easyAerobicObservation run. BLANK in any of these means not recorded: the run or log \
+        predates them, or the question was never asked. notRecorded means it was asked and left.
 
         CUES: this export was created with cue_source "\(intervalAudio.cueSource)" and cue_mode \
         "\(intervalAudio.cueMode)". See "interval_audio" in manifest.json.
