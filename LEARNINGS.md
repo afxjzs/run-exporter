@@ -257,6 +257,30 @@ Read from the Watch's forwarded log; the date and specifics are in `private/run-
   so first; workout sharing refused stops; any route short of complete saves orange; a refusal is
   logged once and counted (`RouteTally`). Unmeasured until a run uses it.
 
+### Workout Routes reverts on the Watch with no install at all (2026-10-07)
+
+Measured from the forwarded log on build 202610051330. The owner allowed Health access and the
+per-type check read `routes authorized`; the app went to the background; two minutes later it came
+back and read `routes denied`, sheet unanswered — no install, no app restart, nothing logged between.
+It had happened at least twice more since the install two days before. So the earlier entry's
+"an install turns routes off" is one trigger, not the only one, and **why is not known.** The app's
+own ask-whenever-on-screen is what turns each revert into a prompt the owner sees; the owner also
+reports repeated prompts on the phone, which does not log its checks, so that half is not measured.
+
+### A launch reported failed while the Watch was connecting fine (2026-10-07)
+
+Both logs, same run. The Watch started its session, tried to send before its mirror to the phone was
+up, and logged `Sending to the phone failed: Workout session is not currently mirroring to the
+companion device` — then `iPhone link: connected` three seconds later. The phone, still waiting,
+read that forwarded error line as the launch failing (`reportWatchErrorDuringLaunch` fails on any
+error line), showed "continues on the phone only", and never logged the mirrored session arriving.
+Every Try again after that was a new start, which the Watch refused because it was already
+recording; ending the run on the phone then told the Watch nothing, and its log said "the watch saved
+nothing" while the Watch was still recording. **Not yet known:** why the mirrored session never
+reached the phone, when the Watch reported it connected. The owner's rule for the fix: the phone
+decides and the Watch follows — a start from the phone while the Watch records means the Watch
+takes on the phone's run.
+
 ---
 
 ## Audio cues
