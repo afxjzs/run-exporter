@@ -411,6 +411,10 @@ struct ActiveWorkoutView: View {
                 .foregroundStyle(.white.opacity(0.7))
                 .monospacedDigit()
 
+            if model.intensity == .easyAerobicObservation {
+                aerobicPanel
+            }
+
             Spacer(minLength: 0)
 
             controls(model: model)
@@ -449,7 +453,10 @@ struct ActiveWorkoutView: View {
             watchLine("Watch not updated. It may show the wrong phase until the link recovers.",
                       systemImage: "exclamationmark.applewatch")
         case .connected:
-            watchLine(watchConnectedText, systemImage: "applewatch.radiowaves.left.and.right")
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                watchLine(watchConnectedText(now: context.date),
+                          systemImage: "applewatch.radiowaves.left.and.right")
+            }
         case .failed(let reason), .disconnected(let reason):
             VStack(spacing: 8) {
                 watchLine(watchProblemText(reason), systemImage: "applewatch.slash")
@@ -460,9 +467,58 @@ struct ActiveWorkoutView: View {
         }
     }
 
-    private var watchConnectedText: String {
-        guard let bpm = watchLink.latestStatus?.heartRate else { return "Watch recording" }
+    /// Its heart rate only while current: this line used to show the last reading for as long as
+    /// the Watch stayed connected, however old it was. On its own clock, because the engine may not
+    /// tick while paused. An aerobic run's panel shows the number instead, so it appears once.
+    private func watchConnectedText(now: Date) -> String {
+        guard model?.intensity != .easyAerobicObservation,
+              case let .current(bpm) = liveHeartRate(now: now) else { return "Watch recording" }
         return "Watch recording · \(Display.heartRate(bpm))"
+    }
+
+    private func liveHeartRate(now: Date) -> LiveHeartRate {
+        LiveHeartRate.onPhone(watchLink.latestStatus, receivedAt: watchLink.latestStatusReceivedAt, now: now)
+    }
+
+    // MARK: - Aerobic
+
+    /// An easy aerobic run's heart rate and target (aerobic spec §4). The number is the Watch's
+    /// latest reading, unsmoothed, and the caption says so; an old one reads "HR --" (§6). Its own
+    /// one-second clock, so a reading goes stale on screen even when nothing else redraws it.
+    private var aerobicPanel: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let reading = liveHeartRate(now: context.date)
+            VStack(spacing: 4) {
+                Text(heartRateHeadline(reading))
+                    .font(.system(size: 52, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                Text(heartRateCaption(reading))
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.75))
+                Text(WorkoutIntensityMode.easyAerobicTargetText)
+                    .font(.headline)
+            }
+        }
+    }
+
+    private func heartRateHeadline(_ reading: LiveHeartRate) -> String {
+        guard case let .current(bpm) = reading else { return "HR --" }
+        return Display.heartRate(bpm)
+    }
+
+    /// Why the number is missing, when it is. The connection comes first: a Watch that is not
+    /// connected has no reading to be stale.
+    private func heartRateCaption(_ reading: LiveHeartRate) -> String {
+        if watchLink.runConnection == .connecting { return "connecting to the Watch" }
+        guard watchLink.runConnection == .connected else { return "Watch not connected" }
+        switch reading {
+        case .current: return "latest Watch reading"
+        case .noReading: return "waiting for the first reading"
+        case .stale(let age): return "no new reading for \(Int(age)) s"
+        case .ageUnknown: return "update the Watch app to show heart rate"
+        }
     }
 
     /// A system error's text often has no final full stop ("Unable to launch watch app"), which ran it

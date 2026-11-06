@@ -134,7 +134,9 @@ final class ExportViewModel: ObservableObject {
     func requestHealthAccess() {
         Task {
             do {
-                try await health.requestAuthorization()
+                if let logProblem = try await health.requestAuthorization(context: "Export, Request Health access") {
+                    errorMessage = logProblem
+                }
                 markAuthorizationRequested()
                 statusMessage = "Health access granted. Ready to export."
             } catch {
@@ -162,7 +164,9 @@ final class ExportViewModel: ObservableObject {
             do {
                 // Ensure the current read-type set has been requested at least once.
                 if !authorizationIsCurrent {
-                    try await health.requestAuthorization()
+                    if let logProblem = try await health.requestAuthorization(context: "Export") {
+                        errorMessage = logProblem
+                    }
                     markAuthorizationRequested()
                 }
 

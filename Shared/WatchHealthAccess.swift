@@ -1,4 +1,100 @@
 import Foundation
+import HealthKit
+
+/// The Health types the Watch app asks for. One list, used both when asking up front and when
+/// checking at launch, so the two cannot drift apart: the first link test stalled when the link
+/// asked for a type the probe never had. `workoutRoute` is shared so the GPS route can be saved
+/// with the workout.
+///
+/// The phone asks for `share` too, and both apps read `workoutRoute`. While the phone only read
+/// routes and the Watch only wrote them, answering either device's Health sheet re-opened the
+/// other's (LEARNINGS.md, "Answering one device's Health sheet re-opens the other's");
+/// `PairedHealthRequestTests` holds every type both apps ask about to the same access.
+///
+/// In `Shared/` so the phone's tests can check the probe against exactly what the Watch asks for.
+enum WatchHealthTypes {
+    static let share: Set<HKSampleType> = [HKObjectType.workoutType(), HKSeriesType.workoutRoute()]
+    static let read: Set<HKObjectType> = [
+        HKObjectType.workoutType(),
+        HKSeriesType.workoutRoute(),
+        HKQuantityType(.heartRate),
+        HKQuantityType(.activeEnergyBurned),
+        HKQuantityType(.distanceWalkingRunning),
+    ]
+}
+
+/// What HealthKit says about **each** requested type, one line, for both apps' diagnostic logs.
+///
+/// Built 2026-10-23 to measure the repeated Health sheets: answering the phone's sheet was followed
+/// within seconds by the Watch's Workout Routes reading denied (LEARNINGS.md, "Answering one
+/// device's Health sheet re-opens the other's"). The whole-request check says only that *some*
+/// type would prompt; this names which.
+///
+/// Per type it reports `asks` (asking for this type alone would show a sheet), `answered` or
+/// `unknown`, from `statusForAuthorizationRequest` — the one per-type answer HealthKit gives for
+/// read access, which it otherwise hides. For a type the app writes it adds `write=` with
+/// `authorizationStatus(for:)`. A check that throws is reported in its place, never dropped.
+///
+/// In `Shared/`, compiled into both apps, so the two logs spell every answer the same way.
+@MainActor
+enum HealthAccessProbe {
+    static func describe(store: HKHealthStore,
+                         share: Set<HKSampleType>,
+                         read: Set<HKObjectType>) async -> String {
+        let types = Set(share.map { $0 as HKObjectType }).union(read)
+            .sorted { $0.identifier < $1.identifier }
+        var parts: [String] = []
+        for type in types {
+            let sample = type as? HKSampleType
+            var shareOne: Set<HKSampleType> = sample.map { share.contains($0) ? [$0] : [] } ?? []
+            var readOne: Set<HKObjectType> = read.contains(type) ? [type] : []
+            var fields = [shareOne.isEmpty ? "r" : (readOne.isEmpty ? "w" : "w+r")]
+            // A route may not be asked about without its workout. HealthKit does not return an error
+            // for that: it throws an Objective-C exception (`_throwIfParentTypeNotRequestedForSharing`),
+            // which Swift cannot catch, and both apps aborted at launch on 2026-10-23. So a route is
+            // checked together with Workouts, and its answer reads "with Workout": if Workout alone
+            // says `answered` and this says `asks`, the route is what is unanswered.
+            if type == HKSeriesType.workoutRoute() {
+                if !shareOne.isEmpty { shareOne.insert(HKObjectType.workoutType()) }
+                if !readOne.isEmpty { readOne.insert(HKObjectType.workoutType()) }
+                fields.append("with Workout")
+            }
+            do {
+                switch try await store.statusForAuthorizationRequest(toShare: shareOne, read: readOne) {
+                case .shouldRequest: fields.append("asks")
+                case .unnecessary: fields.append("answered")
+                case .unknown: fields.append("unknown")
+                @unknown default: fields.append("unrecognized request status")
+                }
+            } catch {
+                fields.append("check failed: \(error.localizedDescription)")
+            }
+            if let sample, share.contains(sample) {
+                switch store.authorizationStatus(for: sample) {
+                case .sharingAuthorized: fields.append("write=authorized")
+                case .sharingDenied: fields.append("write=denied")
+                case .notDetermined: fields.append("write=notDetermined")
+                @unknown default: fields.append("write=unrecognized")
+                }
+            }
+            parts.append("\(shortName(type)) \(fields.joined(separator: " "))")
+        }
+        return parts.joined(separator: "; ")
+    }
+
+    /// `HKQuantityTypeIdentifierHeartRate` → `HeartRate`, `HKWorkoutRouteTypeIdentifier` →
+    /// `WorkoutRoute`. Unknown shapes pass through whole rather than being guessed at.
+    static func shortName(_ type: HKObjectType) -> String {
+        let id = type.identifier
+        for prefix in ["HKQuantityTypeIdentifier", "HKCategoryTypeIdentifier"] where id.hasPrefix(prefix) {
+            return String(id.dropFirst(prefix.count))
+        }
+        if id.hasPrefix("HK"), id.hasSuffix("TypeIdentifier") {
+            return String(id.dropFirst(2).dropLast("TypeIdentifier".count))
+        }
+        return id
+    }
+}
 
 /// The Watch's Health access, as the two separate questions HealthKit answers.
 ///

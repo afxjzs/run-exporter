@@ -41,7 +41,7 @@ struct WatchRunView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                row("♥", heartRateText)
+                row("♥", heartRateText(now: now))
                 row("leg", paceText(controller.pace.legPaceSecondsPerMile))
                 row("mile", paceText(controller.pace.mileSplitSecondsPerMile))
                 row("dist", distanceText)
@@ -121,8 +121,14 @@ struct WatchRunView: View {
         return clock.isOverdue(at: now) ? "waiting for the phone" : "left"
     }
 
-    private var heartRateText: String {
-        controller.heartRate.map { "\(Int($0.rounded())) bpm" } ?? "—"
+    /// An old reading reads "stale", never as the old number (aerobic spec §6). It used to show the
+    /// last reading for as long as the sensor stayed silent.
+    private func heartRateText(now: Date) -> String {
+        switch LiveHeartRate.onWatch(bpm: controller.heartRate, sampledAt: controller.heartRateSampledAt, now: now) {
+        case .current(let bpm): return "\(Int(bpm.rounded())) bpm"
+        case .noReading: return "—"
+        case .stale, .ageUnknown: return "stale"
+        }
     }
 
     private var distanceText: String {

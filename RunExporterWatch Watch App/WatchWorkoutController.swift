@@ -36,6 +36,9 @@ final class WatchWorkoutController: NSObject {
         didSet { WatchEventLog.shared.record("iPhone link: \(mirroring)") }
     }
     private(set) var heartRate: Double?
+    /// When `heartRate` was measured, from HealthKit's sample. Shown and sent with it, so neither
+    /// screen mistakes a reading the sensor stopped updating for a live one (`LiveHeartRate`).
+    private(set) var heartRateSampledAt: Date?
     private(set) var pingsAnswered = 0
     private(set) var statusesSent = 0
     /// Every failure lands here verbatim, and in the saved event log. Nothing on this path fails
@@ -90,16 +93,9 @@ final class WatchWorkoutController: NSObject {
     /// going.
     private(set) var endedAt: Date?
 
-    /// One list, used both when asking up front and when checking at launch, so the two cannot
-    /// drift apart — the first link test stalled when the link asked for a type the probe never had.
-    /// `workoutRoute` is shared so the GPS route can be saved with the workout.
-    private static let shareTypes: Set<HKSampleType> = [HKObjectType.workoutType(), HKSeriesType.workoutRoute()]
-    private static let readTypes: Set<HKObjectType> = [
-        HKObjectType.workoutType(),
-        HKQuantityType(.heartRate),
-        HKQuantityType(.activeEnergyBurned),
-        HKQuantityType(.distanceWalkingRunning),
-    ]
+    /// `WatchHealthTypes`, in `Shared/` so the phone's tests can reach the same list.
+    private static let shareTypes = WatchHealthTypes.share
+    private static let readTypes = WatchHealthTypes.read
 
     /// Location points worse than this are left out of the route; they zigzag and inflate distance.
     private static let maximumRouteAccuracyMeters = 50.0
@@ -158,6 +154,10 @@ final class WatchWorkoutController: NSObject {
                                        workouts: sharing(HKObjectType.workoutType()),
                                        routes: sharing(HKSeriesType.workoutRoute()))
         WatchEventLog.shared.record(access.logLine)
+        // Which type is unanswered, not just that one is (`HealthAccessProbe`). Watch Settings has
+        // shown every toggle on while this check said a sheet would appear.
+        let types = await HealthAccessProbe.describe(store: store, share: Self.shareTypes, read: Self.readTypes)
+        WatchEventLog.shared.record("Health types: \(types)")
         return access
     }
 
@@ -275,6 +275,7 @@ final class WatchWorkoutController: NSObject {
             pingsAnswered = 0
             statusesSent = 0
             heartRate = nil
+            heartRateSampledAt = nil
             phaseClock = nil
             openSegment = nil
             outcome = nil
@@ -576,7 +577,8 @@ final class WatchWorkoutController: NSObject {
     private func sendStatus() {
         guard let startedAt, let origin else { return }
         send(.status(WatchStatus(sentAt: Date(), sessionStartedAt: startedAt,
-                                 heartRate: heartRate, origin: origin))) { [weak self] in
+                                 heartRate: heartRate, heartRateSampledAt: heartRateSampledAt,
+                                 origin: origin))) { [weak self] in
             self?.statusesSent += 1
         }
     }
@@ -648,8 +650,9 @@ final class WatchWorkoutController: NSObject {
         }
     }
 
-    fileprivate func heartRateUpdated(_ bpm: Double) {
+    fileprivate func heartRateUpdated(_ bpm: Double, sampledAt: Date) {
         heartRate = bpm
+        heartRateSampledAt = sampledAt
     }
 
     fileprivate func distanceUpdated(totalMeters: Double, at date: Date) {
@@ -702,10 +705,14 @@ private final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate, HKLi
                                     didCollectDataOf collectedTypes: Set<HKSampleType>) {
         // Read here, on HealthKit's thread, so only plain values cross to the main actor.
         let heartRateType = HKQuantityType(.heartRate)
+        // The sample's own date (watchOS 5+), not now: a delegate call can carry an old reading.
         if collectedTypes.contains(heartRateType),
-           let quantity = workoutBuilder.statistics(for: heartRateType)?.mostRecentQuantity() {
+           let statistics = workoutBuilder.statistics(for: heartRateType),
+           let quantity = statistics.mostRecentQuantity(),
+           let interval = statistics.mostRecentQuantityDateInterval() {
             let bpm = quantity.doubleValue(for: .count().unitDivided(by: .minute()))
-            Task { @MainActor [weak owner] in owner?.heartRateUpdated(bpm) }
+            let sampledAt = interval.end
+            Task { @MainActor [weak owner] in owner?.heartRateUpdated(bpm, sampledAt: sampledAt) }
         }
         let distanceType = HKQuantityType(.distanceWalkingRunning)
         if collectedTypes.contains(distanceType),

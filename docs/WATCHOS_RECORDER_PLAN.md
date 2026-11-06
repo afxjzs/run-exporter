@@ -56,6 +56,30 @@ decide, is a later option.
 | 3 | Join by execution id, the time window kept as fallback for old and Apple-Workout runs. Test-first. **Built 2026-09-29 (build 202609291331):** `WorkoutSummary.executionID` read from `WorkoutMetadataKeys.executionID`; both matcher directions let a tag win outright and never time-match a workout tagged for another run; 4 new tests. **Unmeasured:** no run has been joined this way yet — the first outdoor run is the test | A run joins with no time window involved |
 | 4 | Optional: leg-end tap on the Watch | Owner's call after step 2 |
 
+### The phone decides, the Watch follows, and the Watch saves by default — decided 2026-10-07
+
+**Decided with the owner, not yet built.** Why: an earlier run ended as two unlinked recordings,
+and the Watch's half was lost ([LEARNINGS.md](../LEARNINGS.md), "The missing mirror was the run
+before's second session"). In the owner's words: "the phone should always win and the watch should
+follow along." And on saving: "we should have a bias towards over saving, over recovering data."
+**Do not reverse any row below without the owner.**
+
+| When | The Watch does |
+|---|---|
+| A start for the **same** run arrives while it starts or records | Joins it; never a second session. Retries mirroring if not mirrored |
+| A start for a **different** run arrives while it records | The phone tells it to save the old session, then launches again. The phone sends its execution id as soon as the link connects, and the Watch tags its session with it |
+| **75 minutes** with nothing from the phone | Saves. Comfortably longer than any planned run |
+| End on the Watch | **Saves.** Discarding is a separate action with a confirmation |
+| watchOS ends the session | Saves what was recorded |
+| The phone abandons the run | **Saves** (it used to discard). Unwanted workouts are deleted in Health |
+| The phone finishes the run | Saves, tagged with the execution id |
+| The app relaunches with a session still active | Recovers it (`recoverActiveWorkoutSession`) and carries on under these rules |
+| Its Health check finds anything off | Tells the phone, which shows a banner on the home and run screens naming what is off and where to turn it on |
+
+And on the phone: a Watch that is still working (showing its Health sheet, or reporting an error
+that passes) is **not** a failed launch, and Try again during a run reattaches to the session that
+exists rather than starting another.
+
 ### History — the state before stage 2 ran (kept, not current)
 
 Both paragraphs below were true when written and are not now: the watch target has grown well past

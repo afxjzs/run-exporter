@@ -178,12 +178,14 @@ with `git config core.hooksPath .githooks` and list your own values in `private/
 - **HealthKit capability** — declared in `RunExporter/RunExporter.entitlements`
   (`com.apple.developer.healthkit`). Automatic signing adds the matching capability to the
   provisioning profile when you build with `-allowProvisioningUpdates`.
-- **The iPhone app never writes to HealthKit** — its export and logger read only
-  (`HealthKitManager.requestAuthorization`, `toShare: []`). **Since 2026-09-25 it also asks for
-  permission to share workouts**, from `WatchLink.launchWatchWorkout`, at the owner's direction:
+- **The iPhone app never writes to HealthKit**, though it asks permission to. **Since 2026-09-25
+  it asks to share workouts**, from `WatchLink.launchWatchWorkout`, at the owner's direction:
   starting and controlling the Watch's workout from the phone may need it, and whether it strictly
-  does is unmeasured. The phone's code still performs no write; the Watch saves the workout. Hence
-  `NSHealthUpdateUsageDescription` on the phone target. See **Privacy**.
+  does is unmeasured. **Since 2026-10-23 its export and logger ask to share workouts and workout
+  routes too** (`HealthKitManager.shareTypes`, the Watch's own list), because while the phone only
+  read routes and the Watch only wrote them, answering either device's Health sheet re-opened the
+  other's on every open (LEARNINGS.md). The phone's code still performs no write; the Watch saves
+  the workout. Hence `NSHealthUpdateUsageDescription` on the phone target. See **Privacy**.
 - **Usage description** — `NSHealthShareUsageDescription` is set via the target's
   `INFOPLIST_KEY_NSHealthShareUsageDescription` build setting (the Info.plist is generated).
 - **No third-party dependencies** — ZIP is written by a small built-in writer using the system
@@ -414,7 +416,7 @@ RunExporterWatch Watch App/  watchOS companion; ships embedded at RunExporter.ap
   WatchWorkoutController     the watch end of the phone link: starts and mirrors the session,
                              records phases and the GPS route, saves or discards when told
   WatchEventLog              saved event log, forwarded to the phone's Documents/watch-events.log
-  *.entitlements             HealthKit WRITE — the watch saves workouts; the phone never writes
+  *.entitlements             HealthKit WRITE — the watch saves workouts; the phone asks, never writes
 Config/*.plist               UIBackgroundModes, NSSupportsLiveActivities — keys that do NOT
                              work as INFOPLIST_KEY_* build settings; verify with plutil.
                              RunExporterWatch-Info.plist is partial by necessity; read its comments
@@ -863,9 +865,11 @@ No network requests, no analytics, no crash-reporting or third-party SDKs. Healt
 device only through the share sheet, by your explicit action. Exported files are written to the
 system temporary directory (never Documents) and deleted after sharing.
 
-The **iPhone app** never writes to HealthKit. Its export and logger request **read** access only;
-since 2026-09-25 the watch link also asks for permission to share workouts, so the phone can start
-the Watch's workout, but no phone code saves anything. It reads historical workout
+The **iPhone app** never writes to HealthKit, though it asks for permission to. Since 2026-09-25
+the watch link asks to share workouts, so the phone can start the Watch's workout. Since
+2026-10-23 the export and logger ask to share workouts and workout routes as well: they ask for
+exactly what the Watch asks for, because when the two asked differently, answering either device's
+Health sheet re-opened the other's. No phone code saves anything. It reads historical workout
 routes from HealthKit and never starts location services, so it needs no Core Location permission and
 no `NSLocation*` Info.plist key — none is present in the built app. GPS route data is nonetheless the
 most sensitive part of this export: it reveals home, work, and habitual routes and times.

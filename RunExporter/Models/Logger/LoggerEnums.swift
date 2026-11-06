@@ -280,6 +280,12 @@ enum WorkoutIntensityMode: String, CaseIterable, Identifiable {
 
     /// The aerobic target (§1): RPE 3–4.
     static let easyAerobicRPE: ClosedRange<Double> = 3...4
+
+    /// The target in words, as the plan editors and the run screen both show it. A plain string:
+    /// interpolation inside a view initializer fails this project's Release build.
+    static var easyAerobicTargetText: String {
+        "RPE \(Int(easyAerobicRPE.lowerBound))–\(Int(easyAerobicRPE.upperBound)) · conversational"
+    }
 }
 
 /// How talking felt during the run — the post-run talk test (aerobic spec §7). Stored and exported

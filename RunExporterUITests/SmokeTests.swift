@@ -110,6 +110,11 @@ final class SmokeTests: XCTestCase {
             expect(app.staticTexts["READY"], "the READY screen for the aerobic plan")
             app.buttons["Start"].tap()
             expect(app.buttons["End Workout"], "End Workout on the aerobic run")
+            // The aerobic panel (aerobic spec §4). The simulator has no Watch, so its heart rate
+            // must read as unavailable, never as a number (§6).
+            expect(aerobicTarget, "the aerobic target on the aerobic run screen")
+            expect(app.staticTexts["HR --"], "an unavailable heart rate with no Watch")
+            snapshot("Aerobic run screen")
             endRunAndOpenLog()
             // Offered because the run was easy aerobic (aerobic spec §7), and unanswered until chosen.
             expect(talkTestPicker, "the Talk test picker on the aerobic run's log")
@@ -159,6 +164,9 @@ final class SmokeTests: XCTestCase {
             XCTAssertTrue(phoneOnly.waitForExistence(timeout: 25),
                           "The run screen never said the run continues on the phone only")
             expect(app.buttons["Try again"], "Try again after the Watch failed")
+            // Drawn in the same pass as End Workout, which is already on screen, so this absence
+            // is a fact about the screen rather than about timing.
+            expectAbsent(aerobicTarget, "the aerobic panel on an ordinary run")
         }
 
         step("End the ordinary run; its log does not ask the talk test") {
@@ -191,6 +199,10 @@ final class SmokeTests: XCTestCase {
         expect(noWorkout, "the no-workout prompt")
         noWorkout.buttons["Log it anyway"].tap()
         expect(app.navigationBars["Log Run"], "the run log form")
+    }
+
+    private var aerobicTarget: XCUIElement {
+        app.staticTexts["RPE 3–4 · conversational"]
     }
 
     private var talkTestPicker: XCUIElement {

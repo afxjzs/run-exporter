@@ -231,6 +231,42 @@ owner chose not to rewrite it), and the values are on the guard's list.
 read out of `private/`, an export, or a device log, however convenient. The guard is a
 backstop for known values; it cannot recognize a new one.
 
+## 2026-10-07 — the failure was explained by the run that worked
+
+The handoff asked why one launch's mirror never reached the phone, and pointed at that launch's
+log lines. The cause was in the run before it, which had saved normally. That run had started two
+Watch sessions, and its log said so on every line of the start sequence: "connecting…" twice,
+"connected" twice. Nobody read it, because it succeeded, and none of those lines contains `ERROR`.
+
+**Rule: when a failure follows a success in the same long-lived process, read the success too, and
+look for duplicates as well as errors.** A step logged twice is not an error line, so a search for
+errors never finds it.
+
+**Second lesson: an absence is evidence only next to a presence.** The phone's system log had no
+mirroring lines for the failed launch. That meant nothing until a clean launch showed the line a
+working mirror leaves. One extra launch turned "nothing logged" into "the phone never received it".
+
+## 2026-10-23 — an instrument installed without running it once, and both apps crashed at launch
+
+The Health-sheet instrument (`HealthAccessProbe`) asked HealthKit about each requested type alone.
+Workout Routes may not be asked about without Workouts, and HealthKit says so by throwing an
+Objective-C exception, which Swift's `catch` cannot catch. Both apps aborted at their first Health
+check: the phone on opening Today, the Watch on coming on screen. The owner found it.
+
+The build was reported as "builds clean, 361 unit tests pass", with the new logging named as
+unverified. That was honest, and it was not enough. The simulator has real HealthKit, and a
+two-minute test calling the probe on the apps' real type lists crashed exactly as the phone did.
+That test was written only after the install. The full suite had passed with the crash in it:
+nothing in the suite called the probe, and the test host's own Today screen reached it on one run
+and not on another.
+
+**Rule: new code that calls a system framework runs against that framework at least once before an
+install, even code meant only to observe.** "No behavior change" described the intent, not the
+code. Calling HealthKit with new arguments is a behavior.
+
+**Also: a passing suite says nothing about code no test reaches.** Say what ran the new lines, not
+how many tests passed.
+
 ---
 
 ## Code-level slips

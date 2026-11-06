@@ -89,7 +89,62 @@ struct WatchStatus: Codable, Equatable, Sendable {
     /// Most recent heart rate, beats per minute. Nil until the watch has taken a reading, which
     /// is normal for the first several seconds of a session and is shown as such, not as zero.
     var heartRate: Double?
+    /// Watch clock. When `heartRate` was measured — HealthKit's own sample date, not when this
+    /// status was sent. Without it a reading the sensor stopped updating is resent every status and
+    /// looks live (`LiveHeartRate`). Nil from a watch app built before it existed; synthesized
+    /// `Codable` reads a missing optional as nil, so the two builds still talk.
+    var heartRateSampledAt: Date?
     var origin: WatchWorkoutOrigin
+}
+
+/// Whether a live heart rate may be shown as current (aerobic spec §6): a run screen must never
+/// show an old reading as if it were live.
+///
+/// Live heart rate is for the run screens only (aerobic spec, Decisions D3). The export's heart
+/// rate comes from HealthKit's saved samples and does not pass through here.
+enum LiveHeartRate: Equatable {
+    /// No reading yet, which is normal for the first seconds of a session.
+    case noReading
+    case current(bpm: Double)
+    /// The newest reading is older than `maximumAgeSeconds`: the sensor stopped reporting, or the
+    /// link went quiet. Shown as unavailable, never as the old number.
+    case stale(ageSeconds: TimeInterval)
+    /// A reading with no time on it, from a watch app built before `WatchStatus.heartRateSampledAt`.
+    /// Its age cannot be judged, so it is not shown as current either.
+    case ageUnknown
+
+    /// The oldest a reading may be and still be shown. The watch's heart-rate samples arrive a
+    /// median 5 s apart, 99% within 9 s (aerobic spec, D5's measurement), and a status leaves every
+    /// 5 s, so a healthy reading reaches the phone at most about 15 s old. 20 s leaves margin for
+    /// one late status without letting a dead sensor's number linger.
+    static let maximumAgeSeconds: TimeInterval = 20
+
+    /// On the watch, from its own reading: one clock throughout.
+    static func onWatch(bpm: Double?, sampledAt: Date?, now: Date) -> LiveHeartRate {
+        guard let bpm else { return .noReading }
+        guard let sampledAt else { return .ageUnknown }
+        return judged(bpm: bpm, ageSeconds: now.timeIntervalSince(sampledAt))
+    }
+
+    /// On the phone, from the latest status and when it arrived (`receivedAt`, phone clock).
+    ///
+    /// The age is two same-clock differences added: reading to send on the watch's clock, then
+    /// arrival to now on the phone's. Nothing is subtracted across the two clocks, which are not
+    /// one clock. The link's own delay, about 0.1 s, is left out.
+    static func onPhone(_ status: WatchStatus?, receivedAt: Date?, now: Date) -> LiveHeartRate {
+        guard let status, let receivedAt else { return .noReading }
+        let sinceArrival = now.timeIntervalSince(receivedAt)
+        guard let bpm = status.heartRate else {
+            // No reading yet is normal only while statuses keep coming.
+            return sinceArrival > maximumAgeSeconds ? .stale(ageSeconds: sinceArrival) : .noReading
+        }
+        guard let sampledAt = status.heartRateSampledAt else { return .ageUnknown }
+        return judged(bpm: bpm, ageSeconds: status.sentAt.timeIntervalSince(sampledAt) + sinceArrival)
+    }
+
+    private static func judged(bpm: Double, ageSeconds: TimeInterval) -> LiveHeartRate {
+        ageSeconds > maximumAgeSeconds ? .stale(ageSeconds: ageSeconds) : .current(bpm: bpm)
+    }
 }
 
 enum WatchLinkError: Error, Equatable, LocalizedError {

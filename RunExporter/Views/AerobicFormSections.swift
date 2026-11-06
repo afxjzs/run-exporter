@@ -22,7 +22,7 @@ struct IntensitySection: View {
                 }
             }
             if mode == .easyAerobicObservation {
-                LabeledContent("Target effort", value: Self.aerobicTarget)
+                LabeledContent("Target effort", value: WorkoutIntensityMode.easyAerobicTargetText)
             }
         } header: {
             Text("Intensity")
@@ -32,12 +32,6 @@ struct IntensitySection: View {
                      + "talking felt.")
             }
         }
-    }
-
-    /// Its own string: interpolation inside a view initializer fails this project's Release build.
-    private static var aerobicTarget: String {
-        let range = WorkoutIntensityMode.easyAerobicRPE
-        return "RPE \(Int(range.lowerBound))–\(Int(range.upperBound)) · conversational"
     }
 }
 

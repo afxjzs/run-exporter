@@ -263,7 +263,9 @@ Measured from the forwarded log on build 202610051330. The owner allowed Health 
 per-type check read `routes authorized`; the app went to the background; two minutes later it came
 back and read `routes denied`, sheet unanswered — no install, no app restart, nothing logged between.
 It had happened at least twice more since the install two days before. So the earlier entry's
-"an install turns routes off" is one trigger, not the only one, and **why is not known.** The app's
+"an install turns routes off" is one trigger, not the only one. *(What came between, measured
+later the same day: the phone's own Health sheet. See "Answering one device's Health sheet
+re-opens the other's" below.)* The app's
 own ask-whenever-on-screen is what turns each revert into a prompt the owner sees; the owner also
 reports repeated prompts on the phone, which does not log its checks, so that half is not measured.
 
@@ -276,10 +278,92 @@ read that forwarded error line as the launch failing (`reportWatchErrorDuringLau
 error line), showed "continues on the phone only", and never logged the mirrored session arriving.
 Every Try again after that was a new start, which the Watch refused because it was already
 recording; ending the run on the phone then told the Watch nothing, and its log said "the watch saved
-nothing" while the Watch was still recording. **Not yet known:** why the mirrored session never
-reached the phone, when the Watch reported it connected. The owner's rule for the fix: the phone
-decides and the Watch follows — a start from the phone while the Watch records means the Watch
-takes on the phone's run.
+nothing" while the Watch was still recording. The owner's rule for the fix: the phone decides and
+the Watch follows — a start from the phone while the Watch records means the Watch takes on the
+phone's run.
+
+*Corrected the same day, by the next entry:* the Watch was **not** connecting fine. The phone never
+received its mirroring request at all, and the likely cause is a second session left running by
+the run before.
+
+### The missing mirror was the run before's second session
+
+Measured from both app logs and the phone's system log (`log collect`), with a clean launch as the
+baseline. Times and ids are in `private/run-notes.md`.
+
+- **A working mirror leaves a mark on the phone; this one left none.** When a mirror arrives, the
+  phone's `healthd` logs `[mirroring] HDRapportMessenger: Received request
+  <HKMirroredWorkoutSession-startMirroring>` in the same millisecond the app logs "Watch session
+  mirrored here". The failed launch's archive has no such line in any process. The phone never
+  received the request, although the Watch logged `iPhone link: connected`. So
+  `startMirroringToCompanionDevice` returning does not mean the phone got anything, the same way
+  `startWatchApp` succeeding only means "sent".
+- **The run before, which saved normally, had started two Watch sessions.** Its first launch stopped
+  on the Watch's Health sheet. The phone's 15 s timeout told the owner to tap Try again, and the
+  second launch arrived while the first was still waiting on the sheet. `WatchWorkoutController.start`
+  checks `isRunning` before its first `await` and sets it only after the session begins, so both
+  starts got through. The log shows every step twice: two "starting session", two "connecting…",
+  two "connected". `self.session` kept one of them, the phone attached one, and the run saved one.
+  Nothing ever ended the other. `startStatusTimer` also replaced the first status timer without
+  invalidating it.
+- **watchOS still held a session the app had lost.** The Watch app's process ran without a break
+  from that run to the failed one. After the failed run, End discarded the only session the app knew
+  about. The owner force-quit the app, and watchOS relaunched it within seconds and called
+  `handleActiveWorkoutRecovery`, which it does when a workout session is still active. That handler
+  only logs a line, so the app never learned about the session.
+- **After End, a force-quit and a Watch restart, the next launch mirrored normally.**
+- **Inferred, not measured:** that the leftover session held the app's mirroring channel, so the
+  new session's request never left the Watch. Also inferred: the failed launch's early send error
+  came from the leaked timer. In `start`, nothing else sends before mirroring connects, and the
+  timer sends to whatever `self.session` is at the moment it fires.
+
+### Answering one device's Health sheet re-opens the other's (written 2026-10-23)
+
+From the phone's system log (`log collect`, `healthd` and the app's `com.apple.HealthKit:auth`
+lines) beside the Watch's forwarded log, same morning; times in `private/run-notes.md`.
+
+- **Every time the phone's sheet was answered, the Watch's sheet came back.** The phone app made 11
+  authorization requests in the window. Three showed a sheet: those took seconds to return, the
+  rest milliseconds. After each of the three, the Watch's next check, 2–5 s later, read `sheet
+  unanswered, routes denied`. Twice routes had read authorized at the check before. The third time
+  routes were already off, and what flipped was the Watch's sheet, answered two minutes earlier.
+  Inside the window, the Watch's sheet went from answered to unanswered only after a phone sheet.
+- **It runs the other way too.** After the Watch's sheet was answered, the phone showed its own
+  sheet again the next time it asked. The owner's report, "the share request on both every time I
+  open it", is this ping-pong: both apps ask on every open (`RunLoggerModel.refresh`,
+  `WatchWorkoutController.prepareHealthAccess`), and HealthKit only shows a sheet when a requested
+  type is unanswered.
+- **The two apps ask for different types.** The phone writes only workouts and *reads* workout
+  routes; the Watch *writes* workouts and workout routes. Neither asks for what the other asks.
+- **Not one shared record, at least not visibly.** The iPhone's Settings → Health lists one
+  RunExporter entry, and its write list holds only Workouts, no Workout Routes, although the Watch
+  app writes routes. The single shared authorization record this pattern first suggested is not
+  confirmed, and **the mechanism is not known.**
+- **Watch Settings showed every toggle on while the Watch app found a type unanswered** (owner,
+  2026-10-23). Which type is what `HealthAccessProbe` was built to name, logged by both apps
+  (`health-access-phone.log`, and "Health types:" lines in the Watch's log).
+- **Asking HealthKit about Workout Routes without Workouts crashes the app** (2026-10-23, both
+  devices and the simulator). `statusForAuthorizationRequest` with a route and no workout type
+  in the same request does not return an error: HealthKit throws an Objective-C exception from
+  `_throwIfParentTypeNotRequestedForSharing:types:`, Swift's `catch` cannot see it, and the app
+  aborts. It applied to the phone's *read* request too, though the method's name says sharing.
+  Any request or status check that names `HKSeriesType.workoutRoute()` must name
+  `HKObjectType.workoutType()` with it. `HealthAccessProbeTests` runs the probe on both apps'
+  real type lists against the simulator's HealthKit, which throws the same way.
+- **The type that flips is Workout Routes, on both devices** (measured 2026-10-23 with build
+  `202610231200`, both logs; times in `private/run-notes.md`). On the phone, every type it reads
+  was answered except reading Workout Routes. On the Watch, every type was answered except writing
+  Workout Routes, whose write status read `denied`. Over a few minutes the owner answered six
+  sheets, alternating devices. Each of the first five answers unanswered the route on the other
+  device by that device's next check; after the sixth, the phone made no request that names
+  routes. The phone's route read went back to `asks` after each Watch answer; the
+  Watch's route write went back to `asks` and `denied` after each phone answer. The phone checked
+  once more with no Watch answer since its last one, and it stayed answered. Workouts never
+  flipped. The apps ask for Workouts the same way (read and write: the phone's run start writes
+  them), while for Workout Routes the phone asks only to read and the Watch only to write.
+  **Inferred, not measured:** each answer saves an authorization for Workout Routes that keeps only
+  what that device asked for, and the paired devices sync it, erasing the other half. The
+  prediction to test is that both apps asking for Workout Routes with read *and* write ends it.
 
 ---
 

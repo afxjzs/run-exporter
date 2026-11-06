@@ -70,7 +70,11 @@ final class RunLoggerModel {
         defer { isLoading = false }
 
         do {
-            try await health.requestAuthorization()
+            // Shown, and the refresh carries on: a diagnostic file that cannot be written must not
+            // stop the app reading Health.
+            if let logProblem = try await health.requestAuthorization(context: "Today refresh") {
+                errorMessage = logProblem
+            }
         } catch {
             errorMessage = "Health access failed: \(error.localizedDescription)"
             return

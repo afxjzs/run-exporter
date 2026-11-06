@@ -106,16 +106,17 @@ final class HealthKitManager {
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
-    /// Bumped whenever the set of requested read types changes.
+    /// Bumped whenever the set of requested types changes. 3: the phone asks to write workouts and
+    /// workout routes, as the Watch does.
     ///
     /// A user who granted access under an older version has already dismissed the permission
     /// sheet, so without this the newly-added workout-route type would never be requested and
     /// routes would silently come back empty. `ExportViewModel` re-requests when the stored
     /// version is behind.
-    static let authorizationSchemaVersion = 2
+    static let authorizationSchemaVersion = 3
 
-    /// Read-only: the export and logger never write. (The watch link asks separately for workout
-    /// share access so the phone can start the Watch's workout — see `WatchLink`.)
+    /// What the export and logger read. (The watch link asks separately for workout share access
+    /// so the phone can start the Watch's workout — see `WatchLink`.)
     func readTypes() -> Set<HKObjectType> {
         var types: Set<HKObjectType> = [HKObjectType.workoutType(),
                                         HKObjectType.activitySummaryType()]
@@ -127,9 +128,17 @@ final class HealthKitManager {
         return types
     }
 
-    func requestAuthorization() async throws {
+    /// The Watch's write list, though the export and logger never write: a type both apps ask
+    /// about must be asked for the same way, or each device's answer re-opens the other's sheet.
+    /// See `WatchHealthTypes`.
+    func shareTypes() -> Set<HKSampleType> { WatchHealthTypes.share }
+
+    /// - Parameter context: who is asking, for `health-access-phone.log`.
+    /// - Returns: why that log could not be written, or nil. See `HealthAccessLog.request`.
+    func requestAuthorization(context: String) async throws -> String? {
         guard isAvailable else { throw HealthKitError.notAvailable }
-        try await store.requestAuthorization(toShare: [], read: readTypes())
+        return try await HealthAccessLog.request(context, store: store, share: shareTypes(),
+                                                 read: readTypes())
     }
 
     // MARK: - Generic async sample query

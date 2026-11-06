@@ -20,6 +20,10 @@ final class ActiveWorkoutModel {
     /// When the timer started — the stand-in workout start until HealthKit's own is known.
     private(set) var startedAt = Date()
     private(set) var activityType: PlannedActivityType = .running
+    /// The plan's intent as this run started, copied like its shape so the run screen draws what
+    /// the run is recording. Nil for a raw value this build does not know; the screen then shows
+    /// no aerobic panel, and the run still records the value as it was.
+    private(set) var intensity: WorkoutIntensityMode? = .notSpecified
     /// True once a log has been written mid-workout for this execution.
     ///
     /// Read by the cooldown button, which offers "Edit run log" rather than "Log this run now".
@@ -161,6 +165,7 @@ final class ActiveWorkoutModel {
         planName = plan.name
         startedAt = execution?.timerStartedAt ?? Date()
         activityType = plan.activityTypeValue ?? .running
+        intensity = plan.intensity
         hasPendingLog = false
         // A plan of several segments offers the post-run log form no interval shape, because a
         // blank field asks the user and a wrong one does not.

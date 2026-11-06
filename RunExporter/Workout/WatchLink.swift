@@ -19,6 +19,9 @@ import WatchConnectivity
 final class WatchLink: NSObject {
 
     private(set) var latestStatus: WatchStatus?
+    /// Phone clock. When `latestStatus` arrived, so the run screen can tell a live heart rate from
+    /// an old one (`LiveHeartRate.onPhone`).
+    private(set) var latestStatusReceivedAt: Date?
     /// True while the watch may be showing the wrong phase: the latest phase message failed to send.
     /// Cleared when a resend gets through. Measured on the first real outdoor run: one
     /// "Remote device is unreachable" left the watch on WALK through a whole run leg, with nothing
@@ -126,6 +129,9 @@ final class WatchLink: NSObject {
         runActivityType = activityType
         anchorProvider = anchor
         lastRunAskedWatchToSave = false
+        // The last run's final status would otherwise open this run's screen with its heart rate.
+        latestStatus = nil
+        latestStatusReceivedAt = nil
         log("Run started; connecting to the watch")
         connectForRun()
     }
@@ -229,6 +235,11 @@ final class WatchLink: NSObject {
 
     // MARK: - Actions
 
+    /// What the phone asks Health for before it starts the Watch.
+    nonisolated static let runStartShareTypes: Set<HKSampleType> = [HKObjectType.workoutType()]
+    nonisolated static let runStartReadTypes: Set<HKObjectType> = [HKObjectType.workoutType(),
+                                                                   HKQuantityType(.heartRate)]
+
     /// The workout the Watch is asked to record: the plan's activity, outdoors.
     ///
     /// Was a hardcoded `.running` until 2026-09-30, so a Walking plan was saved to Health as an
@@ -263,8 +274,11 @@ final class WatchLink: NSObject {
             // The UI smoke test, Debug builds only (`UITesting`). The simulator has no Watch, so the
             // launch below fails either way and the run screen reports it.
             if !UITesting.skipsHealthAuthorization {
-                try await store.requestAuthorization(toShare: [HKObjectType.workoutType()],
-                                                     read: [HKObjectType.workoutType(), HKQuantityType(.heartRate)])
+                if let logProblem = try await HealthAccessLog.request(
+                    "Run start (Watch launch)", store: store,
+                    share: Self.runStartShareTypes, read: Self.runStartReadTypes) {
+                    fileError = logProblem
+                }
             }
         } catch {
             let message = "HealthKit authorization failed: \(error.localizedDescription)"
@@ -382,6 +396,7 @@ final class WatchLink: NSObject {
                         log("First status from the watch")
                     }
                     latestStatus = status
+                    latestStatusReceivedAt = now
                     // A status arriving proves the link works again: resend where the run is now.
                     if phaseUnsent, anchorProvider != nil, isConnected {
                         log("Resending the phase after a failed send")
