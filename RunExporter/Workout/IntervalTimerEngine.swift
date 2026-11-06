@@ -484,7 +484,8 @@ final class IntervalTimerEngine {
             }
         case .walk:
             cues.append(.walk)
-            if settings.halfwayAnnouncement, isHalfway(planned) {
+            // Halfway lands exactly on this walk's start: the runs before it are half the running.
+            if settings.halfwayAnnouncement, halfwayPoint(in: planned) == 0 {
                 cues.append(.halfway)
             }
         case .cooldown:
@@ -495,10 +496,34 @@ final class IntervalTimerEngine {
         return cues
     }
 
-    /// True at the walk that sits at the midpoint of the repetitions.
-    private func isHalfway(_ planned: WorkoutPhaseSchedule.PlannedPhase) -> Bool {
-        guard let repetition = planned.repetition, totalRepetitions > 2 else { return false }
-        return repetition == totalRepetitions / 2
+    /// Seconds into `planned` at which half the workout's planned running is done, or nil when
+    /// that moment is not in this phase.
+    ///
+    /// For a walk, only 0 qualifies: the runs before it add up to exactly half. For a run, any
+    /// point strictly inside it. It used to be the walk after run `totalRepetitions / 2`, which is
+    /// right for an even count and early for an odd one: with 5 runs it said "halfway" after run 2,
+    /// 40% of the running (owner's report). Counted in planned seconds rather than runs, so a plan
+    /// whose segments differ in length is also right. Only a fixed schedule has a planned total; an
+    /// open-interval run's length is the measurement.
+    private func halfwayPoint(in planned: WorkoutPhaseSchedule.PlannedPhase) -> Double? {
+        guard totalRepetitions > 2, let source, !source.legsEndByHand else { return nil }
+        let runs = source.fixedPhases.filter { $0.phase == .run }
+        let total = runs.reduce(0) { $0 + ($1.plannedSeconds ?? 0) }
+        guard total > 0 else { return nil }
+        let half = Double(total) / 2
+        let before = Double(runs.filter { $0.index < planned.index }
+            .reduce(0) { $0 + ($1.plannedSeconds ?? 0) })
+
+        switch planned.phase {
+        case .walk:
+            return before == half ? 0 : nil
+        case .run:
+            guard let seconds = planned.plannedSeconds,
+                  before < half, half < before + Double(seconds) else { return nil }
+            return half - before
+        default:
+            return nil
+        }
     }
 
     /// Cues that fire partway through a phase rather than at its start.
@@ -531,6 +556,12 @@ final class IntervalTimerEngine {
             // runner does. Announcing "running in 5 seconds" would promise a transition the app
             // will not make. `.recoveryFloorReached` says "Start when you are ready" instead, which
             // is what actually happens.
+        }
+
+        // Halfway inside a run: an odd number of equal runs puts it mid-run.
+        if settings.halfwayAnnouncement, planned.phase == .run,
+           let offset = halfwayPoint(in: planned) {
+            cues.append((start.addingTimeInterval(offset), .halfway))
         }
 
         if planned.phase == .countdown, let seconds = planned.plannedSeconds {

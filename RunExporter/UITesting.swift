@@ -32,4 +32,21 @@ enum UITesting {
         return false
         #endif
     }()
+
+    /// `-uiTestingSilencesNoWatchAlarm`: show the no-Watch warning but play no sound or vibration.
+    ///
+    /// The alarm ignores "Play cues" on purpose, and the simulator never has a Watch, so every smoke
+    /// test run would otherwise sound it through the Mac's speakers. Only the sound is skipped; the
+    /// warning screen, which is what the test checks, is unchanged. Logged when on, like the flag above.
+    static let silencesNoWatchAlarm: Bool = {
+        #if DEBUG
+        let on = ProcessInfo.processInfo.arguments.contains("-uiTestingSilencesNoWatchAlarm")
+        if on {
+            NSLog("UI TESTING: the no-Watch alarm is silent (-uiTestingSilencesNoWatchAlarm)")
+        }
+        return on
+        #else
+        return false
+        #endif
+    }()
 }

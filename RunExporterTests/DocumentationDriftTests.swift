@@ -40,7 +40,9 @@ final class DocumentationDriftTests: XCTestCase {
               citedBy: ["README.md"]),
         .init(text: "Add note",
               citedBy: ["README.md", "docs/BACKLOG.md"]),
-        .init(text: "Include walking workouts",
+        .init(text: "About exports",
+              citedBy: ["README.md"]),
+        .init(text: "Date range",
               citedBy: ["README.md"]),
         .init(text: "Edit log",
               citedBy: ["README.md", "LEARNINGS.md"]),
@@ -211,6 +213,10 @@ final class DocumentationDriftTests: XCTestCase {
         .init(text: "Reset this screen", retiredIn: cleanOut, replacement: nil),
         // Renamed: Start now launches the Watch workout too, not only the phone's timer.
         .init(text: "Start Audio Timer", retiredIn: cleanOut, replacement: "Start Workout"),
+        // Walks are kept by rule now (`HealthKitManager.keeps`); the Watch app records what the
+        // plan says, which is what made the switch necessary.
+        .init(text: "Include walking workouts", retiredIn: "2026-11-06 export change",
+              replacement: nil),
     ]
 
     /// Every document that names a retired control also says where it went.

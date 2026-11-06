@@ -270,6 +270,39 @@ final class IntervalTimerEngineTests: XCTestCase {
         XCTAssertEqual(recorder.cues.filter { $0 == "final_round" }.count, 1)
     }
 
+    /// Runs `plan` second by second and returns when each "halfway" was said.
+    private func halfwayTimes(_ plan: PlannedWorkout, through seconds: Int) throws -> [TimeInterval] {
+        settings.halfwayAnnouncement = true
+        let engine = IntervalTimerEngine()
+        let start = Date(timeIntervalSinceReferenceDate: 0)
+        var now = start
+        var times: [TimeInterval] = []
+        engine.onCue = { cue in
+            if cue == .halfway { times.append(now.timeIntervalSince(start)) }
+        }
+        try engine.start(plan: plan, settings: settings, now: start)
+        for second in 0...seconds {
+            now = start.addingTimeInterval(TimeInterval(second))
+            engine.tick(now: now)
+        }
+        return times
+    }
+
+    /// The owner's report: "halfway" when not halfway, with an odd number of runs. It counted runs
+    /// with integer division, so 5 runs said it after run 2, with 40% of the running done.
+    func testHalfwayWithAnOddNumberOfRunsIsMidRun() throws {
+        // 60/30 × 5: running ends at 60, 150, 240, 330, 420. Half of 300 s of running is 150 s,
+        // reached 30 s into run 3, which starts at 180.
+        let times = try halfwayTimes(plan(run: 60, walk: 30, reps: 5, countdown: 0), through: 450)
+        XCTAssertEqual(times, [210], "Halfway is half the planned running, once")
+    }
+
+    func testHalfwayWithAnEvenNumberOfRunsIsAtTheMiddleWalk() throws {
+        // 60/30 × 4: half of 240 s of running is reached as run 2 ends, at 150.
+        let times = try halfwayTimes(plan(run: 60, walk: 30, reps: 4, countdown: 0), through: 360)
+        XCTAssertEqual(times, [150])
+    }
+
     func testUnschedulablePlanThrowsInsteadOfStarting() {
         let engine = IntervalTimerEngine()
         let bad = plan()

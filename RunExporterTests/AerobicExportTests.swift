@@ -440,8 +440,8 @@ final class AerobicExportTests: XCTestCase {
                                queryEnd: t0.addingTimeInterval(86_400),
                                mode: .fullDateRange,
                                options: ExportOptions(includeWeather: false, includeRoutes: false,
-                                                      includeWalking: false,
-                                                      reclassifiedAsRunning: []),
+                                                      reclassifiedAsRunning: [],
+                                                      range: .dates(start: t0, end: t0.addingTimeInterval(86_400))),
                                intervalAudio: IntervalAudioSettings(
                                    cueSource: CueSource.iphoneAudioEngine.rawValue,
                                    cueMode: CueMode.voiceAndBeeps.rawValue,

@@ -29,6 +29,10 @@ struct ActiveWorkoutView: View {
     @State private var showEarlyLegConfirmation = false
     /// Non-nil when a workout of the right kind exists but started outside the matching window.
     @State private var nearMiss: NearMiss?
+    /// The no-Watch warning is up. See `noWatchWarning`.
+    @State private var showNoWatchWarning = false
+    /// Once per run: a Try again that fails, after the runner chose to run on, is not news.
+    @State private var hasWarnedNoWatch = false
 
     /// Identifiable wrapper so the picker can be driven by `.sheet(item:)`.
     struct CandidateList: Identifiable {
@@ -59,8 +63,27 @@ struct ActiveWorkoutView: View {
             } else {
                 ProgressView().tint(.white)
             }
+
+            if showNoWatchWarning {
+                noWatchWarning
+            }
         }
         .preferredColorScheme(.dark)
+        .onChange(of: watchLink.runConnection) { _, connection in
+            guard case .failed = connection, !hasWarnedNoWatch, let model, model.hasStarted else { return }
+            hasWarnedNoWatch = true
+            model.pause()
+            showNoWatchWarning = true
+        }
+        // Repeats until answered, because the phone may already be in a pocket when the launch
+        // fails. Cancelled when the warning closes; the sleep's CancellationError is that exit.
+        .task(id: showNoWatchWarning) {
+            guard showNoWatchWarning else { return }
+            while !Task.isCancelled {
+                audio.soundNoWatchAlarm()
+                try? await Task.sleep(for: .seconds(4))
+            }
+        }
         .task {
             guard model == nil else { return }
             // Created, deliberately not started. The timer session, the audio session and the Live
@@ -424,6 +447,65 @@ struct ActiveWorkoutView: View {
     }
 
     // MARK: - The Watch
+
+    /// Full screen, red, and loud: the first launch of this run could not reach the Watch.
+    ///
+    /// Built because the owner twice started a run with the Watch left behind, and the only sign
+    /// was one caption line. The run is paused underneath, so the minutes spent deciding (or
+    /// fetching the Watch) are not recorded as running. The phone cannot tell a Watch left at home
+    /// from one on the wrist that did not answer (its Health sheet, most often), so the text
+    /// names both.
+    private var noWatchWarning: some View {
+        ZStack {
+            Color.red.ignoresSafeArea()
+            VStack(spacing: 24) {
+                Spacer(minLength: 0)
+                Image(systemName: "applewatch.slash")
+                    .font(.system(size: 88, weight: .bold))
+                Text("NO WATCH")
+                    .font(.system(size: 56, weight: .heavy, design: .rounded))
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+                Text(noWatchMessage)
+                    .font(.title3.weight(.medium))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Button {
+                    showNoWatchWarning = false
+                    model?.cancel()
+                    dismiss()
+                } label: {
+                    Text("Stop — I'll get my Watch")
+                        .font(.title2.weight(.bold))
+                        .frame(maxWidth: .infinity, minHeight: 72)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.white)
+                .foregroundStyle(.red)
+                Button {
+                    showNoWatchWarning = false
+                    model?.resume()
+                } label: {
+                    Text("Run without Watch")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                }
+                .buttonStyle(.bordered)
+                .tint(.white)
+            }
+            .foregroundStyle(.white)
+            .padding()
+        }
+    }
+
+    /// Its own property: string concatenation inside a view initializer has failed this project's
+    /// Release type-checker before (LEARNINGS.md).
+    private var noWatchMessage: String {
+        "Your Watch didn't answer, so this run would have no heart rate, distance or route. "
+            + "The run is paused.\n\nIf the Watch is on your wrist and asking for Health access, "
+            + "answer it there first."
+    }
 
     /// Shown when the run finishes. The Watch's workout ends by itself only if this run was
     /// connected to it; otherwise there may be one the runner started by hand, which they must end.

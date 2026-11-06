@@ -235,8 +235,6 @@ final class LoggerDefaultsTests: XCTestCase {
         XCTAssertTrue(defaults.fiveSecondWarning,
                       "The upcoming phase is announced five seconds ahead by default")
         XCTAssertEqual(defaults.unloggedPromptDays, 7, "Spec §21 default")
-        XCTAssertFalse(defaults.includeWalkingWorkouts,
-                       "Walking workouts are excluded unless explicitly turned on")
         XCTAssertTrue(defaults.configurationIssues.isEmpty)
     }
 
@@ -345,13 +343,11 @@ final class LoggerDefaultsTests: XCTestCase {
         first.cueMode = .beeps
         first.countdownSeconds = 10
         first.unloggedPromptDays = 14
-        first.includeWalkingWorkouts = true
 
         let second = LoggerDefaults(defaults: suite)
         XCTAssertEqual(second.cueMode, .beeps)
         XCTAssertEqual(second.countdownSeconds, 10)
         XCTAssertEqual(second.unloggedPromptDays, 14)
-        XCTAssertTrue(second.includeWalkingWorkouts)
         XCTAssertTrue(second.configurationIssues.isEmpty)
     }
 

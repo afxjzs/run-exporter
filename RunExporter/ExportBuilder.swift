@@ -65,20 +65,29 @@ struct ExportBuilder {
 
         // 1. Workouts
         progress("Reading workouts…")
+        // A last-N export starts its workouts exactly at the oldest of the N (the query matches on
+        // strict start date), so the day of padding the records get does not add a workout from
+        // the day before. A date range keeps the padding for both, as it always has.
+        let workoutsStart: Date
+        switch options.range {
+        case .lastWorkouts(_, let from): workoutsStart = from
+        case .dates: workoutsStart = queryStart
+        }
         let workoutResult = try await health.fetchWorkouts(
-            start: queryStart, end: queryEnd,
-            includeWalking: options.includeWalking,
+            start: workoutsStart, end: queryEnd,
             reclassifiedAsRunning: options.reclassifiedAsRunning)
         let workouts = workoutResult.workouts
         dataset.allWorkoutTypeCounts = workoutResult.allCounts
         dataset.keptWorkoutTypeCounts = workoutResult.keptCounts
 
-        if !options.includeWalking {
-            let walkCount = workoutResult.allCounts["HKWorkoutActivityTypeWalking"] ?? 0
+        let walksSeen = workoutResult.allCounts["HKWorkoutActivityTypeWalking"] ?? 0
+        let walksKept = workoutResult.keptCounts["HKWorkoutActivityTypeWalking"] ?? 0
+        if walksSeen > walksKept {
             dataset.log(.info, "workouts",
-                        "Walking workouts were excluded from this export; \(walkCount) were seen "
-                            + "in the window and skipped. They still exist in HealthKit — see "
-                            + "\"walking_included\" in manifest.json.")
+                        "\(walksSeen - walksKept) of \(walksSeen) walking workouts in the window "
+                            + "were left out: only walks this app recorded, or ones marked as "
+                            + "runs, are kept. They still exist in HealthKit — see \"walks_kept\" "
+                            + "in manifest.json.")
         }
 
         // 2. Workout weather, straight from metadata already loaded with each workout.
@@ -439,7 +448,8 @@ struct ExportBuilder {
         let workoutCounts: [String: Any] = [
             "all_workout_types_in_window": dataset.allWorkoutTypeCounts,
             "kept_workout_types": dataset.keptWorkoutTypeCounts,
-            "workout_types_to_keep": HealthKitManager.keptTypeNames(includeWalking: options.includeWalking),
+            "workout_types_to_keep": ["running", "walking"],
+            "walks_kept": HealthKitManager.walksKeptRule,
         ]
         try writeJSON(workoutCounts, "workout_type_counts.json", folder)
 
@@ -492,7 +502,10 @@ struct ExportBuilder {
             "end_date_mode": "dynamic_now_plus_one_day",
             "timezone": TimeZone.current.identifier,
             "export_mode": mode.rawValue,
-            "workout_types_to_keep": HealthKitManager.keptTypeNames(includeWalking: options.includeWalking),
+            // Which workouts: the last N (the default) or a date range. start_date and end_date
+            // above are the padded query window either way.
+            "export_range": options.range.json,
+            "workout_types_to_keep": ["running", "walking"],
             "record_types_requested": dataset.requestedTypes,
             "record_types_available": dataset.availableTypes,
             "record_types_unavailable": dataset.unavailableTypes,
@@ -510,7 +523,8 @@ struct ExportBuilder {
 
             // Recorded so a reader can tell "walks were filtered out" from "this person never
             // walked". `all_workout_types_in_window` in workout_type_counts.json shows how many.
-            "walking_included": options.includeWalking,
+            // Replaced `walking_included`, a switch that no longer exists.
+            "walks_kept": HealthKitManager.walksKeptRule,
 
             // Walks the user asserted were really runs. Listed explicitly so the assertion is
             // auditable: workoutActivityType still says walking for these rows.
@@ -624,35 +638,22 @@ struct ExportBuilder {
             """
         }
 
-        let activitySection: String
-        if options.includeWalking {
-            activitySection = """
-            ACTIVITY TYPES
-            Both running and walking workouts are included. Walking is kept because a run/walk \
-            session is occasionally recorded by the Watch as "Outdoor Walk" rather than \
-            "Outdoor Run".
-            """
-        } else {
-            activitySection = """
-            ACTIVITY TYPES
-            ONLY RUNNING workouts are included. Walking workouts were deliberately excluded from \
-            this export and are absent from workouts.csv, routes and the record windows.
+        let activitySection = """
+        ACTIVITY TYPES
+        Every running workout is included. Walks are included only when this app recorded them \
+        (a Walking plan, saved by its Watch app with the plan's execution id) or when they were \
+        marked in the app as really being runs (reclassifiedAsRunning). Every other walk is left \
+        out of workouts.csv, routes and the record windows.
 
-            This is a filter, not an absence of data: the walks still exist in Apple Health. \
-            workout_type_counts.json reports every workout type seen in the window under \
-            "all_workout_types_in_window", including how many walks were skipped, and \
-            manifest.json records "walking_included": false.
-
-            One caveat worth knowing: a run/walk session is occasionally recorded by the Watch as \
-            "Outdoor Walk" rather than "Outdoor Run". Any such session is excluded here too. Turn \
-            "Include walking workouts" on in the app and re-export if you need them.
-            """
-        }
+        This is a filter, not an absence of data: the walks still exist in Apple Health. \
+        workout_type_counts.json reports every workout type seen in the window under \
+        "all_workout_types_in_window", including how many walks were skipped, and \
+        manifest.json records the rule as "walks_kept".
+        """
 
         return """
         This export was generated locally on iPhone from HealthKit.
-        It includes \(options.includeWalking ? "running and walking" : "running") workouts from \
-        June 18, 2026 through the export date, plus relevant HealthKit quantity samples such as \
+        It includes \(options.range.readmeDescription), plus relevant HealthKit quantity samples such as \
         heart rate, distance, steps, energy, running speed, running dynamics, walking metrics, \
         resting heart rate, HRV, and VO2 Max when available.
 

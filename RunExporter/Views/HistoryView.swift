@@ -8,18 +8,12 @@ struct HistoryView: View {
 
     @State private var filter: Filter = .all
 
-    /// The activity filters worth offering. "Walking" is hidden when walking workouts are not
-    /// read at all — a filter that can only ever return nothing is worse than no filter.
-    private var availableFilters: [Filter] {
-        defaults.includeWalkingWorkouts
-            ? Filter.allCases.filter { $0 != .walks }
-            : Filter.allCases.filter { $0 != .walking && $0 != .running }
-    }
-
+    /// Running and Walking filters went with the switch that let every walk in: the main list
+    /// is almost all runs now, and the only walks in it are ones this app recorded.
     enum Filter: String, CaseIterable, Identifiable {
-        case all, logged, unlogged, running, walking
-        /// Browses walking workouts even when they are excluded, so a run the Watch mislabelled
-        /// as a walk can still be found and corrected.
+        case all, logged, unlogged
+        /// Browses every walk, including the ones the app leaves out, so a run recorded as a walk
+        /// can still be found and corrected.
         case walks
         var id: String { rawValue }
         var displayName: String {
@@ -27,8 +21,6 @@ struct HistoryView: View {
             case .all: return "All"
             case .logged: return "Logged"
             case .unlogged: return "Unlogged"
-            case .running: return "Running"
-            case .walking: return "Walking"
             case .walks: return "Walks"
             }
         }
@@ -43,8 +35,6 @@ struct HistoryView: View {
             case .all: return true
             case .logged: return logger.loggedWorkoutUUIDs.contains(workout.uuid)
             case .unlogged: return !logger.loggedWorkoutUUIDs.contains(workout.uuid)
-            case .running: return workout.activityType == .running
-            case .walking: return workout.activityType == .walking
             case .walks: return false   // handled above
             }
         }
@@ -54,21 +44,17 @@ struct HistoryView: View {
         List {
             Section {
                 Picker("Filter", selection: $filter) {
-                    ForEach(availableFilters) { Text($0.displayName).tag($0) }
+                    ForEach(Filter.allCases) { Text($0.displayName).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .onChange(of: defaults.includeWalkingWorkouts) { _, _ in
-                    // A hidden filter must not stay selected, or the list silently shows nothing.
-                    if !availableFilters.contains(filter) { filter = .all }
-                }
             }
             .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
 
             if filter == .walks {
                 Section {
-                    Text("Walking workouts are excluded from the app and the export. If one of "
-                         + "these was really a run/walk session the Watch recorded as "
-                         + "\"Outdoor Walk\", open it and tap \"This was really a run\".")
+                    Text("Walks this app didn't record are left out of the app and the export. If "
+                         + "one of these was really a run the Watch recorded as \"Outdoor Walk\", "
+                         + "open it and tap \"This was really a run\".")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

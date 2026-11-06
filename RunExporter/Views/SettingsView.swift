@@ -25,6 +25,7 @@ struct SettingsView: View {
             voiceSection($defaults)
             defaultsSection($defaults)
             loggingSection($defaults)
+            aboutExportsSection
 
             Section {
                 Text("Everything this app records stays on this device. There is no account, no "
@@ -46,6 +47,36 @@ struct SettingsView: View {
         }
         .navigationTitle("Settings")
     }
+
+    // MARK: - About exports
+
+    /// The explanations that sat under each control on the export screen, moved here so Export is
+    /// on screen without scrolling. Plain text: nothing here is a setting.
+    private var aboutExportsSection: some View {
+        Section("About exports") {
+            ForEach(Self.exportExplanations, id: \.self) { line in
+                Text(line)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private static let exportExplanations: [String] = [
+        "Last workouts exports your most recent runs, from the first of them until now. Date "
+            + "range exports whatever falls between two dates, and its End resets to now each "
+            + "time you open the app.",
+        "Every run is exported. A walk is exported only when this app recorded it from a "
+            + "Walking plan, or when you marked it as really a run in History. The export says "
+            + "how many walks it left out.",
+        "Full date range includes every heart-rate and other Health record in the range. "
+            + "Workout windows only keeps records within "
+            + "\(ExportMode.workoutWindowBufferMinutes) minutes of each workout, for a smaller "
+            + "export.",
+        "Weather comes from each workout's own Health data. Nothing is looked up online.",
+        "GPS routes show where you run, so treat an export that includes them as sensitive.",
+        "If some data is missing, check this app's permissions in the Health app, under Sharing.",
+    ]
 
     /// "1.1.4 (1)" — marketing version plus build, read from the running bundle.
     private static var versionString: String {
@@ -114,7 +145,8 @@ struct SettingsView: View {
             return "This iPhone plays the run, walk and cooldown cues through your current audio "
                 + "route. The settings above apply."
         case .none:
-            return "No cues will play from this app at all, including confirmations of taps."
+            return "No cues will play from this app at all, including confirmations of taps. "
+                + "The warning when a run starts without your Watch still sounds."
         }
     }
 

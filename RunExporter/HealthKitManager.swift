@@ -168,10 +168,9 @@ final class HealthKitManager {
     /// The `HKWorkout` objects themselves are returned rather than finished rows so the caller
     /// can also read each workout's weather metadata and query its routes. Row construction
     /// lives in `WorkoutMetadataExporter`.
-    /// - Parameter includeWalking: when false, only running workouts are kept. Walking is excluded
-    ///   by default because a walkable neighbourhood produces many walks that are not training.
-    ///   `allCounts` still reports every type seen, so the export always shows what was filtered.
-    func fetchWorkouts(start: Date, end: Date, includeWalking: Bool,
+    /// Which workouts are kept is `keeps`. `allCounts` still reports every type seen, so the export
+    /// always shows what was filtered.
+    func fetchWorkouts(start: Date, end: Date,
                        reclassifiedAsRunning: Set<UUID> = []) async throws
         -> (workouts: [HKWorkout], allCounts: [String: Int], keptCounts: [String: Int],
             keptIntervals: [DateInterval]) {
@@ -189,7 +188,7 @@ final class HealthKitManager {
             allCounts[rawName, default: 0] += 1
 
             guard Self.keeps(w.workoutActivityType, uuid: w.uuid,
-                             includeWalking: includeWalking,
+                             recordedByThisApp: Self.isRecordedByThisApp(w),
                              reclassifiedAsRunning: reclassifiedAsRunning) else { continue }
             keptCounts[rawName, default: 0] += 1
 
@@ -258,14 +257,13 @@ final class HealthKitManager {
     ///
     /// Uses the same activity-type rule as the export, so the logger never offers a workout the
     /// export would not contain — and never hides one it would.
-    func fetchRecentWorkouts(hours: Int, includeWalking: Bool,
+    func fetchRecentWorkouts(hours: Int,
                              reclassifiedAsRunning: Set<UUID> = [],
                              now: Date = Date()) async throws -> [WorkoutSummary] {
         let start = now.addingTimeInterval(-Double(hours) * 3600)
         // A workout in progress can have an end date in the future relative to `now`.
         let end = now.addingTimeInterval(3600)
         let result = try await fetchWorkouts(start: start, end: end,
-                                             includeWalking: includeWalking,
                                              reclassifiedAsRunning: reclassifiedAsRunning)
         return result.workouts
             .compactMap { Self.summary(for: $0, reclassifiedAsRunning: reclassifiedAsRunning) }
@@ -281,8 +279,9 @@ final class HealthKitManager {
                               now: Date = Date()) async throws -> [WorkoutSummary] {
         let start = now.addingTimeInterval(-Double(hours) * 3600)
         let end = now.addingTimeInterval(3600)
-        let result = try await fetchWorkouts(start: start, end: end, includeWalking: true)
-        return result.workouts
+        // Every walk, so not through `fetchWorkouts`, whose rule drops most of them.
+        let samples = try await fetchSamples(type: HKObjectType.workoutType(), start: start, end: end)
+        return samples.compactMap { $0 as? HKWorkout }
             .filter { $0.workoutActivityType == .walking }
             .compactMap { Self.summary(for: $0, reclassifiedAsRunning: reclassifiedAsRunning) }
             .sorted { $0.startDate > $1.startDate }
@@ -292,28 +291,35 @@ final class HealthKitManager {
     ///
     /// One place so the export, the logger queue and History can never disagree about what exists.
     ///
-    /// - Parameter reclassifiedAsRunning: workouts the user has marked as really being runs. A
-    ///   walk in this set is kept even when walking is otherwise excluded — that is the whole
-    ///   point of the annotation.
+    /// Every run is kept. A walk is kept only when this app recorded it (a Walking plan, tagged
+    /// with its execution id) or the user marked it as really a run. Other walks were the reason
+    /// a switch to include every walk existed: before the Watch app, a run started by hand
+    /// was sometimes recorded as a walk. The Watch app records what the plan says, so that switch
+    /// was retired.
+    ///
+    /// - Parameter reclassifiedAsRunning: workouts the user has marked as really being runs.
     static func keeps(_ type: HKWorkoutActivityType,
                       uuid: UUID? = nil,
-                      includeWalking: Bool,
+                      recordedByThisApp: Bool = false,
                       reclassifiedAsRunning: Set<UUID> = []) -> Bool {
         switch type {
         case .running:
             return true
         case .walking:
             if let uuid, reclassifiedAsRunning.contains(uuid) { return true }
-            return includeWalking
+            return recordedByThisApp
         default:
             return false
         }
     }
 
-    /// Human names of the activity types kept, for the manifest and `workout_type_counts.json`.
-    static func keptTypeNames(includeWalking: Bool) -> [String] {
-        includeWalking ? ["running", "walking"] : ["running"]
+    /// True when this app's Watch app saved the workout: it carries an execution id.
+    static func isRecordedByThisApp(_ workout: HKWorkout) -> Bool {
+        workout.metadata?[WorkoutMetadataKeys.executionID] != nil
     }
+
+    /// The rule, for manifest.json's `walks_kept`.
+    static let walksKeptRule = "planned_in_this_app_or_reclassified"
 
     /// One workout by its HealthKit UUID, or nil when it no longer exists (it may have been
     /// deleted in the Health app after being logged).

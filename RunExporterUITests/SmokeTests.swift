@@ -34,6 +34,9 @@ final class SmokeTests: XCTestCase {
             // reads `.standard`, and `cue.source` = `none` is "Play cues" off. The simulator plays
             // through the Mac's speakers, and every run announced "3, 2, 1, Run" out loud.
             "-cue.source", "none",
+            // The no-Watch alarm plays even with cues off, so without this every run in the
+            // simulator, which has no Watch, would sound it through the Mac's speakers.
+            "-uiTestingSilencesNoWatchAlarm",
         ]
     }
 
@@ -109,6 +112,7 @@ final class SmokeTests: XCTestCase {
             app.buttons["Start Workout"].tap()
             expect(app.staticTexts["READY"], "the READY screen for the aerobic plan")
             app.buttons["Start"].tap()
+            answerNoWatchWarning(with: runWithoutWatch)
             expect(app.buttons["End Workout"], "End Workout on the aerobic run")
             // The aerobic panel (aerobic spec §4). The simulator has no Watch, so its heart rate
             // must read as unavailable, never as a number (§6).
@@ -144,6 +148,22 @@ final class SmokeTests: XCTestCase {
             tapTab("Today")
             app.buttons["Export Data"].tap()
             expect(app.navigationBars["Export Data"], "the export screen")
+            // The owner had to scroll to reach Export. It must be on screen as the screen opens,
+            // even with Health access not yet granted (the test never grants it), which is when the
+            // screen has the most to show.
+            let export = app.buttons["Export"]
+            expect(export, "the Export button")
+            XCTAssertTrue(export.isHittable, "Export is not on screen without scrolling")
+            expect(app.buttons["Grant Health Access"], "the Health access prompt when not granted")
+            // The default range, said on screen so the mode is never a guess.
+            let lastWorkouts = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@",
+                                                                    "Last 15 workouts")).firstMatch
+            expect(lastWorkouts, "the Last 15 workouts default")
+            // Retired: walks are kept by rule now, and the explanations live in Settings.
+            expectAbsent(app.switches["Include walking workouts"], "the walking toggle")
+            let footnote = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@",
+                                                                "Only running workouts are read")).firstMatch
+            expectAbsent(footnote, "the walking footnote")
             snapshot("Export screen, before going back")
             app.navigationBars.buttons.firstMatch.tap()
         }
@@ -156,13 +176,12 @@ final class SmokeTests: XCTestCase {
 
         step("Start: the run screen, and the Watch failure reported") {
             app.buttons["Start"].tap()
+            // Chosen to run on: the screen must then say the run carries on without the Watch.
+            answerNoWatchWarning(with: runWithoutWatch)
             expect(app.buttons["End Workout"], "End Workout on the run screen")
-            // The simulator has no Watch. The launch fails at once or after the 15 s timeout, and
-            // either way the screen must say the run carries on without it.
             let phoneOnly = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@",
                                                                  "continues on the phone only")).firstMatch
-            XCTAssertTrue(phoneOnly.waitForExistence(timeout: 25),
-                          "The run screen never said the run continues on the phone only")
+            expect(phoneOnly, "the run screen saying the run continues on the phone only")
             expect(app.buttons["Try again"], "Try again after the Watch failed")
             // Drawn in the same pass as End Workout, which is already on screen, so this absence
             // is a fact about the screen rather than about timing.
@@ -177,6 +196,16 @@ final class SmokeTests: XCTestCase {
             expectAbsent(talkTestPicker, "the talk test on an ordinary run's log (§7)")
             app.navigationBars["Log Run"].buttons["Cancel"].tap()
             expect(app.buttons["Start Workout"], "back on Today after the run")
+        }
+
+        step("Start with no Watch, and stop to go and get it") {
+            app.buttons["Start Workout"].tap()
+            expect(app.staticTexts["READY"], "the READY screen")
+            app.buttons["Start"].tap()
+            answerNoWatchWarning(with: stopForWatch)
+            // Stopping abandons the run: no end confirmation, no log prompt, straight back.
+            expect(app.buttons["Start Workout"], "back on Today after stopping for the Watch")
+            expectAbsent(app.alerts["Workout complete"], "a log prompt for the abandoned run")
         }
         // No closing "no sheet appeared" wait: the sheet has arrived as late as 27 s after its
         // request, so a 5 s wait passed whenever it was merely late. The launch flag is proved by
@@ -200,6 +229,24 @@ final class SmokeTests: XCTestCase {
         noWorkout.buttons["Log it anyway"].tap()
         expect(app.navigationBars["Log Run"], "the run log form")
     }
+
+    /// Waits for the no-Watch warning and answers it. The simulator has no Watch, so every run's
+    /// launch fails, at once or at the 15 s timeout; waiting for the warning before anything else on
+    /// the run screen keeps a late warning from landing on top of a later tap.
+    private func answerNoWatchWarning(with choice: XCUIElement) {
+        let warning = app.staticTexts["NO WATCH"]
+        XCTAssertTrue(warning.waitForExistence(timeout: 25),
+                      "The run started with no Watch and the no-Watch warning never appeared")
+        snapshot("No-Watch warning")
+        expect(runWithoutWatch, "Run without Watch on the warning")
+        expect(stopForWatch, "Stop on the warning")
+        choice.tap()
+        XCTAssertTrue(warning.waitForNonExistence(timeout: 5),
+                      "The no-Watch warning stayed up after it was answered")
+    }
+
+    private var runWithoutWatch: XCUIElement { app.buttons["Run without Watch"] }
+    private var stopForWatch: XCUIElement { app.buttons["Stop — I'll get my Watch"] }
 
     private var aerobicTarget: XCUIElement {
         app.staticTexts["RPE 3–4 · conversational"]

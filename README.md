@@ -317,13 +317,17 @@ Notes:
 
 ## Using the app
 
-1. Launch. Tap **Grant Health Access** and allow the requested read types in the Health sheet.
-2. The date range defaults to **Start: Jun 18, 2026** (persisted across launches) and **End: Now**
-   (resets to now each launch). Adjust if you like.
-3. Choose an **Export Mode** (see below).
-4. Under **Additional Data**, leave *Include workout weather* and *Include GPS routes* on (both
-   default to on at every launch). Turning routes off skips route queries entirely and writes no
-   `routes/` folder; the manifest still records that routes were not requested.
+1. Launch. On **Export Data**, tap **Grant Health Access** and allow the requested types in the
+   Health sheet. Once granted, the section shrinks to a green "Health access" check under Export.
+2. The export covers the **last 15 workouts** by default: from the start of the oldest of them
+   until now. **Options** (collapsed) holds the rest. Under **Range**, change the count, or choose
+   **Date range** for a **Start** (remembered across launches) and an **End** (reset to now each
+   launch). Both the choice and the count are remembered.
+3. Also under **Options**: the **Records** mode (see below), and *Include workout weather* and
+   *Include GPS routes*, both on at every launch. Turning routes off skips route queries entirely
+   and writes no `routes/` folder; the manifest still records that routes were not requested. The
+   folded Options row lists what is set, so a changed setting shows without opening it.
+4. The explanations for all of this are in **Settings → About exports**.
 5. Tap **Export**. The app reads workouts, weather metadata, quantity samples, activity summaries,
    and workout routes, writes the files, and zips them.
 6. The share sheet appears — send the ZIP to Files, AirDrop, Messages, Mail, ChatGPT, etc.
@@ -333,7 +337,9 @@ Notes:
 ### Export modes
 
 - **Full date range** (default) — every requested HealthKit quantity sample across the whole
-  window (program start − 1 day through now + 1 day). Largest, most complete export.
+  window: from one day before the first exported workout (or the Start date) through one day after
+  now (or the End date). Largest, most complete export. `manifest.json`'s `export_range` says
+  whether the export was the last N workouts or a date range.
 - **Workout windows only** — quantity samples are limited to within **30 minutes before/after**
   each running or walking workout; overlapping windows are merged so no sample is duplicated. This
   produces a much smaller `records.csv` while keeping the data needed to analyze heart rate, speed,
@@ -737,7 +743,7 @@ Three companion files, kept separate because they answer different questions:
   misdirected a real diagnosis; see MISTAKES.md.)
 
 - **HealthKit read permission is opaque.** iOS does not tell an app whether read access was
-  granted for privacy reasons, so "Health Access Granted" means *requested*. Missing data can mean
+  granted for privacy reasons, so the green "Health access" check means *requested*. Missing data can mean
   permission denied, type unavailable on this OS, or simply no samples exist. Re-check toggles in
   the Health app under Sharing if something you expected is absent.
 - **Running dynamics** (power, stride length, ground contact time, vertical oscillation) generally
@@ -745,18 +751,22 @@ Three companion files, kept separate because they answer different questions:
 - **`runningCadence`** is not a standard HealthKit quantity identifier on current SDKs; it is
   attempted and reported under `unavailable_types` when the OS doesn't expose it. Step count and
   other running metrics still export.
-- **Walking workouts are excluded by default (v1.1).** Only running workouts are read — by the
-  export, the "needs a log" queue and History alike. Turn on **Include walking workouts** on the
-  export screen to get them back; the setting is remembered and applies everywhere.
+- **Most walks are left out.** Every run is read — by the export, the "needs a log" queue and
+  History alike — but a walk only when this app's Watch app recorded it from a Walking plan (it
+  carries the execution id) or you marked it as really a run in History. The rule is
+  `HealthKitManager.keeps`.
 
-  Excluding them is never silent: `manifest.json` records `"walking_included": false`,
-  `workout_types_to_keep` becomes `["running"]`, `export_log.json` says how many walks were
-  skipped, `workout_type_counts.json` still lists every type seen in the window, and `README.txt`
-  inside the ZIP explains it. A reader can always tell filtering from an empty week.
+  Until 2026-11-06 an **Include walking workouts** switch on the export screen let every walk in;
+  it was removed in the 2026-11-06 export change. It existed because a run started by hand on the
+  Watch was sometimes recorded as a walk, and the Watch app now records what the plan says. A
+  stored value of the old switch is left in place and read by nothing.
 
-  **Caveat:** run/walk sessions occasionally record as *Outdoor Walk* rather than *Outdoor Run* —
-  v1.0 included walking for exactly this reason. Any such session is now excluded too. If a run
-  goes missing from the export, turn the toggle on and re-export.
+  Leaving walks out is never silent: `manifest.json` records `"walks_kept":
+  "planned_in_this_app_or_reclassified"` (which replaced `"walking_included"`), `export_log.json`
+  says how many walks were skipped, `workout_type_counts.json` still lists every type seen in the
+  window, and `README.txt` inside the ZIP explains it. A reader can always tell filtering from an
+  empty week. History's **Walks** filter lists every walk, so a run recorded as a walk can still be
+  found and marked.
 - **Activity summaries** are best-effort; if the query fails the other files still export and the
   issue is noted in `export_log.json`.
 - **Weather is often missing.** Apple records it only for some outdoor workouts, mostly Apple

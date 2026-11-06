@@ -85,7 +85,6 @@ final class RunLoggerModel {
             // export would drop, and never hides one it would keep.
             recentWorkouts = try await health.fetchRecentWorkouts(
                 hours: Self.historyHours,
-                includeWalking: defaults.includeWalkingWorkouts,
                 reclassifiedAsRunning: defaults.reclassifiedAsRunning)
         } catch {
             errorMessage = "Could not read recent workouts: \(error.localizedDescription)"

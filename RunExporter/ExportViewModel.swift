@@ -13,6 +13,15 @@ final class ExportViewModel: ObservableObject {
 
     // MARK: - Published state
 
+    /// Which workouts to export. Remembered, like `startDate`.
+    enum RangeChoice: String, CaseIterable, Identifiable {
+        case lastWorkouts = "last_workouts"
+        case dates = "dates"
+        var id: String { rawValue }
+    }
+
+    @Published var rangeChoice: RangeChoice
+    @Published var lastWorkoutCount: Int
     @Published var startDate: Date
     @Published var endDate: Date = Date()
     @Published var exportMode: ExportMode = .fullDateRange
@@ -21,11 +30,6 @@ final class ExportViewModel: ObservableObject {
     /// `exportMode`, so an export never quietly omits data because of an earlier session.
     @Published var includeWeather = true
     @Published var includeRoutes = true
-
-    /// Unlike the two above, this one is **persisted** (in `LoggerDefaults`) and defaults to off.
-    /// It is a statement about what counts as training data rather than a per-export choice, and
-    /// the same value drives the logger queue and History so they can never disagree.
-    @Published var includeWalking = false
 
     @Published var permissionRequested: Bool
     @Published var isExporting = false
@@ -46,6 +50,8 @@ final class ExportViewModel: ObservableObject {
     private var pendingResult: ExportBuilder.Result?
 
     private let startDateKey = "savedStartDate"
+    private let rangeChoiceKey = "export.rangeChoice"
+    private let lastWorkoutCountKey = "export.lastWorkoutCount"
     private let permissionRequestedKey = "permissionRequested"
     private let permissionSchemaVersionKey = "permissionSchemaVersion"
 
@@ -94,6 +100,19 @@ final class ExportViewModel: ObservableObject {
         self.loggerDefaults = loggerDefaults
 
         let defaults = UserDefaults.standard
+        // An unknown stored value (a later build's choice) is not coerced silently: it is
+        // reported once the screen can show it, and the default is used meanwhile.
+        let storedChoice = defaults.string(forKey: rangeChoiceKey)
+        let choice = storedChoice.flatMap(RangeChoice.init(rawValue:))
+        self.rangeChoice = choice ?? .lastWorkouts
+        var problemAtLaunch: String?
+        if let storedChoice, choice == nil {
+            problemAtLaunch = "The saved export range \"\(storedChoice)\" is not one this version "
+                + "knows, so Last \(ExportRange.defaultWorkoutCount) workouts is selected."
+        }
+        let storedCount = defaults.integer(forKey: lastWorkoutCountKey)
+        self.lastWorkoutCount = ExportRange.workoutCountRange.contains(storedCount)
+            ? storedCount : ExportRange.defaultWorkoutCount
         // Persisted start date (defaults to program start on first launch).
         if let saved = defaults.object(forKey: startDateKey) as? Date {
             self.startDate = saved
@@ -107,10 +126,25 @@ final class ExportViewModel: ObservableObject {
         self.permissionRequested = defaults.bool(forKey: permissionRequestedKey)
             && defaults.integer(forKey: permissionSchemaVersionKey)
                 >= HealthKitManager.authorizationSchemaVersion
+        self.initialProblem = problemAtLaunch
     }
 
     func persistStartDate() {
         UserDefaults.standard.set(startDate, forKey: startDateKey)
+    }
+
+    func persistRange() {
+        UserDefaults.standard.set(rangeChoice.rawValue, forKey: rangeChoiceKey)
+        UserDefaults.standard.set(lastWorkoutCount, forKey: lastWorkoutCountKey)
+    }
+
+    /// Set in `init`, which cannot show an alert; the view shows it on appearing.
+    private var initialProblem: String?
+
+    func showInitialProblem() {
+        guard let initialProblem else { return }
+        errorMessage = initialProblem
+        self.initialProblem = nil
     }
 
     /// Connects the run logger, whose contents are added to the export.
@@ -121,12 +155,6 @@ final class ExportViewModel: ObservableObject {
     func attachLogger(store: LoggerStore, defaults: LoggerDefaults) {
         loggerStore = store
         loggerDefaults = defaults
-        includeWalking = defaults.includeWalkingWorkouts
-    }
-
-    /// Persists the walking choice, so the logger queue and History match the next export.
-    func persistIncludeWalking() {
-        loggerDefaults?.includeWalkingWorkouts = includeWalking
     }
 
     // MARK: - Permissions
@@ -155,6 +183,7 @@ final class ExportViewModel: ObservableObject {
         }
 
         persistStartDate()
+        persistRange()
         isExporting = true
         errorMessage = nil
         statusMessage = "Exporting…"
@@ -170,7 +199,18 @@ final class ExportViewModel: ObservableObject {
                     markAuthorizationRequested()
                 }
 
-                let (queryStart, queryEnd) = queryWindow()
+                let reclassified = loggerDefaults?.reclassifiedAsRunning ?? []
+                guard let resolved = try await resolveRange(reclassified: reclassified) else {
+                    isExporting = false
+                    progressText = ""
+                    errorMessage = "There are no running workouts since "
+                        + programStartDate.formatted(date: .long, time: .omitted)
+                        + " to export. Choose Date range to export a period with none."
+                    statusMessage = "Nothing exported."
+                    return
+                }
+                let (range, displayStart) = resolved
+                let (queryStart, queryEnd) = queryWindow(start: displayStart)
 
                 // Copy the logger out of SwiftData here, on the main actor, before the export
                 // task starts. The models are not Sendable and must not cross into it.
@@ -183,13 +223,12 @@ final class ExportViewModel: ObservableObject {
                     programStart: programStartDate,
                     queryStart: queryStart,
                     queryEnd: queryEnd,
-                    displayStart: startDate,
+                    displayStart: displayStart,
                     mode: exportMode,
                     options: ExportOptions(includeWeather: includeWeather,
                                            includeRoutes: includeRoutes,
-                                           includeWalking: includeWalking,
-                                           reclassifiedAsRunning:
-                                            loggerDefaults?.reclassifiedAsRunning ?? []),
+                                           reclassifiedAsRunning: reclassified,
+                                           range: range),
                     logger: loggerData,
                     intervalAudio: audioSettings,
                     // Not `[weak self]`: the enclosing Task already holds this view model strongly
@@ -332,13 +371,34 @@ final class ExportViewModel: ObservableObject {
         transitionCountdown: false,
         duckOtherAudio: false)
 
-    /// Query window with the intentional 1-day buffers, based on the user-selected dates.
-    private func queryWindow() -> (Date, Date) {
+    /// Query window with the intentional 1-day buffers. A last-N export ends now, whatever the
+    /// End picker says: it is hidden in that mode.
+    private func queryWindow(start: Date) -> (Date, Date) {
         let cal = Calendar.current
-        let startOfDay = cal.startOfDay(for: startDate)
+        let startOfDay = cal.startOfDay(for: start)
         let queryStart = cal.date(byAdding: .day, value: -1, to: startOfDay) ?? startOfDay
-        let queryEnd = cal.date(byAdding: .day, value: 1, to: endDate) ?? endDate
+        let end = rangeChoice == .lastWorkouts ? Date() : endDate
+        let queryEnd = cal.date(byAdding: .day, value: 1, to: end) ?? end
         return (queryStart, queryEnd)
+    }
+
+    /// The range this export covers, and the date its folder is named from. Nil when "last N
+    /// workouts" finds none since program start, which the caller reports.
+    private func resolveRange(reclassified: Set<UUID>) async throws -> (ExportRange, Date)? {
+        switch rangeChoice {
+        case .dates:
+            return (.dates(start: startDate, end: endDate), startDate)
+        case .lastWorkouts:
+            progressText = "Finding the last \(lastWorkoutCount) workouts…"
+            let now = Date()
+            let found = try await health.fetchWorkouts(start: programStartDate,
+                                                       end: now.addingTimeInterval(86_400),
+                                                       reclassifiedAsRunning: reclassified)
+            guard let from = ExportRange.lastWorkoutsStart(
+                workoutStarts: found.workouts.map(\.startDate), count: lastWorkoutCount)
+            else { return nil }
+            return (.lastWorkouts(count: lastWorkoutCount, from: from), from)
+        }
     }
 
     // MARK: - Cleanup after share

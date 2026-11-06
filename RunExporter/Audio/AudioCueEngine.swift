@@ -1,3 +1,4 @@
+import AudioToolbox
 import AVFAudio
 import Foundation
 import Observation
@@ -201,6 +202,24 @@ final class AudioCueEngine {
     }
 
     func clearError() { lastError = nil }
+
+    // MARK: - The no-Watch alarm
+
+    /// Says the Watch is not connected, at full volume, and vibrates.
+    ///
+    /// **Plays even with cues off.** It is a warning, not a cue: a run started with the Watch left
+    /// at home loses its heart rate, distance and route, and the owner did that twice with nothing
+    /// louder than a caption to tell them. Full volume rather than the cue volume for the same
+    /// reason. Uses the workout's audio session, which `ActiveWorkoutModel.start` has already
+    /// activated, so it plays with the ringer switch on silent and with the screen locked.
+    func soundNoWatchAlarm() {
+        guard !UITesting.silencesNoWatchAlarm else { return }
+        AudioServicesPlayAlertSound(SystemSoundID(kSystemSoundID_Vibrate))
+        let utterance = AVSpeechUtterance(string: "Watch not connected.")
+        utterance.volume = 1
+        if let settings { utterance.voice = resolvedVoice(settings: settings) }
+        synthesizer.speak(utterance)
+    }
 
     // MARK: - Voices
 

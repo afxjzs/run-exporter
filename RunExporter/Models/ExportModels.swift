@@ -21,15 +21,60 @@ enum ExportMode: String, CaseIterable, Identifiable {
 
 // MARK: - Optional data toggles
 
-/// User-facing "Additional Data" switches.
+/// User-facing "Additional Data" switches, and the range the export covers.
 struct ExportOptions {
     var includeWeather: Bool = true
     var includeRoutes: Bool = true
-    /// Walking workouts. Off by default — see `LoggerDefaults.includeWalkingWorkouts`. When off,
-    /// `workout_type_counts.json` still reports how many walks were seen and skipped.
-    var includeWalking: Bool = false
-    /// Walks the user marked as really being runs. Kept even when `includeWalking` is false.
+    /// Walks the user marked as really being runs. Kept, like walks this app recorded; every other
+    /// walk is left out (`HealthKitManager.keeps`).
     var reclassifiedAsRunning: Set<UUID> = []
+    /// What the export covers, recorded in manifest.json and README.txt.
+    var range: ExportRange
+}
+
+// MARK: - Range
+
+/// What an export covers: the most recent workouts (the default), or a date range.
+enum ExportRange: Equatable {
+    /// The `count` most recent kept workouts, the oldest of which started at `from`.
+    case lastWorkouts(count: Int, from: Date)
+    case dates(start: Date, end: Date)
+
+    /// The default and the bounds of the "last N workouts" stepper.
+    static let defaultWorkoutCount = 15
+    static let workoutCountRange = 1...200
+
+    /// The start of the oldest of the `count` newest workouts, in any order given. Nil when there
+    /// are none: the caller must say so, not fall back to some other date.
+    static func lastWorkoutsStart(workoutStarts: [Date], count: Int) -> Date? {
+        workoutStarts.sorted(by: >).prefix(max(count, 0)).last
+    }
+
+    /// For manifest.json's `export_range`.
+    var json: [String: Any] {
+        switch self {
+        case let .lastWorkouts(count, from):
+            return ["mode": "last_workouts",
+                    "workout_count_requested": count,
+                    "workouts_from": Fmt.isoString(from)]
+        case let .dates(start, end):
+            return ["mode": "date_range",
+                    "start": Fmt.isoString(start),
+                    "end": Fmt.isoString(end)]
+        }
+    }
+
+    /// For README.txt: which workouts the export holds.
+    var readmeDescription: String {
+        let style = Date.FormatStyle(date: .long, time: .omitted)
+        switch self {
+        case let .lastWorkouts(count, from):
+            return "the last \(count) workouts, the first of them on \(from.formatted(style)), "
+                + "through the export date"
+        case let .dates(start, end):
+            return "workouts from \(start.formatted(style)) through \(end.formatted(style))"
+        }
+    }
 }
 
 // MARK: - Structured export log

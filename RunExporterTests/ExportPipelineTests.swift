@@ -49,8 +49,10 @@ final class ExportPipelineTests: XCTestCase {
     /// it properly means a fake store; see the entry in `docs/BACKLOG.md`.
     private func runExport(logger: LoggerExportData = LoggerExportData(),
                            workouts: [WorkoutExportRow] = [],
-                           includeWalking: Bool = false,
-                           reclassified: Set<UUID> = []) throws -> ExportBuilder.Result {
+                           reclassified: Set<UUID> = [],
+                           range: ExportRange = .dates(start: Date(timeIntervalSinceReferenceDate: 0),
+                                                       end: Date(timeIntervalSinceReferenceDate: 86_400)))
+        throws -> ExportBuilder.Result {
         let fm = FileManager.default
         let exportFolder = fm.temporaryDirectory
             .appendingPathComponent("running_health_export", isDirectory: true)
@@ -84,8 +86,8 @@ final class ExportPipelineTests: XCTestCase {
                                queryEnd: start.addingTimeInterval(86_400),
                                mode: .fullDateRange,
                                options: ExportOptions(includeWeather: true, includeRoutes: false,
-                                                      includeWalking: includeWalking,
-                                                      reclassifiedAsRunning: reclassified),
+                                                      reclassifiedAsRunning: reclassified,
+                                                      range: range),
                                intervalAudio: audioSettings,
                                createdAt: createdAt)
 
@@ -144,43 +146,38 @@ final class ExportPipelineTests: XCTestCase {
 
     // MARK: - Activity type filtering
 
-    /// Excluding walks must be recorded, not silent. A reader who finds no walking workouts has to
-    /// be able to tell "filtered out" from "this person never walked".
-    func testExcludingWalkingIsRecordedInManifestAndReadme() throws {
-        let result = try runExport(includeWalking: false)
+    /// Which walks are kept must be recorded, not silent. A reader who finds few walking workouts
+    /// has to be able to tell "filtered out" from "this person never walked".
+    func testWalkRuleIsRecordedInManifestAndReadme() throws {
+        let result = try runExport()
         let manifest = try loadManifest(result)
 
-        XCTAssertEqual(manifest["walking_included"] as? Bool, false)
-        XCTAssertEqual(manifest["workout_types_to_keep"] as? [String], ["running"])
+        XCTAssertEqual(manifest["walks_kept"] as? String, "planned_in_this_app_or_reclassified")
+        XCTAssertNil(manifest["walking_included"],
+                     "walking_included described a setting that no longer exists")
 
         let readme = try String(contentsOf: result.extractFolder
             .appendingPathComponent("README.txt"), encoding: .utf8)
-        XCTAssertTrue(readme.contains("ONLY RUNNING"),
-                      "README.txt must state that walking was excluded")
+        XCTAssertTrue(readme.contains("Walks are included only when"),
+                      "README.txt must state which walks were kept")
         XCTAssertTrue(readme.contains("still exist in Apple Health"),
                       "README.txt must make clear this is a filter, not missing data")
     }
 
-    func testIncludingWalkingIsRecorded() throws {
-        let result = try runExport(includeWalking: true)
-        let manifest = try loadManifest(result)
-
-        XCTAssertEqual(manifest["walking_included"] as? Bool, true)
-        XCTAssertEqual(manifest["workout_types_to_keep"] as? [String], ["running", "walking"])
-    }
-
-    /// The rule itself, used by the export, the logger queue and History alike.
+    /// The rule itself, used by the export, the logger queue and History alike. Since the Watch
+    /// app records every run, the only walks worth keeping are the ones this app was asked to
+    /// record (a Walking plan) and the ones the user said were really runs.
     func testActivityTypeRule() {
-        XCTAssertTrue(HealthKitManager.keeps(.running, includeWalking: false))
-        XCTAssertTrue(HealthKitManager.keeps(.running, includeWalking: true))
+        XCTAssertTrue(HealthKitManager.keeps(.running))
+        XCTAssertFalse(HealthKitManager.keeps(.walking),
+                       "A walk this app did not record is not training data")
+        XCTAssertTrue(HealthKitManager.keeps(.walking, recordedByThisApp: true),
+                      "A walk from a Walking plan in this app is kept")
 
-        XCTAssertFalse(HealthKitManager.keeps(.walking, includeWalking: false))
-        XCTAssertTrue(HealthKitManager.keeps(.walking, includeWalking: true))
-
-        // Nothing else is ever kept, whatever the walking setting says.
+        // Nothing else is ever kept, even if this app's tag is somehow on it.
         for other in [HKWorkoutActivityType.cycling, .swimming, .hiking, .yoga] {
-            XCTAssertFalse(HealthKitManager.keeps(other, includeWalking: true))
-            XCTAssertFalse(HealthKitManager.keeps(other, includeWalking: false))
+            XCTAssertFalse(HealthKitManager.keeps(other))
+            XCTAssertFalse(HealthKitManager.keeps(other, recordedByThisApp: true))
         }
     }
 
@@ -188,25 +185,76 @@ final class ExportPipelineTests: XCTestCase {
 
     /// A walk the user marked as really a run must survive the walking filter — that is the
     /// entire purpose of the annotation.
-    func testReclassifiedWalkIsKeptEvenWhenWalkingIsExcluded() {
+    func testReclassifiedWalkIsKept() {
         let target = UUID()
         let otherWalk = UUID()
 
         XCTAssertTrue(HealthKitManager.keeps(.walking, uuid: target,
-                                             includeWalking: false,
                                              reclassifiedAsRunning: [target]))
         XCTAssertFalse(HealthKitManager.keeps(.walking, uuid: otherWalk,
-                                              includeWalking: false,
                                               reclassifiedAsRunning: [target]))
     }
 
     /// Reclassification promotes walks; it never demotes runs or admits other activities.
     func testReclassificationNeverAffectsOtherTypes() {
         let id = UUID()
-        XCTAssertTrue(HealthKitManager.keeps(.running, uuid: id, includeWalking: false,
-                                             reclassifiedAsRunning: []))
-        XCTAssertFalse(HealthKitManager.keeps(.cycling, uuid: id, includeWalking: true,
-                                              reclassifiedAsRunning: [id]))
+        XCTAssertTrue(HealthKitManager.keeps(.running, uuid: id, reclassifiedAsRunning: []))
+        XCTAssertFalse(HealthKitManager.keeps(.cycling, uuid: id, reclassifiedAsRunning: [id]))
+    }
+
+    // MARK: - Range
+
+    /// The default export: the last N workouts. Their oldest start is where the export begins,
+    /// whatever order HealthKit returned them in.
+    func testLastWorkoutsStartAtTheOldestOfTheNewestN() {
+        let day: TimeInterval = 86_400
+        let starts = (0..<20).map { Date(timeIntervalSinceReferenceDate: Double($0) * day) }
+            .shuffled()
+        let start = ExportRange.lastWorkoutsStart(workoutStarts: starts, count: 15)
+        // Days 5...19 are the newest fifteen.
+        XCTAssertEqual(start, Date(timeIntervalSinceReferenceDate: 5 * day))
+    }
+
+    func testFewerWorkoutsThanAskedStartsAtTheOldest() {
+        let starts = [Date(timeIntervalSinceReferenceDate: 300),
+                      Date(timeIntervalSinceReferenceDate: 100),
+                      Date(timeIntervalSinceReferenceDate: 200)]
+        XCTAssertEqual(ExportRange.lastWorkoutsStart(workoutStarts: starts, count: 15),
+                       Date(timeIntervalSinceReferenceDate: 100))
+    }
+
+    /// No workouts is an answer the caller must report, never a silent fallback to some date.
+    func testNoWorkoutsHasNoStart() {
+        XCTAssertNil(ExportRange.lastWorkoutsStart(workoutStarts: [], count: 15))
+    }
+
+    /// The manifest says which range mode made the export, so a reader never has to infer it.
+    func testManifestRecordsALastWorkoutsRange() throws {
+        let from = Date(timeIntervalSinceReferenceDate: 3_600)
+        let manifest = try loadManifest(runExport(range: .lastWorkouts(count: 15, from: from)))
+        let range = try XCTUnwrap(manifest["export_range"] as? [String: Any])
+        XCTAssertEqual(range["mode"] as? String, "last_workouts")
+        XCTAssertEqual(range["workout_count_requested"] as? Int, 15)
+        XCTAssertEqual(range["workouts_from"] as? String, Fmt.isoString(from))
+    }
+
+    func testManifestRecordsADateRange() throws {
+        let manifest = try loadManifest(runExport())
+        let range = try XCTUnwrap(manifest["export_range"] as? [String: Any])
+        XCTAssertEqual(range["mode"] as? String, "date_range")
+        XCTAssertNil(range["workout_count_requested"])
+    }
+
+    /// README.txt said "from June 18, 2026 through the export date" whatever range was chosen.
+    func testReadmeStatesTheRangeActuallyExported() throws {
+        let from = Date(timeIntervalSinceReferenceDate: 3_600)
+        let result = try runExport(range: .lastWorkouts(count: 15, from: from))
+        let readme = try String(contentsOf: result.extractFolder
+            .appendingPathComponent("README.txt"), encoding: .utf8)
+        XCTAssertFalse(readme.contains("June 18, 2026"),
+                       "README.txt still claims the program-start range")
+        XCTAssertTrue(readme.contains("the last 15 workouts"),
+                      "README.txt must say this is a last-15-workouts export")
     }
 
     /// The export records the assertion without rewriting what Apple stored.
@@ -224,7 +272,7 @@ final class ExportPipelineTests: XCTestCase {
             metadataJSON: "{}", workoutEventsJSON: "[]", workoutStatisticsJSON: "[]")
         row.reclassifiedAsRunning = true
 
-        let result = try runExport(workouts: [row], includeWalking: false)
+        let result = try runExport(workouts: [row])
         let csv = try String(contentsOf: result.extractFolder
             .appendingPathComponent("workouts.csv"), encoding: .utf8)
         let lines = csv.components(separatedBy: "\r\n").filter { !$0.isEmpty }
@@ -243,7 +291,7 @@ final class ExportPipelineTests: XCTestCase {
 
     func testManifestListsReclassifiedWorkouts() throws {
         let uuid = UUID()
-        let result = try runExport(includeWalking: false, reclassified: [uuid])
+        let result = try runExport(reclassified: [uuid])
         let manifest = try loadManifest(result)
 
         XCTAssertEqual(manifest["reclassified_as_running_count"] as? Int, 1)

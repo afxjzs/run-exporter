@@ -34,7 +34,8 @@ final class LoggerDefaults {
         static let defaultWalkSeconds = "defaults.walkSeconds"
         static let defaultRepetitions = "defaults.repetitions"
 
-        static let includeWalkingWorkouts = "workouts.includeWalking"
+        // "workouts.includeWalking" was the retired switch that let every walk in. A stored
+        // value is left in place and read by nothing; HealthKitManager.keeps is the rule now.
         static let reclassifiedAsRunning = "workouts.reclassifiedAsRunning"
         static let showBodySignals = "logging.showBodySignals"
         static let showRecoveryPrompt = "logging.showRecoveryPrompt"
@@ -100,8 +101,6 @@ final class LoggerDefaults {
         self.defaultRepetitions = Self.readInt(defaults, Key.defaultRepetitions, default: 5,
                                                minimum: 1)
 
-        self.includeWalkingWorkouts = Self.readBool(defaults, Key.includeWalkingWorkouts,
-                                                    default: false)
         self.reclassifiedAsRunning = Self.readUUIDSet(defaults, Key.reclassifiedAsRunning,
                                                       issues: &issues)
         self.showBodySignals = Self.readBool(defaults, Key.showBodySignals, default: true)
@@ -181,19 +180,6 @@ final class LoggerDefaults {
     var defaultRunSeconds: Int { didSet { defaults.set(defaultRunSeconds, forKey: Key.defaultRunSeconds) } }
     var defaultWalkSeconds: Int { didSet { defaults.set(defaultWalkSeconds, forKey: Key.defaultWalkSeconds) } }
     var defaultRepetitions: Int { didSet { defaults.set(defaultRepetitions, forKey: Key.defaultRepetitions) } }
-
-    /// Whether walking workouts are read at all — by the logger, History **and** the export.
-    ///
-    /// Off by default: a walkable neighbourhood produces far more walks than runs, and every one
-    /// of them would otherwise sit in the "needs a log" queue and pad the export.
-    ///
-    /// Unlike the weather and route toggles this one persists, because it is a statement about
-    /// what this user considers training data rather than a per-export choice. Excluding walks is
-    /// recorded in `manifest.json` and `README.txt` so a reader can always tell "filtered out"
-    /// from "never happened".
-    var includeWalkingWorkouts: Bool {
-        didSet { defaults.set(includeWalkingWorkouts, forKey: Key.includeWalkingWorkouts) }
-    }
 
     /// HealthKit workout UUIDs the user has marked "this walk was really a run".
     ///
