@@ -267,8 +267,10 @@ fast): every tab, a plan from a preset and an open-interval plan, Settings, the 
 run from Start Workout to End Workout. It checks that removed controls are **absent**, not only that
 the rest are present. Each run starts from a clean install and writes the result bundle and one
 screenshot per step to `build/smoke-test/<timestamp>/` (git-ignored). The simulator has no Watch,
-so the run screen is expected to report that the run continues on the phone only; the Watch path
-needs the device. It launches the app with `-uiTestingSkipsHealthAuthorization`, which a **Debug**
+so every run is expected to raise the no-Watch warning (silenced with
+`-uiTestingSilencesNoWatchAlarm`). The test answers it both ways: Run without Watch must leave the
+screen saying the run is phone only, and Stop must go straight back with no log prompt. The Watch
+path needs the device. It launches the app with `-uiTestingSkipsHealthAuthorization`, which a **Debug**
 build honors by never requesting HealthKit access (`UITesting`; a Release build ignores it), and
 with cues off so the simulator does not speak through the Mac. Dismissing the simulator's Health
 sheet instead made the test fail three runs in five.

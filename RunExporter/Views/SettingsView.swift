@@ -22,7 +22,6 @@ struct SettingsView: View {
             }
 
             cueSection($defaults)
-            voiceSection($defaults)
             defaultsSection($defaults)
             loggingSection($defaults)
             aboutExportsSection
@@ -103,17 +102,28 @@ struct SettingsView: View {
                     value: defaults.countdownSeconds,
                     in: 0...10,
                     step: 1)
-            Toggle("Five-second warning", isOn: defaults.fiveSecondWarning)
             Toggle("Announce final round", isOn: defaults.finalRoundAnnouncement)
             Toggle("Announce halfway", isOn: defaults.halfwayAnnouncement)
-            Toggle("Count down every transition", isOn: defaults.transitionCountdown)
-            Toggle("Duck other audio", isOn: defaults.duckOtherAudio)
 
-            VStack(alignment: .leading) {
-                Text("Cue volume")
-                // Floors at 10%, not 0 — silencing cues is "Play cues" off, which skips the
-                // work rather than doing it inaudibly. See `LoggerDefaults.minimumCueVolume`.
-                Slider(value: defaults.cueVolume, in: LoggerDefaults.minimumCueVolume...1)
+            // Set once and left: folded so the screen opens on what changes run to run.
+            DisclosureGroup("Fine-tuning") {
+                Toggle("Five-second warning", isOn: defaults.fiveSecondWarning)
+                Toggle("Count down every transition", isOn: defaults.transitionCountdown)
+                Toggle("Duck other audio", isOn: defaults.duckOtherAudio)
+
+                VStack(alignment: .leading) {
+                    Text("Cue volume")
+                    // Floors at 10%, not 0 — silencing cues is "Play cues" off, which skips the
+                    // work rather than doing it inaudibly. See `LoggerDefaults.minimumCueVolume`.
+                    Slider(value: defaults.cueVolume, in: LoggerDefaults.minimumCueVolume...1)
+                }
+
+                Picker("Voice", selection: defaults.cueVoiceIdentifier) {
+                    Text("System default").tag(String?.none)
+                    ForEach(AudioCueEngine.availableVoices, id: \.identifier) { voice in
+                        Text("\(voice.name) (\(voice.language))").tag(String?.some(voice.identifier))
+                    }
+                }
             }
         } header: {
             Text("Workout cues")
@@ -150,25 +160,19 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Voice
-
-    @ViewBuilder
-    private func voiceSection(_ defaults: Bindable<LoggerDefaults>) -> some View {
-        Section("Voice") {
-            Picker("Voice", selection: defaults.cueVoiceIdentifier) {
-                Text("System default").tag(String?.none)
-                ForEach(AudioCueEngine.availableVoices, id: \.identifier) { voice in
-                    Text("\(voice.name) (\(voice.language))").tag(String?.some(voice.identifier))
-                }
-            }
-        }
-    }
-
     // MARK: - Defaults
 
     @ViewBuilder
     private func defaultsSection(_ defaults: Bindable<LoggerDefaults>) -> some View {
-        Section("Defaults for new workouts") {
+        Section {
+            DisclosureGroup("Defaults for new workouts") {
+                defaultsRows(defaults)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func defaultsRows(_ defaults: Bindable<LoggerDefaults>) -> some View {
             Picker("Activity", selection: defaults.activityType) {
                 ForEach(PlannedActivityType.allCases) { Text($0.displayName).tag($0) }
             }
@@ -185,7 +189,6 @@ struct SettingsView: View {
                     value: defaults.defaultWalkSeconds, in: 0...3600, step: 15)
             Stepper("Rounds: \(defaults.wrappedValue.defaultRepetitions)",
                     value: defaults.defaultRepetitions, in: 1...60)
-        }
     }
 
     // MARK: - Logging
@@ -193,16 +196,17 @@ struct SettingsView: View {
     @ViewBuilder
     private func loggingSection(_ defaults: Bindable<LoggerDefaults>) -> some View {
         Section {
-            Toggle("Show body signals", isOn: defaults.showBodySignals)
-            Toggle("Show recovery prompt", isOn: defaults.showRecoveryPrompt)
-            Toggle("Show scale explanations", isOn: defaults.showScaleExplanations)
-            Stepper("Prompt for the last \(defaults.wrappedValue.unloggedPromptDays) days",
-                    value: defaults.unloggedPromptDays, in: 1...90)
-        } header: {
-            Text("Logging")
-        } footer: {
-            Text("Older workouts are never deleted — they just stop appearing in the "
-                 + "\"needs a log\" list. You can still log any of them from History.")
+            DisclosureGroup("Logging") {
+                Toggle("Show body signals", isOn: defaults.showBodySignals)
+                Toggle("Show recovery prompt", isOn: defaults.showRecoveryPrompt)
+                Toggle("Show scale explanations", isOn: defaults.showScaleExplanations)
+                Stepper("Prompt for the last \(defaults.wrappedValue.unloggedPromptDays) days",
+                        value: defaults.unloggedPromptDays, in: 1...90)
+                Text("Older workouts are never deleted. They stop appearing in the \"needs a "
+                     + "log\" list, and you can still log any of them from History.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 }

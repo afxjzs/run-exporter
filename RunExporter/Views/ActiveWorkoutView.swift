@@ -281,9 +281,11 @@ struct ActiveWorkoutView: View {
                 .font(.title2.weight(.semibold))
                 .multilineTextAlignment(.center)
 
-            Text(plannedShape)
-                .font(.headline)
-                .foregroundStyle(.white.opacity(0.8))
+            if let shape = plan.shapeUnlessName {
+                Text(shape)
+                    .font(.headline)
+                    .foregroundStyle(.white.opacity(0.8))
+            }
 
             Text(startOrderHint)
                 .font(.subheadline)
@@ -316,24 +318,10 @@ struct ActiveWorkoutView: View {
         .padding()
     }
 
-    /// "4/1 × 5", or "4:00 continuous" when the plan has no walk.
-    ///
-    /// Built in its own property: this project's SwiftUI type-checker gives up on interpolation
-    /// mixed with concatenation inside a view initialiser, and fails the Release build rather than
-    /// warning about it.
-    private var plannedShape: String {
-        // `intervalSummary` reads the plan's resolved shape, so this renders "5/1×1 · 8/1×2 ·
-        // 5/1×1" for a plan of several segments instead of the flat fields' first block. It was a
-        // third independent copy of this string, and the copy that would have gone on lying while
-        // the timer beside it ran something else.
-        plan.intervalSummary
-    }
-
     /// Changed with watch plan step 2. The old text told the runner to start the Watch's workout
     /// first; now Start does that itself, and doing both would record **two** workouts.
     private var startOrderHint: String {
-        "Start also starts the workout on your Apple Watch. Don't start one on the Watch yourself. "
-            + "Nothing is recorded until you tap Start."
+        "Start also starts your Watch. Don't start one on the Watch yourself."
     }
 
     // MARK: - Content
@@ -470,6 +458,16 @@ struct ActiveWorkoutView: View {
                     .font(.title3.weight(.medium))
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+                // The actual reason: a timeout, the system's launch error, or an error the Watch
+                // itself reported. The run screen's line afterwards is short, so this is where
+                // it is shown.
+                if case .failed(let reason) = watchLink.runConnection {
+                    Text(reason)
+                        .font(.footnote)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .opacity(0.85)
+                }
                 Spacer(minLength: 0)
                 Button {
                     showNoWatchWarning = false
@@ -502,7 +500,7 @@ struct ActiveWorkoutView: View {
     /// Its own property: string concatenation inside a view initializer has failed this project's
     /// Release type-checker before (LEARNINGS.md).
     private var noWatchMessage: String {
-        "Your Watch didn't answer, so this run would have no heart rate, distance or route. "
+        "Your Watch isn't recording, so this run would have no heart rate, distance or route. "
             + "The run is paused.\n\nIf the Watch is on your wrist and asking for Health access, "
             + "answer it there first."
     }
@@ -539,9 +537,9 @@ struct ActiveWorkoutView: View {
                 watchLine(watchConnectedText(now: context.date),
                           systemImage: "applewatch.radiowaves.left.and.right")
             }
-        case .failed(let reason), .disconnected(let reason):
+        case .failed, .disconnected:
             VStack(spacing: 8) {
-                watchLine(watchProblemText(reason), systemImage: "applewatch.slash")
+                watchLine(watchProblemText, systemImage: "applewatch.slash")
                 Button("Try again") { watchLink.retryRun() }
                     .buttonStyle(.bordered)
                     .tint(.white)
@@ -603,11 +601,13 @@ struct ActiveWorkoutView: View {
         }
     }
 
-    /// A system error's text often has no final full stop ("Unable to launch watch app"), which ran it
-    /// into the next sentence; one is added when it is missing.
-    private func watchProblemText(_ reason: String) -> String {
-        let sentence = reason.hasSuffix(".") ? reason : reason + "."
-        return sentence + " This run continues on the phone only."
+    /// Short, because the no-Watch warning has already shown the reason, at the moment it mattered.
+    /// A disconnect mid-run says so: the Watch did record until then.
+    private var watchProblemText: String {
+        if case .disconnected = watchLink.runConnection {
+            return "Watch disconnected · phone only from here"
+        }
+        return "No Watch · this run is phone only"
     }
 
     /// Wraps to as many lines as it needs. Without `fixedSize` the run screen, short of height,

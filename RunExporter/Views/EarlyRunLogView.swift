@@ -104,9 +104,7 @@ struct EarlyRunLogView: View {
 
     private var headerFootnote: String {
         if isAfterWorkout {
-            return "Nothing was found in Apple Health to attach this to, so it will be saved with "
-                + "your intervals but without distance, pace or heart rate. If a Watch workout "
-                + "turns up later you can log that one too."
+            return "Saved with your intervals, without distance, pace or heart rate."
         }
         return "Distance, pace and heart rate are added automatically when the workout arrives "
             + "from your Watch. Log how it felt now, while it is fresh."

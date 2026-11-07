@@ -133,7 +133,7 @@ struct HomeView: View {
             if logger.isLoading && logger.recentWorkouts.isEmpty {
                 HStack { ProgressView(); Text("Reading Health…").foregroundStyle(.secondary) }
             } else if logger.recentWorkouts.isEmpty {
-                Text("No running or walking workouts found yet.")
+                Text("No runs yet.")
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(logger.recentWorkouts.prefix(5)) { workout in
@@ -200,9 +200,11 @@ struct PlannedWorkoutCard: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(plan.name)
                 .font(.title3.weight(.semibold))
-            Text(plan.intervalSummary)
-                .font(.headline)
-                .foregroundStyle(.tint)
+            if let shape = plan.shapeUnlessName {
+                Text(shape)
+                    .font(.headline)
+                    .foregroundStyle(.tint)
+            }
 
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 2) {
                 // A plan of several segments has no one run or walk length, so it lists them
@@ -274,12 +276,8 @@ struct PlannedWorkoutCard: View {
                     Text("Cooldown").foregroundStyle(.secondary)
                     Text(cooldownText)
                 }
-                // Shown because it decides whether Apple Watch will even attempt a weather
-                // reading. Outdoor is required for weather; it does not guarantee it.
-                GridRow {
-                    Text("Location").foregroundStyle(.secondary)
-                    Text("Outdoor")
-                }
+                // No Location row: it read a hardcoded "Outdoor", left from the WorkoutKit route.
+                // Every run is recorded outdoor (`WatchLink.workoutConfiguration`).
             }
             .font(.subheadline)
         }

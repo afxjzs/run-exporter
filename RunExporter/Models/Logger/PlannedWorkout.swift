@@ -277,6 +277,13 @@ final class PlannedWorkout {
         }
     }
 
+    /// The shape, for a line under the plan's name, or nil when the name already is the shape.
+    /// A plan made from a preset is named after it, and every screen showed "4/1 × 5" twice.
+    var shapeUnlessName: String? {
+        let summary = intervalSummary
+        return summary == name ? nil : summary
+    }
+
     /// "Run to 30 min · 3 min walks" — the two numbers that define an open-interval plan.
     ///
     /// Neither a leg length nor a round count appears, because neither exists until the run

@@ -49,7 +49,7 @@ final class SmokeTests: XCTestCase {
             // says "Reading Health…" — and whether the system's sheet has appeared yet is not
             // predictable (a run on 2026-09-30 passed a sheet check while the request sat pending).
             // With the launch flag honored, the app skips the read and settles on this instead.
-            expect(app.staticTexts["No running or walking workouts found yet."],
+            expect(app.staticTexts["No runs yet."],
                    "Today finished without waiting on Health")
             expect(app.buttons["Export Data"], "Export Data on Today")
             // Hidden, not removed: the owner has one pair, so the picker asked a question with one
@@ -72,6 +72,10 @@ final class SmokeTests: XCTestCase {
             row.tap()
             expect(app.buttons["Start Workout"], "Start Workout on the plan screen")
             expectAbsent(app.buttons["Send to Apple Watch"], "WorkoutKit send link")
+            // A plan named after its shape says it once on the page (the title bar aside).
+            expectOnce("4/1 × 5", in: app.collectionViews.firstMatch, "the plan's name and shape")
+            // Hardcoded "Outdoor", never a setting: a WorkoutKit leftover.
+            expectAbsent(app.staticTexts["Location"], "the Location row")
             snapshot("Plan detail, before going back")
             app.navigationBars.buttons.firstMatch.tap()
         }
@@ -138,6 +142,14 @@ final class SmokeTests: XCTestCase {
         step("Settings: Play cues, no removed diagnostics") {
             tapTab("Settings")
             expect(app.switches["Play cues"], "the Play cues toggle")
+            expect(app.switches["Announce halfway"], "Announce halfway, kept unfolded")
+            // Fine-tuning is folded away until asked for.
+            expectAbsent(app.switches["Duck other audio"], "Duck other audio before unfolding")
+            let fineTuning = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@",
+                                                              "Fine-tuning")).firstMatch
+            expect(fineTuning, "the folded Fine-tuning group")
+            fineTuning.tap()
+            expect(app.switches["Duck other audio"], "Duck other audio once unfolded")
             expectAbsent(app.buttons["Cue test"], "the Cue test link")
             expectAbsent(app.buttons["Watch link test"], "the Watch link test link")
             expectAbsent(app.buttons["Export Data"], "the Settings Export Data link")
@@ -172,6 +184,9 @@ final class SmokeTests: XCTestCase {
             expect(app.buttons["Start Workout"], "Start Workout on Today")
             app.buttons["Start Workout"].tap()
             expect(app.staticTexts["READY"], "the READY screen")
+            // READY is a full-screen cover, and Today's card is still in the element tree beneath
+            // it, so only what can be tapped (what is on top) is counted.
+            expectOnce("4/1 × 5", in: app, "the plan's name and shape on READY", onTopOnly: true)
         }
 
         step("Start: the run screen, and the Watch failure reported") {
@@ -180,7 +195,7 @@ final class SmokeTests: XCTestCase {
             answerNoWatchWarning(with: runWithoutWatch)
             expect(app.buttons["End Workout"], "End Workout on the run screen")
             let phoneOnly = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@",
-                                                                 "continues on the phone only")).firstMatch
+                                                                 "phone only")).firstMatch
             expect(phoneOnly, "the run screen saying the run continues on the phone only")
             expect(app.buttons["Try again"], "Try again after the Watch failed")
             // Drawn in the same pass as End Workout, which is already on screen, so this absence
@@ -291,6 +306,20 @@ final class SmokeTests: XCTestCase {
                         file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(element.waitForExistence(timeout: 10), "Not found: \(what)",
                       file: file, line: line)
+    }
+
+    /// Exactly one static text reads `label` inside `container`. Waits for the first, so the count is
+    /// taken of a drawn screen, not an empty one.
+    private func expectOnce(_ label: String, in container: XCUIElement, _ what: String,
+                            onTopOnly: Bool = false,
+                            file: StaticString = #filePath, line: UInt = #line) {
+        let matches = container.staticTexts.matching(NSPredicate(format: "label == %@", label))
+        XCTAssertTrue(matches.firstMatch.waitForExistence(timeout: 10), "Not found: \(what)",
+                      file: file, line: line)
+        let count = onTopOnly
+            ? matches.allElementsBoundByIndex.filter(\.isHittable).count
+            : matches.count
+        XCTAssertEqual(count, 1, "Shown \(count) times: \(what)", file: file, line: line)
     }
 
     private func expectAbsent(_ element: XCUIElement, _ what: String,

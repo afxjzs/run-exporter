@@ -134,9 +134,12 @@ struct PlannedWorkoutListView: View {
     /// planned length, and a damaged plan has nothing — `mainSetSeconds` is nil for both, so this
     /// no longer needs to know which kinds to suppress by hand.
     private func planSubtitle(_ plan: PlannedWorkout) -> String {
-        guard let seconds = plan.mainSetSeconds else { return plan.intervalSummary }
-        let mainSet = PlannedWorkout.clockDuration(seconds)
-        return "\(plan.intervalSummary) · main set \(mainSet)"
+        // The shape only when the name is not already it.
+        var parts = [plan.shapeUnlessName].compactMap { $0 }
+        if let seconds = plan.mainSetSeconds {
+            parts.append("main set " + PlannedWorkout.clockDuration(seconds))
+        }
+        return parts.joined(separator: " · ")
     }
 
     private func create(from preset: PlannedWorkoutPreset) {
