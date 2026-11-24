@@ -8,9 +8,10 @@ import XCTest
 /// remaining ones are present — a smoke test that only looks for what should be there would pass
 /// with every deleted screen restored.
 ///
-/// What the simulator cannot show: the Watch. `startWatchApp` has no Watch to reach, so the run
-/// screen is expected to report that the run continues on the phone only. That is the failure path
-/// working; the Watch path itself needs the device.
+/// What the simulator cannot show: the Watch. `startWatchApp` has no Watch to reach, so every run
+/// raises the full-screen no-Watch warning, which pauses the run until it is answered
+/// (`answerNoWatchWarning`). That is the failure path working; the Watch path itself needs the
+/// device.
 ///
 /// Run it with `scripts/smoke-test.sh`, which starts from a clean install and exports the
 /// screenshots to a folder.
@@ -78,6 +79,23 @@ final class SmokeTests: XCTestCase {
             expectAbsent(app.staticTexts["Location"], "the Location row")
             snapshot("Plan detail, before going back")
             app.navigationBars.buttons.firstMatch.tap()
+        }
+
+        step("Duplicate opens the copy") {
+            // The screen used to stay as it was, so nothing said the copy was made and the owner
+            // tapped again, making more. One tap must land on the copy itself.
+            app.cells.containing(.staticText, identifier: "4/1 × 5").firstMatch.tap()
+            let duplicate = app.buttons["Duplicate"]
+            expect(duplicate, "Duplicate on the plan screen")
+            duplicate.tap()
+            expect(app.navigationBars["4/1 × 5 copy"], "the copy's own screen after one tap")
+            snapshot("The copy, opened by Duplicate")
+            app.navigationBars.buttons.firstMatch.tap()
+            expect(app.navigationBars["4/1 × 5"], "back on the original plan")
+            app.navigationBars.buttons.firstMatch.tap()
+            expect(app.navigationBars["Plans"], "back on the Plans list")
+            let copies = app.cells.containing(.staticText, identifier: "4/1 × 5 copy")
+            XCTAssertEqual(copies.count, 1, "One tap on Duplicate should make exactly one copy")
         }
 
         step("Plans: create an easy aerobic open-interval plan") {
@@ -203,6 +221,16 @@ final class SmokeTests: XCTestCase {
             expectAbsent(aerobicTarget, "the aerobic panel on an ordinary run")
         }
 
+        step("Slide to skip, twice in a row") {
+            // The slider stayed stuck at the end after one skip, so a second skip needed a pause
+            // and resume first. Two skips in a row must each move the run on.
+            expect(app.staticTexts["RUN"], "the first run interval, after the countdown")
+            slideToSkip()
+            expect(app.staticTexts["WALK"], "the walk, after the first skip")
+            slideToSkip()
+            expect(app.staticTexts["RUN"], "the next run interval, after the second skip")
+        }
+
         step("End the ordinary run; its log does not ask the talk test") {
             endRunAndOpenLog()
             // The rating row renders in the same pass as the talk test would, so waiting for it
@@ -213,10 +241,21 @@ final class SmokeTests: XCTestCase {
             expect(app.buttons["Start Workout"], "back on Today after the run")
         }
 
-        step("Start with no Watch, and stop to go and get it") {
+        step("Start with no Watch, try to reconnect, then stop to go and get it") {
             app.buttons["Start Workout"].tap()
             expect(app.staticTexts["READY"], "the READY screen")
             app.buttons["Start"].tap()
+            waitForNoWatchWarning()
+            // The simulator has no Watch, so the attempt fails, at once or at the 15 s timeout.
+            // The warning must say so and offer the attempt again, rather than look untouched.
+            let reconnect = app.buttons["Try to reconnect now"]
+            expect(reconnect, "Try to reconnect now on the warning")
+            reconnect.tap()
+            let failed = app.staticTexts["Reconnecting didn't work."]
+            XCTAssertTrue(failed.waitForExistence(timeout: 25),
+                          "The reconnect attempt failed and the warning never said so")
+            expect(reconnect, "Try to reconnect now, offered again after the attempt failed")
+            snapshot("No-Watch warning after a failed reconnect")
             answerNoWatchWarning(with: stopForWatch)
             // Stopping abandons the run: no end confirmation, no log prompt, straight back.
             expect(app.buttons["Start Workout"], "back on Today after stopping for the Watch")
@@ -245,19 +284,38 @@ final class SmokeTests: XCTestCase {
         expect(app.navigationBars["Log Run"], "the run log form")
     }
 
+    /// Drags the Skip slider's thumb all the way across, as a thumb on the screen would.
+    ///
+    /// A real drag, never `tap()`: the slider's accessibility action fires Skip without the drag,
+    /// so a tap would pass even with the drag path broken.
+    private func slideToSkip() {
+        let slider = app.buttons["Slide to skip"]
+        expect(slider, "the Skip slider")
+        let thumb = slider.coordinate(withNormalizedOffset: CGVector(dx: 0.06, dy: 0.5))
+        let end = slider.coordinate(withNormalizedOffset: CGVector(dx: 0.99, dy: 0.5))
+        thumb.press(forDuration: 0.1, thenDragTo: end)
+    }
+
     /// Waits for the no-Watch warning and answers it. The simulator has no Watch, so every run's
     /// launch fails, at once or at the 15 s timeout; waiting for the warning before anything else on
     /// the run screen keeps a late warning from landing on top of a later tap.
     private func answerNoWatchWarning(with choice: XCUIElement) {
-        let warning = app.staticTexts["NO WATCH"]
-        XCTAssertTrue(warning.waitForExistence(timeout: 25),
-                      "The run started with no Watch and the no-Watch warning never appeared")
-        snapshot("No-Watch warning")
+        let warning = waitForNoWatchWarning()
         expect(runWithoutWatch, "Run without Watch on the warning")
         expect(stopForWatch, "Stop on the warning")
         choice.tap()
         XCTAssertTrue(warning.waitForNonExistence(timeout: 5),
                       "The no-Watch warning stayed up after it was answered")
+    }
+
+    /// Waits for the no-Watch warning, without answering it.
+    @discardableResult
+    private func waitForNoWatchWarning() -> XCUIElement {
+        let warning = app.staticTexts["NO WATCH"]
+        XCTAssertTrue(warning.waitForExistence(timeout: 25),
+                      "The run started with no Watch and the no-Watch warning never appeared")
+        snapshot("No-Watch warning")
+        return warning
     }
 
     private var runWithoutWatch: XCUIElement { app.buttons["Run without Watch"] }

@@ -33,6 +33,8 @@ struct ActiveWorkoutView: View {
     @State private var showNoWatchWarning = false
     /// Once per run: a Try again that fails, after the runner chose to run on, is not news.
     @State private var hasWarnedNoWatch = false
+    /// A reconnect from the warning failed. Cleared by the next attempt or by answering.
+    @State private var reconnectFailed = false
 
     /// Identifiable wrapper so the picker can be driven by `.sheet(item:)`.
     struct CandidateList: Identifiable {
@@ -70,17 +72,35 @@ struct ActiveWorkoutView: View {
         }
         .preferredColorScheme(.dark)
         .onChange(of: watchLink.runConnection) { _, connection in
-            guard case .failed = connection, !hasWarnedNoWatch, let model, model.hasStarted else { return }
-            hasWarnedNoWatch = true
-            model.pause()
-            showNoWatchWarning = true
+            switch connection {
+            case .failed where showNoWatchWarning:
+                // A reconnect from the warning failed. Said on the warning, which stays up.
+                reconnectFailed = true
+            case .failed:
+                guard !hasWarnedNoWatch, let model, model.hasStarted else { return }
+                hasWarnedNoWatch = true
+                model.pause()
+                showNoWatchWarning = true
+            case .connected where showNoWatchWarning:
+                // The Watch is recording now, so the warning's reason is gone. The run resumes by
+                // itself (the owner's choice), because the phone may be in a pocket by now; the
+                // resume cue says so.
+                reconnectFailed = false
+                showNoWatchWarning = false
+                model?.resume()
+            case .off, .connecting, .connected, .disconnected:
+                break
+            }
         }
         // Repeats until answered, because the phone may already be in a pocket when the launch
         // fails. Cancelled when the warning closes; the sleep's CancellationError is that exit.
+        // Quiet while a reconnect is in flight, and back on the next beat if it fails.
         .task(id: showNoWatchWarning) {
             guard showNoWatchWarning else { return }
             while !Task.isCancelled {
-                audio.soundNoWatchAlarm()
+                if watchLink.runConnection != .connecting {
+                    audio.soundNoWatchAlarm()
+                }
                 try? await Task.sleep(for: .seconds(4))
             }
         }
@@ -446,10 +466,10 @@ struct ActiveWorkoutView: View {
     private var noWatchWarning: some View {
         ZStack {
             Color.red.ignoresSafeArea()
-            VStack(spacing: 24) {
+            VStack(spacing: 16) {
                 Spacer(minLength: 0)
                 Image(systemName: "applewatch.slash")
-                    .font(.system(size: 88, weight: .bold))
+                    .font(.system(size: 64, weight: .bold))
                 Text("NO WATCH")
                     .font(.system(size: 56, weight: .heavy, design: .rounded))
                     .minimumScaleFactor(0.5)
@@ -461,6 +481,10 @@ struct ActiveWorkoutView: View {
                 // The actual reason: a timeout, the system's launch error, or an error the Watch
                 // itself reported. The run screen's line afterwards is short, so this is where
                 // it is shown.
+                if reconnectFailed {
+                    Text("Reconnecting didn't work.")
+                        .font(.headline)
+                }
                 if case .failed(let reason) = watchLink.runConnection {
                     Text(reason)
                         .font(.footnote)
@@ -481,8 +505,30 @@ struct ActiveWorkoutView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(.white)
                 .foregroundStyle(.red)
+                // The same retry as the run screen's Try again (`WatchLink.retryRun`). Replaced
+                // while an attempt is in flight, so a second tap cannot send a second launch.
+                if watchLink.runConnection == .connecting {
+                    HStack(spacing: 10) {
+                        ProgressView().tint(.white)
+                        Text("Reconnecting…")
+                    }
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                } else {
+                    Button {
+                        reconnectFailed = false
+                        watchLink.retryRun()
+                    } label: {
+                        Text("Try to reconnect now")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity, minHeight: 52)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.white)
+                }
                 Button {
                     showNoWatchWarning = false
+                    reconnectFailed = false
                     model?.resume()
                 } label: {
                     Text("Run without Watch")
@@ -502,7 +548,8 @@ struct ActiveWorkoutView: View {
     private var noWatchMessage: String {
         "Your Watch isn't recording, so this run would have no heart rate, distance or route. "
             + "The run is paused.\n\nIf the Watch is on your wrist and asking for Health access, "
-            + "answer it there first."
+            + "answer it there before reconnecting. Reconnecting while it asks can start a second "
+            + "workout on the Watch."
     }
 
     /// Shown when the run finishes. The Watch's workout ends by itself only if this run was

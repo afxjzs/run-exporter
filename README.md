@@ -468,9 +468,12 @@ reasoning first.
    [LEARNINGS.md](LEARNINGS.md#workoutkit) for why it was unreliable on this hardware). The screen
    opens *armed* and records nothing — no timer session, no audio session, no Live Activity. **Start** also launches the workout on the Watch
    (watch plan step 2, from 2026-09-29): one tap, both devices. Do not start a workout on the Watch
-   yourself as well, or two are recorded. The run screen says whether the Watch is recording and
-   offers **Try again** if it is not; a Watch that fails never stops the run, which carries on
-   phone-only. Before this, the Watch's workout was started by hand and matched to the timer by
+   yourself as well, or two are recorded. If the Watch's first launch fails, the run pauses under a
+   full-screen red NO WATCH warning, which sounds until answered: **Try to reconnect now** (resumes
+   the run by itself if the Watch connects), **Run without Watch** (resumes phone-only), or Stop.
+   Answer a Health access prompt on the Watch before reconnecting, or a second Watch workout can
+   start. After that the run screen says whether the Watch is recording and offers **Try again**
+   if it is not. Before this, the Watch's workout was started by hand and matched to the timer by
    start time, which is why the start countdown defaulted to 0 until the 2026-09-29 clean-out.
 3. **Cues play through AirPods** — run, walk, cooldown and completion, plus the five-second warning
    and the 3-2-1 into each transition (both on by default), the final-round call (on) and the
@@ -856,8 +859,10 @@ Three companion files, kept separate because they answer different questions:
   change is sent to it; finishing the run asks the Watch to save its workout, tagged with the
   execution id (`WatchLink.finishRun`); abandoning the run asks it to discard (`WatchLink.abandonRun`).
   The phone cannot see the save itself, so the finish screen says the Watch was *asked* to save. If
-  the Watch fails to connect within 15 seconds, reports an error, or drops, the run screen says so
-  and offers **Try again**, and the run carries on phone-only. The interval boundaries are still
+  the Watch's first launch fails (no answer within 15 seconds, or an error), the run pauses under
+  the NO WATCH warning (`ActiveWorkoutView.noWatchWarning`) until the runner reconnects, runs on
+  phone-only, or stops. A later failure or drop does not raise it again: the run screen says so
+  and offers **Try again**. The interval boundaries are still
   stored on the phone either way, which is why a phone-only run keeps them.
 - **Deployment target stays at iOS 17.0.** The spec suggests iOS 18; raising it would emit a
   deprecation warning for `HKWorkout.totalEnergyBurned`, and the supported replacement

@@ -63,6 +63,11 @@ final class DocumentationDriftTests: XCTestCase {
               citedBy: ["docs/BACKLOG.md"]),
         .init(text: "Slide to skip",
               citedBy: ["docs/BACKLOG.md"]),
+        // Added 2026-11-23 with the reconnect button on the no-Watch warning.
+        .init(text: "Try to reconnect now",
+              citedBy: ["README.md"]),
+        .init(text: "Run without Watch",
+              citedBy: ["README.md"]),
     ]
 
     // MARK: - Locating the repository

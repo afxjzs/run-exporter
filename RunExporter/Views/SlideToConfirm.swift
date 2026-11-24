@@ -64,7 +64,11 @@ struct SlideToConfirm: View {
                                     hasFired = true
                                     // Slide the rest of the way before acting, so the gesture is
                                     // seen to complete rather than the screen simply changing.
-                                    withAnimation(.easeOut(duration: 0.12)) { dragOffset = travel }
+                                    withAnimation(.easeOut(duration: 0.12)) {
+                                        dragOffset = travel
+                                    } completion: {
+                                        rearm()
+                                    }
                                     action()
                                 } else {
                                     withAnimation(.spring(duration: 0.25)) { dragOffset = 0 }
@@ -81,5 +85,20 @@ struct SlideToConfirm: View {
         .accessibilityLabel(title)
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { action() }
+    }
+
+    /// Returns the thumb to the start and makes the control usable again.
+    ///
+    /// Without this the thumb stayed at the end after firing and every later drag was ignored. Pause
+    /// never showed it, because pausing replaces the slider with Resume and resuming builds a fresh
+    /// one. Skip leaves the same slider on screen, so a second skip needed a pause and resume
+    /// first. The control stays disarmed until the thumb is home, so a drag during the return
+    /// cannot fire it twice.
+    private func rearm() {
+        withAnimation(.spring(duration: 0.3)) {
+            dragOffset = 0
+        } completion: {
+            hasFired = false
+        }
     }
 }

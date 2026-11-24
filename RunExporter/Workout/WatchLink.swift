@@ -203,7 +203,7 @@ final class WatchLink: NSObject {
             // well after this message. A build that adds a Health type needs that grant, on the
             // watch, once.
             let reason = "The Watch did not respond within \(Int(Self.launchTimeoutSeconds)) s. "
-                + "If the Watch app is asking for Health access, allow it there, then tap Try again."
+                + "If the Watch app is asking for Health access, allow it there, then try again."
             self.runConnection = .failed(reason)
             self.log(reason, isError: true)
         }

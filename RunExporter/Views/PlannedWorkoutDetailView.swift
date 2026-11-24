@@ -21,6 +21,8 @@ struct PlannedWorkoutDetailView: View {
     @State private var errorMessage: String?
     @State private var didDelete = false
     @State private var showDeleteConfirmation = false
+    /// The plan Duplicate just made, shown on its own screen. See `duplicate()`.
+    @State private var openedCopy: PlannedWorkout?
 
     var body: some View {
         List {
@@ -84,6 +86,9 @@ struct PlannedWorkoutDetailView: View {
         .fullScreenCover(isPresented: $showingTimer) {
             ActiveWorkoutView(plan: plan, logger: logger)
         }
+        .navigationDestination(item: $openedCopy) { copy in
+            PlannedWorkoutDetailView(plan: copy, logger: logger)
+        }
         // `role: .destructive` only colors the button; it prompts for nothing. This delete is
         // irreversible, so it gets a real confirmation — the same treatment "End this workout?"
         // already gets for a far more recoverable action.
@@ -110,9 +115,18 @@ struct PlannedWorkoutDetailView: View {
         if let error = store.save() { errorMessage = error }
     }
 
+    /// Makes the copy and opens it. This screen used to stay exactly as it was, so nothing showed
+    /// the copy had been made and each further tap silently made another. Opening the copy is the
+    /// confirmation, and it moves Duplicate off screen. Opened only once saved, so a failed save
+    /// shows its error rather than a screen for a plan that is not stored.
     private func duplicate() {
-        context.insert(plan.duplicate())
-        if let error = store.save() { errorMessage = error }
+        let copy = plan.duplicate()
+        context.insert(copy)
+        if let error = store.save() {
+            errorMessage = error
+            return
+        }
+        openedCopy = copy
     }
 
     /// Deletes the plan. It no longer touches this iPhone's WorkoutKit queue: sending to the Watch
