@@ -31,6 +31,7 @@ struct OpenIntervalPlanEditorView: View {
     @State private var cooldownMinutes = 10
     @State private var isNextWorkout = false
     @State private var intensity = IntensityChoice()
+    @State private var kind: RunKind?
     @State private var errorMessage: String?
     @State private var hasLoaded = false
 
@@ -89,6 +90,7 @@ struct OpenIntervalPlanEditorView: View {
                 Text(footerText)
             }
 
+            RunKindSection(kind: $kind)
             IntensitySection(mode: $intensity.mode)
 
             Section("Warmup") {
@@ -124,6 +126,8 @@ struct OpenIntervalPlanEditorView: View {
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") { save() }
+                    // A kind is required and has no default (`RunKindSection`).
+                    .disabled(kind == nil)
             }
         }
         .alert("Something went wrong",
@@ -150,6 +154,7 @@ struct OpenIntervalPlanEditorView: View {
         cooldownMinutes = max(1, (plan.cooldownSeconds ?? 600) / 60)
         isNextWorkout = plan.isNextWorkout
         intensity = IntensityChoice(plan: plan)
+        kind = plan.kind
 
         if let shape = plan.openIntervalShape {
             targetMinutes = shape.targetRunSeconds / 60
@@ -176,6 +181,7 @@ struct OpenIntervalPlanEditorView: View {
         target.cooldownMode = cooldownMode.rawValue
         target.cooldownSeconds = cooldownMode == .timed ? cooldownMinutes * 60 : nil
         intensity.write(to: target, isNew: plan == nil)
+        target.runKind = kind?.rawValue
         target.updatedAt = Date()
 
         writeShape(to: target)

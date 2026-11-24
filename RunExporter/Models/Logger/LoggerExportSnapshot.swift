@@ -319,8 +319,12 @@ enum LoggerExportSnapshot {
                             issues: inout [ExportLogEntry]) -> ExecutionExportRow {
         check(execution.statusValue, raw: execution.status,
               label: "status", subject: "execution \(execution.id)", issues: &issues)
+        if let kind = execution.runKind {
+            check(RunKind(rawValue: kind), raw: kind,
+                  label: "run kind", subject: "execution \(execution.id)", issues: &issues)
+        }
 
-        return ExecutionExportRow(
+        var row = ExecutionExportRow(
             executionID: execution.id.uuidString,
             plannedWorkoutID: execution.plannedWorkoutID.uuidString,
             plannedWorkoutName: execution.plannedWorkoutName,
@@ -339,6 +343,8 @@ enum LoggerExportSnapshot {
             timerEndedAt: execution.timerEndedAt,
             createdAt: execution.createdAt,
             updatedAt: execution.updatedAt)
+        row.runKind = execution.runKind
+        return row
     }
 
     /// Reports a stored string this build cannot interpret. The raw value is still exported

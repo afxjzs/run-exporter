@@ -463,6 +463,13 @@ reasoning first.
    A third kind, **open intervals**, has no fixed leg length at all: you run until you decide to
    stop, walk until you decide to go, and the plan ends when the running adds up to a target. See
    [Open-interval runs](#open-interval-runs).
+
+   Every plan has a **kind** — Speed, Recovery or Endurance — so runs can be compared with others
+   of the same kind. Both editors start with no kind chosen and keep Save disabled until one is;
+   there is no default, on purpose. A plan without one (made before kinds existed, or from a
+   preset in one tap) asks "What kind of run is this?" at Start Workout and saves the answer on
+   the plan. Duplicate copies it. Each run keeps the kind its plan had when it began, in
+   `pending_workout_executions.csv`'s `runKind` column.
 2. **Start Workout** on the phone (named "Start Audio Timer" until the 2026-09-29 clean-out). There is no separate send-to-Watch step: the WorkoutKit
    "Send to Apple Watch" screen was removed in the 2026-09-29 clean-out (see
    [LEARNINGS.md](LEARNINGS.md#workoutkit) for why it was unreliable on this hardware). The screen

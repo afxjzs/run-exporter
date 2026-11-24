@@ -288,6 +288,28 @@ enum WorkoutIntensityMode: String, CaseIterable, Identifiable {
     }
 }
 
+/// What a run is for, so History can compare like with like: a speed day always costs more beats
+/// per meter than a recovery day, and mixing them hides the trend in each.
+///
+/// Chosen on the plan, with no default — the owner wants to choose it every time — and copied onto
+/// each run when it starts (`PendingWorkoutExecution.runKind`). Separate from
+/// `WorkoutIntensityMode`, which says how hard to run, not what the run is for.
+enum RunKind: String, CaseIterable, Identifiable {
+    case speed
+    case recovery
+    case endurance
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .speed: return "Speed"
+        case .recovery: return "Recovery"
+        case .endurance: return "Endurance"
+        }
+    }
+}
+
 /// How talking felt during the run — the post-run talk test (aerobic spec §7). Stored and exported
 /// as the raw values the spec names.
 enum TalkTest: String, CaseIterable, Identifiable {

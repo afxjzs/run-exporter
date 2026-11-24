@@ -68,6 +68,9 @@ final class DocumentationDriftTests: XCTestCase {
               citedBy: ["README.md"]),
         .init(text: "Run without Watch",
               citedBy: ["README.md"]),
+        // Added 2026-11-24 with the run kind, asked at Start of a plan that has none.
+        .init(text: "What kind of run is this?",
+              citedBy: ["README.md"]),
     ]
 
     // MARK: - Locating the repository

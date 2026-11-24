@@ -242,6 +242,7 @@ struct PlannedWorkoutEditorView: View {
     @State private var countdownSeconds = 0
     @State private var isNextWorkout = true
     @State private var intensity = IntensityChoice()
+    @State private var kind: RunKind?
     @State private var errorMessage: String?
     @State private var didLoad = false
 
@@ -323,6 +324,7 @@ struct PlannedWorkoutEditorView: View {
                 Text(blocksExplanation)
             }
 
+            RunKindSection(kind: $kind)
             IntensitySection(mode: $intensity.mode)
 
             Section("Warmup") {
@@ -393,6 +395,7 @@ struct PlannedWorkoutEditorView: View {
     private var isValid: Bool {
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
         guard !blocks.isEmpty else { return false }
+        guard kind != nil else { return false }
         // Every segment has to be runnable, not just the first — the same rule
         // `WorkoutPhaseSchedule.build` applies, checked here so Save is disabled rather than
         // failing with an alert after the fact.
@@ -543,6 +546,7 @@ struct PlannedWorkoutEditorView: View {
         countdownSeconds = plan.countdownSeconds
         isNextWorkout = plan.isNextWorkout
         intensity = IntensityChoice(plan: plan)
+        kind = plan.kind
     }
 
     private func save() {
@@ -577,6 +581,7 @@ struct PlannedWorkoutEditorView: View {
         target.cooldownSeconds = cooldownMode == .timed ? cooldownMinutes * 60 : nil
         target.countdownSeconds = countdownSeconds
         intensity.write(to: target, isNew: plan == nil)
+        target.runKind = kind?.rawValue
         target.updatedAt = Date()
 
         if isNextWorkout {

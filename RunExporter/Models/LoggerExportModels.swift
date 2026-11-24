@@ -369,6 +369,10 @@ struct ExecutionExportRow {
     var actualRunSeconds: Double?
     var actualWalkSeconds: Double?
 
+    /// What the run was for — `speed`, `recovery` or `endurance` — as its plan said when it began.
+    /// Blank for a run recorded before kinds existed. Raw: an unknown value is exported as stored.
+    var runKind: String?
+
     static let columns = [
         "executionID", "plannedWorkoutID", "plannedWorkoutName",
         "expectedActivityType", "expectedDurationSeconds",
@@ -378,6 +382,8 @@ struct ExecutionExportRow {
         "timerStartedAt", "timerEndedAt", "createdAt", "updatedAt",
         // Appended: what was run, beside what was planned.
         "actualShape", "actualRunLegCount", "actualRunSeconds", "actualWalkSeconds",
+        // Appended 2026-11-24.
+        "runKind",
     ]
 
     var values: [String] {
@@ -393,6 +399,7 @@ struct ExecutionExportRow {
             Fmt.isoString(createdAt), Fmt.isoString(updatedAt),
             actualShape ?? "", actualRunLegCount.map(String.init) ?? "",
             Fmt.fixed(actualRunSeconds, places: 3), Fmt.fixed(actualWalkSeconds, places: 3),
+            runKind ?? "",
         ]
     }
 }

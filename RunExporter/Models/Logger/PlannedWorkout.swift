@@ -74,6 +74,10 @@ final class PlannedWorkout {
     var targetHeartRateMin: Int?
     var targetHeartRateMax: Int?
 
+    /// What runs of this plan are for, as `RunKind`'s raw value. Read through `kind`. Not set on a
+    /// plan made before kinds existed, or made from a preset in one tap; Start asks for it then.
+    var runKind: String?
+
     init(id: UUID = UUID(),
          name: String,
          activityType: PlannedActivityType = .running,
@@ -120,6 +124,10 @@ final class PlannedWorkout {
         guard let intensityMode else { return .notSpecified }
         return WorkoutIntensityMode(rawValue: intensityMode)
     }
+
+    /// This plan's kind. Nil when none is set, and also when the stored string is one this build
+    /// does not know — either way the plan needs a kind chosen before it can start.
+    var kind: RunKind? { runKind.flatMap(RunKind.init(rawValue:)) }
 
     // MARK: - Shape
 
@@ -447,6 +455,9 @@ final class PlannedWorkout {
         copy.targetRPEMax = targetRPEMax
         copy.targetHeartRateMin = targetHeartRateMin
         copy.targetHeartRateMax = targetHeartRateMax
+        // The owner makes new plans by copying a close one, so a copy without its kind would ask
+        // again at the next edit or Start.
+        copy.runKind = runKind
 
         // New records, never the originals. `PlannedWorkoutBlock.plan` is the inverse of `blocks`,
         // so assigning the original's blocks re-parents them: the plan being copied is left with

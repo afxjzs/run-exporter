@@ -19,6 +19,7 @@ struct HomeView: View {
 
     @State private var workoutToLog: HealthKitManager.WorkoutSummary?
     @State private var activePlan: PlannedWorkout?
+    @State private var planNeedingKind: PlannedWorkout?
 
     private var nextWorkout: PlannedWorkout? { nextWorkouts.first ?? allPlans.first }
 
@@ -41,6 +42,7 @@ struct HomeView: View {
         .fullScreenCover(item: $activePlan) { plan in
             ActiveWorkoutView(plan: plan, logger: logger)
         }
+        .askingForRunKind($planNeedingKind) { activePlan = $0 }
         .sheet(item: $workoutToLog) { workout in
             NavigationStack {
                 RunLogFormView(workout: workout, logger: logger)
@@ -82,7 +84,8 @@ struct HomeView: View {
                 PlannedWorkoutCard(plan: plan)
 
                 Button {
-                    activePlan = plan
+                    // A plan with no kind is asked for one first (`RunKindQuestion`).
+                    if plan.kind == nil { planNeedingKind = plan } else { activePlan = plan }
                 } label: {
                     Label("Start Workout", systemImage: "play.circle.fill")
                         .font(.headline)

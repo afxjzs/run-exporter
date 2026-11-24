@@ -771,7 +771,8 @@ struct ExportBuilder {
         as 300/60x1|480/60x2|300/60x1 — run seconds, walk seconds and repetitions per segment, \
         segments separated by |, or as open:1800/180 for an OPEN INTERVAL run — target seconds \
         then walk floor. What was actually run is in the actual* columns (see PLANNED vs ACTUAL \
-        below). When blockShape names more than one segment, runIntervalSeconds and \
+        below). runKind is what the run was for (speed, recovery or endurance), as its plan said \
+        when it began; BLANK for a run recorded before kinds existed. When blockShape names more than one segment, runIntervalSeconds and \
         walkIntervalSeconds are BLANK, because no single value is true of that run; blank does not \
         mean zero. plannedRepetitions is well defined however many segments there were. For an \
         OPEN INTERVAL run, runIntervalSeconds, walkIntervalSeconds, plannedRepetitions and \

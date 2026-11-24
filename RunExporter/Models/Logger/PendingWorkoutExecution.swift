@@ -54,6 +54,11 @@ final class PendingWorkoutExecution {
     var targetHeartRateMin: Int?
     var targetHeartRateMax: Int?
 
+    /// What this run was for (`RunKind`'s raw value), copied from the plan when it began so that
+    /// re-tagging the plan later cannot move past runs between History's comparisons. Not set for
+    /// a run recorded before kinds existed.
+    var runKind: String?
+
     var updatedAt: Date
 
     init(id: UUID = UUID(),
@@ -110,6 +115,7 @@ final class PendingWorkoutExecution {
         execution.targetRPEMax = plan.targetRPEMax
         execution.targetHeartRateMin = plan.targetHeartRateMin
         execution.targetHeartRateMax = plan.targetHeartRateMax
+        execution.runKind = plan.runKind
         return execution
     }
 

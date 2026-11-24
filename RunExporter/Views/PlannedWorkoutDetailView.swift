@@ -23,6 +23,7 @@ struct PlannedWorkoutDetailView: View {
     @State private var showDeleteConfirmation = false
     /// The plan Duplicate just made, shown on its own screen. See `duplicate()`.
     @State private var openedCopy: PlannedWorkout?
+    @State private var planNeedingKind: PlannedWorkout?
 
     var body: some View {
         List {
@@ -30,7 +31,8 @@ struct PlannedWorkoutDetailView: View {
 
             Section {
                 Button {
-                    showingTimer = true
+                    // A plan with no kind is asked for one first (`RunKindQuestion`).
+                    if plan.kind == nil { planNeedingKind = plan } else { showingTimer = true }
                 } label: {
                     Label("Start Workout", systemImage: "play.circle.fill")
                         .font(.headline)
@@ -86,6 +88,7 @@ struct PlannedWorkoutDetailView: View {
         .fullScreenCover(isPresented: $showingTimer) {
             ActiveWorkoutView(plan: plan, logger: logger)
         }
+        .askingForRunKind($planNeedingKind) { _ in showingTimer = true }
         .navigationDestination(item: $openedCopy) { copy in
             PlannedWorkoutDetailView(plan: copy, logger: logger)
         }

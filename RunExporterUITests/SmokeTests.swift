@@ -115,7 +115,18 @@ final class SmokeTests: XCTestCase {
             expect(aerobic, "Easy aerobic in the Intensity picker")
             aerobic.tap()
             expect(target, "the aerobic target once Easy aerobic is chosen")
-            snapshot("Open-interval editor with Easy aerobic chosen")
+            // Every plan needs a kind, so History can compare like with like. There is no
+            // default, on purpose: the owner wants to choose it every time.
+            let save = app.buttons["Save"]
+            XCTAssertFalse(save.isEnabled, "Save should stay disabled until a kind is chosen")
+            let kind = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Kind")).firstMatch
+            expect(kind, "the Kind picker")
+            kind.tap()
+            let recovery = app.buttons["Recovery"]
+            expect(recovery, "Recovery in the Kind picker")
+            recovery.tap()
+            XCTAssertTrue(save.isEnabled, "Save should be enabled once a kind is chosen")
+            snapshot("Open-interval editor with Easy aerobic and Recovery chosen")
             // No scrolling in this editor: a swipe lands on its duration wheels and changes the plan.
             app.buttons["Save"].tap()
         }
@@ -201,6 +212,13 @@ final class SmokeTests: XCTestCase {
         step("Start Workout opens the READY screen") {
             expect(app.buttons["Start Workout"], "Start Workout on Today")
             app.buttons["Start Workout"].tap()
+            // The preset made this plan in one tap, so it has no kind yet. Start asks once, and
+            // the answer is saved on the plan. (The aerobic plan above has one and went straight
+            // to READY.)
+            let speed = app.buttons["Speed"]
+            expect(speed, "the question asking a plan with no kind for one")
+            snapshot("Start asks for the kind")
+            speed.tap()
             expect(app.staticTexts["READY"], "the READY screen")
             // READY is a full-screen cover, and Today's card is still in the element tree beneath
             // it, so only what can be tapped (what is on top) is counted.
