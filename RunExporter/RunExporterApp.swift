@@ -4,7 +4,8 @@ import SwiftUI
 struct RunExporterApp: App {
 
     /// Created once for the app's lifetime and shared through the environment.
-    @State private var store = LoggerStore()
+    /// In memory only under the Debug-only History fixture (`UITesting.historyFixture`).
+    @State private var store = LoggerStore(inMemory: UITesting.historyFixture)
     @State private var defaults = LoggerDefaults()
     @State private var audio = AudioCueEngine()
     /// Created with the app, not with a screen: it installs HealthKit's mirroring handler, which

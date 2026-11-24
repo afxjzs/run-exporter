@@ -1,130 +1,4 @@
 import SwiftUI
-
-/// Recent workouts with filters (spec §19).
-struct HistoryView: View {
-    @Environment(LoggerDefaults.self) private var defaults
-
-    let logger: RunLoggerModel
-
-    @State private var filter: Filter = .all
-
-    /// Running and Walking filters went with the switch that let every walk in: the main list
-    /// is almost all runs now, and the only walks in it are ones this app recorded.
-    enum Filter: String, CaseIterable, Identifiable {
-        case all, logged, unlogged
-        /// Browses every walk, including the ones the app leaves out, so a run recorded as a walk
-        /// can still be found and corrected.
-        case walks
-        var id: String { rawValue }
-        var displayName: String {
-            switch self {
-            case .all: return "All"
-            case .logged: return "Logged"
-            case .unlogged: return "Unlogged"
-            case .walks: return "Walks"
-            }
-        }
-    }
-
-    private var filtered: [HealthKitManager.WorkoutSummary] {
-        // "Walks" reads a different list entirely: walking workouts the main list excludes.
-        if filter == .walks { return logger.walkingWorkouts }
-
-        return logger.recentWorkouts.filter { workout in
-            switch filter {
-            case .all: return true
-            case .logged: return logger.loggedWorkoutUUIDs.contains(workout.uuid)
-            case .unlogged: return !logger.loggedWorkoutUUIDs.contains(workout.uuid)
-            case .walks: return false   // handled above
-            }
-        }
-    }
-
-    var body: some View {
-        List {
-            Section {
-                Picker("Filter", selection: $filter) {
-                    ForEach(Filter.allCases) { Text($0.displayName).tag($0) }
-                }
-                .pickerStyle(.segmented)
-            }
-            .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
-
-            if filter == .walks {
-                Section {
-                    Text("Walks this app didn't record are left out of the app and the export. If "
-                         + "one of these was really a run the Watch recorded as \"Outdoor Walk\", "
-                         + "open it and tap \"This was really a run\".")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            if filtered.isEmpty {
-                Section {
-                    Text(logger.isLoading ? "Reading Health…" : "Nothing matches this filter.")
-                        .foregroundStyle(.secondary)
-                }
-            } else {
-                ForEach(filtered) { workout in
-                    NavigationLink {
-                        WorkoutDetailView(workout: workout, logger: logger)
-                    } label: {
-                        HistoryRow(workout: workout, log: logger.runLog(forWorkout: workout.uuid),
-                                   logger: logger)
-                    }
-                }
-            }
-        }
-        .navigationTitle("History")
-        .refreshable { await logger.refresh() }
-        .task { if logger.recentWorkouts.isEmpty { await logger.refresh() } }
-        .task(id: filter) {
-            if filter == .walks { await logger.loadWalkingWorkouts() }
-        }
-    }
-}
-
-private struct HistoryRow: View {
-    let workout: HealthKitManager.WorkoutSummary
-    let log: RunLog?
-    let logger: RunLoggerModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack {
-                Text(Display.dayFormatter.string(from: workout.startDate))
-                    .font(.headline)
-                Spacer()
-                Text(Display.miles(workout.distanceMiles))
-                    .font(.subheadline.monospacedDigit())
-            }
-
-            if let log {
-                if let run = log.runIntervalSeconds, let walk = log.walkIntervalSeconds,
-                   let reps = log.plannedRepetitions {
-                    Text("\(PlannedWorkout.compactDuration(run))/\(PlannedWorkout.compactDuration(walk)) × \(reps)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                HStack(spacing: 10) {
-                    Text("RPE \(Display.rating(log.effortRPE))")
-                    Text("Heat \(Display.rating(log.personalHeatRating))")
-                    // No shoe: hidden 2026-10-01 with the rest of the shoe UI (docs/BACKLOG.md,
-                    // "Hide shoes for now"). New logs still record one, so leaving this would show
-                    // shoes here and nowhere else.
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            } else {
-                Text("Not logged")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            }
-        }
-    }
-}
-
 /// Everything known about one workout, objective and subjective kept visually separate.
 struct WorkoutDetailView: View {
     let workout: HealthKitManager.WorkoutSummary
@@ -149,6 +23,7 @@ struct WorkoutDetailView: View {
 
     var body: some View {
         List {
+            kindSection
             classificationSection
 
             Section("Apple Health") {
@@ -218,6 +93,40 @@ struct WorkoutDetailView: View {
         return "Apple Watch records weather only for some outdoor workouts — it needs a weather "
             + "fetch at the time. This workout has \(workout.metadataKeys.count) other metadata "
             + "field(s) but no weather ones. Nothing was lost in reading it."
+    }
+
+    /// The run's kind, changeable here for this run alone — its plan, and the plan's other runs,
+    /// keep theirs. A run with no timer session in this app has nowhere to keep one, and says so.
+    @ViewBuilder
+    private var kindSection: some View {
+        if let run = logger.historyRuns().first(where: { $0.id == workout.uuid }) {
+            Section {
+                if run.canChangeKind {
+                    Picker("Kind", selection: Binding(
+                        get: { run.kind },
+                        set: { chosen in
+                            guard let chosen else { return }
+                            if let error = logger.setRunKind(chosen, forWorkout: workout) {
+                                logger.errorMessage = error
+                            }
+                        })) {
+                        // Only while no kind is set, so it cannot be chosen back.
+                        if run.kind == nil {
+                            Text(run.unknownKind == nil ? "None" : "Unknown").tag(RunKind?.none)
+                        }
+                        ForEach(RunKind.allCases) { kind in
+                            Text(kind.displayName).tag(RunKind?.some(kind))
+                        }
+                    }
+                } else {
+                    LabeledContent("Kind", value: "None")
+                }
+            } footer: {
+                Text(run.canChangeKind
+                     ? "Changes this run only. History compares runs of the same kind."
+                     : "This run wasn't started from a plan in this app, so it has no kind.")
+            }
+        }
     }
 
     /// Lets a run the Watch recorded as a walk be treated as a run everywhere in this app.

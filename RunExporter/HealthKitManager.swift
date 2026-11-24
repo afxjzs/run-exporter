@@ -1,5 +1,6 @@
 import Foundation
 import HealthKit
+import CoreLocation
 
 /// Describes one quantity type we want to export, including display + SI unit handling.
 struct QuantitySpec {
@@ -270,23 +271,6 @@ final class HealthKitManager {
             .sorted { $0.startDate > $1.startDate }
     }
 
-    /// Every walking workout in the window, regardless of the walking filter.
-    ///
-    /// Used by History's "Walks" browser so a run that the Watch mislabelled as a walk can still
-    /// be found and reclassified — otherwise excluding walks would also hide the one workout the
-    /// user most needs to reach.
-    func fetchWalkingWorkouts(hours: Int, reclassifiedAsRunning: Set<UUID> = [],
-                              now: Date = Date()) async throws -> [WorkoutSummary] {
-        let start = now.addingTimeInterval(-Double(hours) * 3600)
-        let end = now.addingTimeInterval(3600)
-        // Every walk, so not through `fetchWorkouts`, whose rule drops most of them.
-        let samples = try await fetchSamples(type: HKObjectType.workoutType(), start: start, end: end)
-        return samples.compactMap { $0 as? HKWorkout }
-            .filter { $0.workoutActivityType == .walking }
-            .compactMap { Self.summary(for: $0, reclassifiedAsRunning: reclassifiedAsRunning) }
-            .sorted { $0.startDate > $1.startDate }
-    }
-
     /// The single rule for which workouts this app handles.
     ///
     /// One place so the export, the logger queue and History can never disagree about what exists.
@@ -324,6 +308,33 @@ final class HealthKitManager {
     /// One workout by its HealthKit UUID, or nil when it no longer exists (it may have been
     /// deleted in the Health app after being logged).
     func fetchWorkout(uuid: UUID) async throws -> WorkoutSummary? {
+        guard let workout = try await fetchHKWorkout(uuid: uuid) else { return nil }
+        return Self.summary(for: workout)
+    }
+
+    /// One workout's route, for drawing on a map. Reads through the export's own route reader
+    /// (`WorkoutRouteExporter.readRoutes`), so the map and the exported GPX are the same points.
+    func route(forWorkout uuid: UUID) async -> RouteLoad {
+        let workout: HKWorkout?
+        do {
+            workout = try await fetchHKWorkout(uuid: uuid)
+        } catch {
+            return .failed("The workout could not be read: \(error.localizedDescription)")
+        }
+        guard let workout else { return .failed("This workout is no longer in Health.") }
+
+        let output = await WorkoutRouteExporter(store: store).readRoutes(for: workout)
+        if !output.points.isEmpty {
+            return .points(output.points.map {
+                CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
+            })
+        }
+        // No route sample and nothing went wrong: the run simply recorded none.
+        if output.routeSampleCount == 0 && output.issues.isEmpty { return .noRoute }
+        return .failed(output.issues.first?.message ?? "The route could not be read.")
+    }
+
+    private func fetchHKWorkout(uuid: UUID) async throws -> HKWorkout? {
         let predicate = HKQuery.predicateForObject(with: uuid)
         let samples: [HKSample] = try await withCheckedThrowingContinuation { continuation in
             let query = HKSampleQuery(sampleType: HKObjectType.workoutType(),
@@ -338,8 +349,7 @@ final class HealthKitManager {
             }
             store.execute(query)
         }
-        guard let workout = samples.compactMap({ $0 as? HKWorkout }).first else { return nil }
-        return Self.summary(for: workout)
+        return samples.compactMap({ $0 as? HKWorkout }).first
     }
 
     /// Reduces an `HKWorkout` to a `WorkoutSummary`, or nil for an activity type the app does not

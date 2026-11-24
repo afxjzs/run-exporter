@@ -33,6 +33,23 @@ enum UITesting {
         #endif
     }()
 
+    /// `-uiTestingHistoryFixture`: an in-memory store and a set of invented runs in place of Health
+    /// (`HistoryFixture`), so the History screen can be tested in a simulator that has no workouts.
+    ///
+    /// The store is in memory so the fixture can never reach, or be reached by, the real one; the
+    /// app reads no Health workouts while it is on. Logged when on, like the switches beside it.
+    static let historyFixture: Bool = {
+        #if DEBUG
+        let on = ProcessInfo.processInfo.arguments.contains("-uiTestingHistoryFixture")
+        if on {
+            NSLog("UI TESTING: invented History runs in an in-memory store (-uiTestingHistoryFixture)")
+        }
+        return on
+        #else
+        return false
+        #endif
+    }()
+
     /// `-uiTestingSilencesNoWatchAlarm`: show the no-Watch warning but play no sound or vibration.
     ///
     /// The alarm ignores "Play cues" on purpose, and the simulator never has a Watch, so every smoke

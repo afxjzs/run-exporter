@@ -265,7 +265,10 @@ here — the previously quoted figure had been wrong for two sessions.
 (`RunExporterUITests/SmokeTests.swift`, its own `RunExporterUITests` scheme so the unit loop stays
 fast): every tab, a plan from a preset and an open-interval plan, Settings, the export screen, and a
 run from Start Workout to End Workout. It checks that removed controls are **absent**, not only that
-the rest are present. Each run starts from a clean install and writes the result bundle and one
+the rest are present. A second test covers History: grouping by week and by kind, the kind filter,
+and changing a run's kind on its detail. The simulator has no workouts, so it launches with
+`-uiTestingHistoryFixture`, which a **Debug** build honors with invented runs in an in-memory
+store (`HistoryFixture`); the real store is never opened. Each run starts from a clean install and writes the result bundle and one
 screenshot per step to `build/smoke-test/<timestamp>/` (git-ignored). The simulator has no Watch,
 so every run is expected to raise the no-Watch warning (silenced with
 `-uiTestingSilencesNoWatchAlarm`). The test answers it both ways: Run without Watch must leave the
@@ -765,7 +768,8 @@ Three companion files, kept separate because they answer different questions:
   other running metrics still export.
 - **Most walks are left out.** Every run is read — by the export, the "needs a log" queue and
   History alike — but a walk only when this app's Watch app recorded it from a Walking plan (it
-  carries the execution id) or you marked it as really a run in History. The rule is
+  carries the execution id) or you marked it as really a run (possible from History's Walks list
+  until 2026-11-24). History itself now shows runs only. The rule is
   `HealthKitManager.keeps`.
 
   Until 2026-11-06 an **Include walking workouts** switch on the export screen let every walk in;
@@ -777,8 +781,9 @@ Three companion files, kept separate because they answer different questions:
   "planned_in_this_app_or_reclassified"` (which replaced `"walking_included"`), `export_log.json`
   says how many walks were skipped, `workout_type_counts.json` still lists every type seen in the
   window, and `README.txt` inside the ZIP explains it. A reader can always tell filtering from an
-  empty week. History's **Walks** filter lists every walk, so a run recorded as a walk can still be
-  found and marked.
+  empty week. Until 2026-11-24 History's **Walks** filter listed every walk, so a run recorded as
+  a walk could be found and marked; it went with the History redesign, which shows runs only. A
+  walk already marked stays a run, and its detail still offers to treat it as a walk again.
 - **Activity summaries** are best-effort; if the query fails the other files still export and the
   issue is noted in `export_log.json`.
 - **Weather is often missing.** Apple records it only for some outdoor workouts, mostly Apple

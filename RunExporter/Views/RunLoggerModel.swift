@@ -60,6 +60,14 @@ final class RunLoggerModel {
         // grow silently while the app cannot read workouts.
         expireAbandonedExecutions()
 
+        #if DEBUG
+        // The History UI test, Debug builds only: invented runs instead of Health. See `UITesting`.
+        if UITesting.historyFixture {
+            loadHistoryFixture()
+            return
+        }
+        #endif
+
         guard health.isAvailable else {
             errorMessage = "HealthKit is not available on this device, so workouts cannot be read."
             return
@@ -179,6 +187,112 @@ final class RunLoggerModel {
         return waiting
     }
 
+    // MARK: - History
+
+    /// Routes already read, by workout. A route never changes once a workout is saved, and reading
+    /// one means a Health query per card, so each is read once per launch.
+    private var routes: [UUID: RouteLoad] = [:]
+
+    /// The runs History shows: running workouts only, newest first, each with its kind, plan name
+    /// and whether it is logged.
+    ///
+    /// A run's kind lives on its timer session. That session is found by the workout it matched,
+    /// or by the session id our watch app tags each workout with — not through
+    /// `resolvedExecution`, which only considers sessions still waiting for a match and so finds
+    /// nothing for a run already logged. Every timer session is fetched once for the whole list.
+    func historyRuns() -> [HistoryRun] {
+        _ = storeRevision
+        let executions: [PendingWorkoutExecution]
+        switch store.fetch(FetchDescriptor<PendingWorkoutExecution>()) {
+        case .success(let fetched): executions = fetched
+        case .failure(let error):
+            errorMessage = error.message
+            executions = []
+        }
+        var byWorkout: [UUID: PendingWorkoutExecution] = [:]
+        var byID: [UUID: PendingWorkoutExecution] = [:]
+        for execution in executions {
+            byID[execution.id] = execution
+            if let matched = execution.matchedHealthKitWorkoutUUID { byWorkout[matched] = execution }
+        }
+
+        return recentWorkouts
+            .filter { $0.activityType == .running }
+            .map { workout in
+                let execution = byWorkout[workout.uuid] ?? workout.executionID.flatMap { byID[$0] }
+                let stored = execution?.runKind
+                let kind = stored.flatMap(RunKind.init(rawValue:))
+                return HistoryRun(
+                    workout: workout,
+                    kind: kind,
+                    unknownKind: kind == nil ? stored : nil,
+                    planName: execution?.plannedWorkoutName,
+                    isLogged: loggedWorkoutUUIDs.contains(workout.uuid)
+                        || pendingLog(forWorkout: workout) != nil,
+                    canChangeKind: execution != nil)
+            }
+    }
+
+    /// Re-files one run under another kind. Changes that run only: its plan, and the plan's other
+    /// runs, keep theirs. Returns the error message, if any.
+    func setRunKind(_ kind: RunKind, forWorkout workout: HealthKitManager.WorkoutSummary) -> String? {
+        guard let run = historyRuns().first(where: { $0.id == workout.uuid }), run.canChangeKind else {
+            return "This run wasn't started from a plan in this app, so there is nowhere to keep "
+                + "its kind."
+        }
+        let uuid = workout.uuid
+        var descriptor = FetchDescriptor<PendingWorkoutExecution>(
+            predicate: #Predicate { $0.matchedHealthKitWorkoutUUID == uuid })
+        descriptor.fetchLimit = 1
+        var execution: PendingWorkoutExecution?
+        switch store.fetch(descriptor) {
+        case .success(let found): execution = found.first
+        case .failure(let error): return error.message
+        }
+        if execution == nil, let tagged = workout.executionID {
+            execution = executionRecord(id: tagged)
+        }
+        guard let execution else {
+            return "This run's timer session could not be found, so its kind was not changed."
+        }
+        execution.runKind = kind.rawValue
+        execution.updatedAt = Date()
+        return saveAndRecord()
+    }
+
+    /// The run's route, read once and then kept. Never throws: a route that cannot be read comes
+    /// back as `.failed` with the reason, to be shown on the card.
+    func route(for workout: HealthKitManager.WorkoutSummary) async -> RouteLoad {
+        if let known = routes[workout.uuid] { return known }
+        #if DEBUG
+        if UITesting.historyFixture { return .noRoute }
+        #endif
+        let loaded = await health.route(forWorkout: workout.uuid)
+        routes[workout.uuid] = loaded
+        return loaded
+    }
+
+    #if DEBUG
+    private var historyFixtureSeeded = false
+
+    /// Seeds the fixture's runs once, then shows them as if Health had returned them.
+    private func loadHistoryFixture() {
+        if !historyFixtureSeeded {
+            let (seeded, error) = HistoryFixture.seed(into: store, now: Date())
+            guard let seeded else {
+                errorMessage = error ?? "The History fixture could not be loaded."
+                return
+            }
+            historyFixtureSeeded = true
+            recentWorkouts = seeded.workouts
+            routes = seeded.routes
+        }
+        reloadLoggedUUIDs()
+        recomputeUnlogged()
+        storeRevision += 1
+    }
+    #endif
+
     private func reloadLoggedUUIDs() {
         switch store.fetch(FetchDescriptor<RunLog>()) {
         case .success(let logs):
@@ -270,20 +384,10 @@ final class RunLoggerModel {
 
     // MARK: - Reclassifying a mislabelled walk
 
-    /// Walking workouts available to browse, regardless of the walking filter.
-    private(set) var walkingWorkouts: [HealthKitManager.WorkoutSummary] = []
-
-    /// Loads walks so a run the Watch recorded as "Outdoor Walk" can be found and corrected.
-    func loadWalkingWorkouts() async {
-        guard health.isAvailable else { return }
-        do {
-            walkingWorkouts = try await health.fetchWalkingWorkouts(
-                hours: Self.historyHours,
-                reclassifiedAsRunning: defaults.reclassifiedAsRunning)
-        } catch {
-            errorMessage = "Could not read walking workouts: \(error.localizedDescription)"
-        }
-    }
+    // History's Walks browser, which listed every walk so one could be marked as a run, was
+    // removed 2026-11-24 with the History redesign: the Watch app records what the plan says, so
+    // only a few walks from before it could ever need this. A walk already marked stays a run, and
+    // its detail still offers "Treat as a walk again".
 
     func isReclassifiedAsRunning(_ uuid: UUID) -> Bool {
         defaults.reclassifiedAsRunning.contains(uuid)
@@ -300,7 +404,6 @@ final class RunLoggerModel {
             defaults.reclassifiedAsRunning.remove(uuid)
         }
         await refresh()
-        await loadWalkingWorkouts()
     }
 
     // MARK: - Lookups

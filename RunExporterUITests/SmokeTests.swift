@@ -41,6 +41,67 @@ final class SmokeTests: XCTestCase {
         ]
     }
 
+    /// History, redesigned 2026-11-24: runs only, grouped by week, filtered and grouped by kind,
+    /// with a run's kind changeable on its detail screen.
+    ///
+    /// The simulator has no Health data, so this launches with `-uiTestingHistoryFixture`: a
+    /// Debug-only set of invented runs in an in-memory store (`UITesting.historyFixture`). Each
+    /// run's shape is chosen to be unique where the test needs to find one card.
+    func testHistoryByWeekAndKind() {
+        app.launchArguments.append("-uiTestingHistoryFixture")
+        app.launch()
+
+        step("History: this week against the goal, and runs grouped by week") {
+            tapTab("History")
+            expect(app.staticTexts["This week"], "the This week summary")
+            let goal = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "of 3 runs"))
+            expect(goal.firstMatch, "this week's runs counted against three a week")
+            expect(app.staticTexts["Last week"], "the Last week group")
+            let endurance = card("6/1 × 4")
+            expect(endurance, "the unlogged endurance run's card")
+            XCTAssertTrue(endurance.label.contains("Endurance"),
+                          "The card should name its kind; it reads \"\(endurance.label)\"")
+            XCTAssertTrue(endurance.label.contains("Not logged"),
+                          "The card should say it is not logged; it reads \"\(endurance.label)\"")
+            expect(card("No route recorded"), "a card for the run with no route")
+            // The old filters: History is runs only now, and logging state is a badge.
+            expectAbsent(app.buttons["Unlogged"], "the old Logged/Unlogged filter")
+            expectAbsent(app.buttons["Walks"], "the old Walks list")
+        }
+
+        step("One kind filters the cards") {
+            app.buttons["Recovery"].tap()
+            expect(card("3/1 × 6"), "a recovery run under Recovery")
+            // Drawn in the same pass as the recovery card, so this absence is about the filter.
+            expectAbsent(card("1/2 × 8"), "a speed run under Recovery")
+            app.buttons["All"].tap()
+            expect(card("1/2 × 8"), "the speed run back under All")
+        }
+
+        step("Group by kind") {
+            app.buttons["By kind"].tap()
+            expect(app.staticTexts["No kind"], "the group for runs without a kind")
+            expect(card("4/1 × 5"), "the run with no kind, in its group")
+            snapshot("History grouped by kind")
+            app.buttons["By week"].tap()
+            expect(app.staticTexts["Last week"], "back to weeks")
+        }
+
+        step("A run's kind changes on its detail screen") {
+            card("2/1 × 10").tap()
+            let kind = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Kind")).firstMatch
+            expect(kind, "the Kind picker on the run's detail")
+            kind.tap()
+            let endurance = app.buttons["Endurance"]
+            expect(endurance, "Endurance in the Kind picker")
+            endurance.tap()
+            snapshot("Run detail after changing its kind")
+            app.navigationBars.buttons.firstMatch.tap()
+            app.buttons["Endurance"].tap()
+            expect(card("2/1 × 10"), "the re-tagged run under Endurance")
+        }
+    }
+
     func testWalkThroughTheApp() {
         app.launch()
 
@@ -342,6 +403,11 @@ final class SmokeTests: XCTestCase {
 
     private var aerobicTarget: XCUIElement {
         app.staticTexts["RPE 3–4 · conversational"]
+    }
+
+    /// A History run card whose text contains `text`. Each card reads as one element.
+    private func card(_ text: String) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
     }
 
     private var talkTestPicker: XCUIElement {
