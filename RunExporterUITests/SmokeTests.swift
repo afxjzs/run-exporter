@@ -141,7 +141,7 @@ final class SmokeTests: XCTestCase {
             snapshot("Open-interval plan detail")
         }
 
-        step("Run the aerobic plan; its log asks the talk test") {
+        step("Run the aerobic plan; its log does not ask the talk test") {
             app.buttons["Start Workout"].tap()
             expect(app.staticTexts["READY"], "the READY screen for the aerobic plan")
             app.buttons["Start"].tap()
@@ -153,11 +153,12 @@ final class SmokeTests: XCTestCase {
             expect(app.staticTexts["HR --"], "an unavailable heart rate with no Watch")
             snapshot("Aerobic run screen")
             endRunAndOpenLog()
-            // Offered because the run was easy aerobic (aerobic spec §7), and unanswered until chosen.
-            expect(talkTestPicker, "the Talk test picker on the aerobic run's log")
-            XCTAssertTrue(talkTestPicker.label.contains("Not recorded"),
-                          "The talk test should start at Not recorded; it reads \"\(talkTestPicker.label)\"")
-            snapshot("Aerobic run log with the talk test")
+            // The talk test (aerobic spec §7) was dropped on 2026-11-24: the owner logs straight
+            // after running and never once answered it. Not even an easy aerobic run asks it now.
+            // Waiting for the ratings first makes the absence a fact about the form, not timing.
+            expect(app.staticTexts["Effort (RPE)"], "the form's required ratings")
+            expectAbsent(talkTestPicker, "the dropped talk test on an easy aerobic run's log")
+            snapshot("Aerobic run log, no talk test")
             app.navigationBars["Log Run"].buttons["Cancel"].tap()
             expect(app.buttons["Start Workout"], "back on the plan screen after the aerobic run")
             app.navigationBars.buttons.firstMatch.tap()

@@ -847,9 +847,10 @@ struct ExportBuilder {
         rate (hrSampleCount to endHR) and, on a walk or cooldown straight after a run, \
         heartRateDrop30s/60s/120s: heart rate at the run's end minus heart rate that long after. \
         run_logs.csv ends with the run's intent — intensityMode (none, easyAerobicObservation) \
-        and its targets, copied from the plan as the run began — and talkTest, asked only after \
-        an easyAerobicObservation run. BLANK in any of these means not recorded: the run or log \
-        predates them, or the question was never asked. notRecorded means it was asked and left.
+        and its targets, copied from the plan as the run began — and talkTest, which the app \
+        asked after an easyAerobicObservation run until 2026-11-24 and no longer asks, so new \
+        logs leave it BLANK. BLANK in any of these means not recorded: the run or log predates \
+        them, or the question was never asked. notRecorded means it was asked and left.
 
         CUES: this export was created with cue_source "\(intervalAudio.cueSource)" and cue_mode \
         "\(intervalAudio.cueMode)". See "interval_audio" in manifest.json.

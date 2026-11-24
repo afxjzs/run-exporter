@@ -28,8 +28,7 @@ struct IntensitySection: View {
             Text("Intensity")
         } footer: {
             if mode == .easyAerobicObservation {
-                Text("Heart rate is recorded, not targeted. After the run you will be asked how "
-                     + "talking felt.")
+                Text("Heart rate is recorded, not targeted.")
             }
         }
     }
@@ -72,28 +71,5 @@ struct IntensityChoice {
     }
 }
 
-/// The talk test (aerobic spec §7), for a run whose plan was easy aerobic. Shared by both run-log
-/// forms.
-struct TalkTestSection: View {
-    @Binding var talkTest: TalkTest?
-
-    var body: some View {
-        Section {
-            Picker("Talk test", selection: Binding(get: { talkTest ?? .notRecorded },
-                                                   set: { talkTest = $0 })) {
-                ForEach(TalkTest.allCases) { answer in
-                    Text(answer.displayName).tag(answer)
-                }
-            }
-        } footer: {
-            Text("How talking would have felt during the run.")
-        }
-    }
-}
-
-extension RunLoggerModel {
-    /// Whether a run's log form asks the talk test: only for a run planned as easy aerobic (§7).
-    func offersTalkTest(executionID: UUID?) -> Bool {
-        intensity(forExecution: executionID) == .easyAerobicObservation
-    }
-}
+// The talk test's form section (aerobic spec §7) was removed 2026-11-24: it was never once
+// answered. `TalkTest` and `RunLog.talkTest` stay, so answers already given are kept and exported.

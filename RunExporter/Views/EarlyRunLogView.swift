@@ -20,7 +20,6 @@ struct EarlyRunLogView: View {
                   run: Int?, walk: Int?, planned: Int?, completed: Int?)?
 
     @State private var draft: RunLogDraft?
-    @State private var offersTalkTest = false
     @State private var errorMessage: String?
 
     var body: some View {
@@ -49,9 +48,7 @@ struct EarlyRunLogView: View {
                     Text("Required")
                 }
 
-                if offersTalkTest {
-                    TalkTestSection(talkTest: binding.talkTest)
-                }
+                // No talk test: dropped 2026-11-24 (see `RunLogFormView`).
 
                 if defaults.showBodySignals {
                     Section("Body signals") {
@@ -128,14 +125,10 @@ struct EarlyRunLogView: View {
 
     private func loadDraft() {
         guard draft == nil else { return }
-        offersTalkTest = logger.offersTalkTest(executionID: executionID)
 
         // Re-opening during the same cooldown must edit the existing log, not start a second one.
         if let existing = logger.pendingLog(forExecution: executionID) {
-            var reopened = RunLogDraft(log: existing)
-            // Offered, so it has an answer, if only "Not recorded" (§7).
-            if offersTalkTest && reopened.talkTest == nil { reopened.talkTest = .notRecorded }
-            draft = reopened
+            draft = RunLogDraft(log: existing)
             return
         }
 
@@ -148,7 +141,6 @@ struct EarlyRunLogView: View {
             fresh.plannedRepetitions = context.planned
             fresh.completedRepetitions = context.completed
         }
-        if offersTalkTest { fresh.talkTest = .notRecorded }
         draft = fresh
     }
 

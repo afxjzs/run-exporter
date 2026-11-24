@@ -697,13 +697,6 @@ final class RunLoggerModel {
         log.targetHeartRateMax = execution.targetHeartRateMax
     }
 
-    /// The intent of the run a timer session recorded, for the forms: they offer the talk test for
-    /// an aerobic run only (§7). Nil when the session is unknown or predates intent.
-    func intensity(forExecution executionID: UUID?) -> WorkoutIntensityMode? {
-        guard let executionID, let execution = executionRecord(id: executionID) else { return nil }
-        return execution.intensityMode.flatMap(WorkoutIntensityMode.init(rawValue:))
-    }
-
     /// Fills the plan shape from the timer session when the draft does not carry it.
     ///
     /// A draft built from a blank form has no `plannedWorkoutID` and no interval shape, and writing

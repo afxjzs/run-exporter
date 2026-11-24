@@ -275,6 +275,11 @@ If Watch connectivity returns, live HR should resume automatically.
 
 # 7. Post-run talk test
 
+> **Dropped 2026-11-24.** The owner logs straight after running and never once answered it, so
+> the log forms no longer ask. The stored field, its values and the `talkTest` export columns
+> remain: answers already given are kept and exported, and new logs leave it blank (D18's "not
+> recorded"). The text below is the original requirement, kept for the record.
+
 For an aerobic-observation workout, add one lightweight subjective field to the existing post-run logging flow:
 
 ```text
