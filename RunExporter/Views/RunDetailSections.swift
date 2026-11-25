@@ -137,8 +137,14 @@ struct RunDetailSections<Middle: View>: View {
         return Display.heartRate(rate) + " running"
     }
 
+    /// The whole workout's average, or for a run whose Watch kept recording, the whole timer's
+    /// (`RunClip`): Health's own average there includes the hours after the run.
     private var wholeHeartRate: String {
-        Display.heartRate(workout.averageHeartRate) + " whole workout"
+        let run = logger.allHistoryRunsIncludingHidden().first(where: { $0.id == workout.uuid })
+        if let run, run.clip != nil {
+            return Display.heartRate(run.figures.averageHeartRate) + " whole run"
+        }
+        return Display.heartRate(workout.averageHeartRate) + " whole workout"
     }
 
     static var heartRateExplanation: String { "Running counts the run legs only, so it is higher than the "

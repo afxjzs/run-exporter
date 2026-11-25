@@ -23,6 +23,7 @@ final class LoggerStore {
         RecoveryLog.self,
         WorkoutIntervalLog.self,
         WorkoutNote.self,
+        HiddenHistoryRun.self,
     ]
 
     private(set) var container: ModelContainer?

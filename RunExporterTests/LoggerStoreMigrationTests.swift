@@ -988,4 +988,46 @@ final class LoggerStoreMigrationTests: XCTestCase {
         XCTAssertNil(log.intensityMode)
         XCTAssertNil(log.talkTest, "the talk test was never asked; that is not `notRecorded`")
     }
+
+    /// Opening the store as installed on 2026-11-25 (build `202611250838`) once History can hide
+    /// runs. The hidden list is a new table; every run, plan and kind already on the phone must
+    /// survive it.
+    func testAStoreWrittenBeforeRunsCouldBeHiddenStillOpensAndKeepsItsData() throws {
+        let workoutUUID = UUID()
+        let modelsBeforeHiding = LoggerStore.models.filter {
+            ObjectIdentifier($0) != ObjectIdentifier(HiddenHistoryRun.self)
+        }
+        XCTAssertEqual(modelsBeforeHiding.count, LoggerStore.models.count - 1,
+                       "the shipping schema should hold the hidden-runs table")
+
+        try autoreleasepool {
+            let old = try container(for: modelsBeforeHiding)
+            let execution = PendingWorkoutExecution(plannedWorkoutID: UUID(),
+                                                    plannedWorkoutName: "4/1 × 5",
+                                                    expectedActivityType: .running,
+                                                    expectedDurationSeconds: nil,
+                                                    runIntervalSeconds: 240,
+                                                    walkIntervalSeconds: 60,
+                                                    plannedRepetitions: 5,
+                                                    status: .matched,
+                                                    createdAt: Date(timeIntervalSince1970: 1_790_000_000))
+            execution.matchedHealthKitWorkoutUUID = workoutUUID
+            execution.runKind = RunKind.speed.rawValue
+            old.mainContext.insert(execution)
+            try old.mainContext.save()
+        }
+
+        let migrated = try container(for: LoggerStore.models)
+        let context = migrated.mainContext
+        let executions = try context.fetch(FetchDescriptor<PendingWorkoutExecution>())
+        XCTAssertEqual(executions.count, 1, "the run's timer session must survive the added table")
+        XCTAssertEqual(executions.first?.runKind, RunKind.speed.rawValue, "and keep its kind")
+        XCTAssertTrue(try context.fetch(FetchDescriptor<HiddenHistoryRun>()).isEmpty)
+
+        // And the new table works: a hidden run is kept and read back.
+        context.insert(HiddenHistoryRun(healthKitWorkoutUUID: workoutUUID, hiddenAt: Date()))
+        try context.save()
+        XCTAssertEqual(try context.fetch(FetchDescriptor<HiddenHistoryRun>()).first?.healthKitWorkoutUUID,
+                       workoutUUID)
+    }
 }

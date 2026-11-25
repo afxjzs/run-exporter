@@ -314,7 +314,8 @@ final class HealthKitManager {
 
     /// One workout's route, for drawing on a map. Reads through the export's own route reader
     /// (`WorkoutRouteExporter.readRoutes`), so the map and the exported GPX are the same points.
-    func route(forWorkout uuid: UUID) async -> RouteLoad {
+    /// With `window`, only the points inside it (`RunClip`); the export always keeps them all.
+    func route(forWorkout uuid: UUID, within window: DateInterval? = nil) async -> RouteLoad {
         let workout: HKWorkout?
         do {
             workout = try await fetchHKWorkout(uuid: uuid)
@@ -324,13 +325,19 @@ final class HealthKitManager {
         guard let workout else { return .failed("This workout is no longer in Health.") }
 
         let output = await WorkoutRouteExporter(store: store).readRoutes(for: workout)
-        if !output.points.isEmpty {
-            return .points(output.points.map {
+        let points = window.map { window in output.points.filter { window.contains($0.timestamp) } }
+            ?? output.points
+        if !points.isEmpty {
+            return .points(points.map {
                 CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
             })
         }
         // No route sample and nothing went wrong: the run simply recorded none.
         if output.routeSampleCount == 0 && output.issues.isEmpty { return .noRoute }
+        // Points, but none inside the timer: said as itself, not as a missing route.
+        if !output.points.isEmpty && output.issues.isEmpty {
+            return .failed("no GPS points fall inside this run's timer")
+        }
         return .failed(output.issues.first?.message ?? "The route could not be read.")
     }
 

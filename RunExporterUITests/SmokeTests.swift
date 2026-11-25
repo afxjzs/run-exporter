@@ -87,6 +87,25 @@ final class SmokeTests: XCTestCase {
             expect(app.staticTexts["Last week"], "back to weeks")
         }
 
+        step("Every date says its weekday, and each week reads newest first") {
+            // Last week: the endurance run on Friday, the recovery run on Wednesday.
+            let friday = card("6/1 × 4")
+            let wednesday = card("3/1 × 6")
+            expect(friday, "last week's Friday run")
+            expect(wednesday, "last week's Wednesday run")
+            XCTAssertLessThan(friday.frame.minY, wednesday.frame.minY,
+                              "Within a week the newest run should come first")
+            XCTAssertTrue(friday.label.contains("Fri"),
+                          "The card's date should say its weekday; it reads \"\(friday.label)\"")
+            // Weeks before last week are titled by their dates, each with its weekday.
+            let olderWeek = app.staticTexts.matching(NSPredicate(
+                format: "label MATCHES %@", "^Mon, .+ – Sun, .+$")).firstMatch
+            scroll(to: olderWeek, in: app.scrollViews.firstMatch)
+            expect(olderWeek, "an older week titled Mon … – Sun …")
+            snapshot("Older weeks titled with weekdays")
+            app.buttons["All"].tap()
+        }
+
         step("Charts compare runs of one kind, and say when there are too few") {
             // Recovery: three runs with legs and Watch heart rate, so both charts draw.
             app.buttons["Recovery"].tap()
@@ -129,6 +148,34 @@ final class SmokeTests: XCTestCase {
             app.navigationBars.buttons.firstMatch.tap()
         }
 
+        step("A run can be hidden from History, and shown again") {
+            card("6/1 × 4").tap()
+            let title = app.navigationBars.staticTexts.matching(NSPredicate(
+                format: "label BEGINSWITH %@", "Fri")).firstMatch
+            expect(title, "the detail's title with its weekday")
+            let hide = app.buttons["Hide from History"]
+            scroll(to: hide, in: app.collectionViews.firstMatch)
+            expect(hide, "Hide from History on the run's detail")
+            hide.tap()
+            // Hiding returns to History; the run is gone from its cards and from its kind's charts.
+            app.buttons["Endurance"].tap()
+            expect(app.staticTexts["Needs 3 endurance runs with recorded legs. You have 1."],
+                   "the endurance chart counting one run once the other is hidden")
+            expectAbsent(card("6/1 × 4"), "the hidden run's card")
+            let hidden = app.buttons["Hidden runs (1)"]
+            scroll(to: hidden, in: app.scrollViews.firstMatch)
+            expect(hidden, "the way back to hidden runs")
+            hidden.tap()
+            expect(card("6/1 × 4"), "the hidden run, listed")
+            snapshot("Hidden runs")
+            app.buttons["Show in History"].tap()
+            app.navigationBars.buttons.firstMatch.tap()
+            expect(app.staticTexts["Needs 3 endurance runs with recorded legs. You have 2."],
+                   "the endurance chart counting both runs again")
+            expect(card("6/1 × 4"), "the run back in History")
+            app.buttons["All"].tap()
+        }
+
         step("A run's kind changes on its detail screen") {
             card("2/1 × 10").tap()
             let kind = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Kind")).firstMatch
@@ -141,6 +188,21 @@ final class SmokeTests: XCTestCase {
             app.navigationBars.buttons.firstMatch.tap()
             app.buttons["Endurance"].tap()
             expect(card("2/1 × 10"), "the re-tagged run under Endurance")
+            app.buttons["All"].tap()
+        }
+
+        step("A run the Watch kept recording is read only inside the phone's timer") {
+            // 2/2 × 5 is twenty minutes on the timer; the fixture's Watch recorded three hours more.
+            let clipped = card("2/2 × 5")
+            scroll(to: clipped, in: app.scrollViews.firstMatch, swipes: 10)
+            expect(clipped, "the run the Watch kept recording")
+            XCTAssertTrue(clipped.label.contains("20:00"),
+                          "The card should show the timer's 20:00; it reads \"\(clipped.label)\"")
+            XCTAssertFalse(clipped.label.contains("3:20:00"),
+                           "The card shows the Watch's whole recording; it reads \"\(clipped.label)\"")
+            XCTAssertTrue(clipped.label.contains("Watch kept recording"),
+                          "The card should say it was clipped; it reads \"\(clipped.label)\"")
+            snapshot("A run clipped to its timer")
         }
     }
 

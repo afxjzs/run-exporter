@@ -25,6 +25,9 @@ enum HistoryFixture {
         let hasRoute: Bool
         /// False for a run the Watch recorded no heart rate for.
         let hasHeartRate: Bool
+        /// Minutes the Watch went on recording after the phone's timer ended: its stop never
+        /// arrived (`WatchStop`). History should read the run only inside the timer.
+        var watchExtraMinutes = 0
 
         var shape: String { "\(runMinutes)/\(walkMinutes) × \(rounds)" }
     }
@@ -52,6 +55,9 @@ enum HistoryFixture {
             logged: true, hasRoute: true, hasHeartRate: true),
         Run(weeksAgo: 4, day: 2, runMinutes: 3, walkMinutes: 1, rounds: 6, kind: .recovery,
             logged: true, hasRoute: true, hasHeartRate: true),
+        // The Watch never got the stop and recorded three more hours at home.
+        Run(weeksAgo: 3, day: 2, runMinutes: 2, walkMinutes: 2, rounds: 5, kind: nil,
+            logged: true, hasRoute: true, hasHeartRate: true, watchExtraMinutes: 180),
     ]
 
     struct Seeded {
@@ -88,6 +94,7 @@ enum HistoryFixture {
                                                     status: .matched,
                                                     createdAt: start)
             execution.matchedHealthKitWorkoutUUID = uuid
+            execution.timerStartedAt = start
             execution.runKind = run.kind?.rawValue
             context.insert(execution)
 
@@ -128,6 +135,22 @@ enum HistoryFixture {
                     cursor = end
                 }
             }
+            // The phone's timer ends here, whatever the Watch does next.
+            let timerEnd = cursor
+            execution.timerEndedAt = timerEnd
+            // After it: slow pottering about at home, with a resting heart rate.
+            var watchEnd = timerEnd
+            if run.watchExtraMinutes > 0 {
+                watchEnd = timerEnd.addingTimeInterval(Double(run.watchExtraMinutes * 60))
+                var t = timerEnd
+                while t < watchEnd {
+                    let next = min(t.addingTimeInterval(60), watchEnd)
+                    legSamples.heartRate.append(WorkoutSample(start: t, end: t, value: 72))
+                    legSamples.distance.append(WorkoutSample(start: t, end: next, value: 3))
+                    meters += 3
+                    t = next
+                }
+            }
             samples[uuid] = legSamples
 
             if run.logged {
@@ -140,11 +163,11 @@ enum HistoryFixture {
                                       personalHeatRating: 5))
             }
 
-            let duration = cursor.timeIntervalSince(start)
+            let duration = watchEnd.timeIntervalSince(start)
             let heartRates = legSamples.heartRate.map(\.value)
             workouts.append(HealthKitManager.WorkoutSummary(
                 uuid: uuid, activityType: .running,
-                startDate: start, endDate: cursor, duration: duration,
+                startDate: start, endDate: watchEnd, duration: duration,
                 distanceMiles: meters / AerobicAnalysis.metersPerMile,
                 averageHeartRate: heartRates.isEmpty ? nil
                     : heartRates.reduce(0, +) / Double(heartRates.count),

@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SwiftData
+import UIKit
 
 /// Shared state for the logging side of the app: recent HealthKit workouts, which of them already
 /// have a run log, and the writes that create or update one.
@@ -201,6 +202,57 @@ final class RunLoggerModel {
     /// `resolvedExecution`, which only considers sessions still waiting for a match and so finds
     /// nothing for a run already logged. Every timer session is fetched once for the whole list.
     func historyRuns() -> [HistoryRun] {
+        let hidden = hiddenWorkoutUUIDs()
+        return allHistoryRuns().filter { !hidden.contains($0.id) }
+    }
+
+    /// The runs hidden from History, newest first, for its "Hidden runs" list.
+    func hiddenHistoryRuns() -> [HistoryRun] {
+        let hidden = hiddenWorkoutUUIDs()
+        return allHistoryRuns().filter { hidden.contains($0.id) }
+    }
+
+    /// Every run, hidden ones too, for a run's own detail screen.
+    func allHistoryRunsIncludingHidden() -> [HistoryRun] { allHistoryRuns() }
+
+    func isHiddenFromHistory(_ workout: HealthKitManager.WorkoutSummary) -> Bool {
+        hiddenWorkoutUUIDs().contains(workout.uuid)
+    }
+
+    /// Hides a run from History, or shows it again. Returns the error message, if any.
+    func setHiddenFromHistory(_ hidden: Bool, workout: HealthKitManager.WorkoutSummary) -> String? {
+        let uuid = workout.uuid
+        let descriptor = FetchDescriptor<HiddenHistoryRun>(
+            predicate: #Predicate { $0.healthKitWorkoutUUID == uuid })
+        let existing: [HiddenHistoryRun]
+        switch store.fetch(descriptor) {
+        case .success(let found): existing = found
+        case .failure(let error): return error.message
+        }
+        if hidden {
+            guard existing.isEmpty else { return nil }
+            guard let context = store.context else { return "The log store is not open." }
+            context.insert(HiddenHistoryRun(healthKitWorkoutUUID: uuid, hiddenAt: Date()))
+        } else {
+            guard let context = store.context else { return "The log store is not open." }
+            existing.forEach { context.delete($0) }
+        }
+        return saveAndRecord()
+    }
+
+    private func hiddenWorkoutUUIDs() -> Set<UUID> {
+        _ = storeRevision
+        switch store.fetch(FetchDescriptor<HiddenHistoryRun>()) {
+        case .success(let found): return Set(found.map(\.healthKitWorkoutUUID))
+        case .failure(let error):
+            // Shown, and nothing is hidden: a run wrongly shown is visible, a run wrongly hidden
+            // would not be.
+            errorMessage = "Hidden runs could not be read: " + error.message
+            return []
+        }
+    }
+
+    private func allHistoryRuns() -> [HistoryRun] {
         _ = storeRevision
         let executions: [PendingWorkoutExecution]
         switch store.fetch(FetchDescriptor<PendingWorkoutExecution>()) {
@@ -222,6 +274,13 @@ final class RunLoggerModel {
                 let execution = byWorkout[workout.uuid] ?? workout.executionID.flatMap { byID[$0] }
                 let stored = execution?.runKind
                 let kind = stored.flatMap(RunKind.init(rawValue:))
+                let clip = RunClip.window(workoutStart: workout.startDate, workoutEnd: workout.endDate,
+                                          timerStart: execution?.timerStartedAt,
+                                          timerEnd: execution?.timerEndedAt)
+                let figures = clip.map {
+                    RunFigures.clipped(to: $0, samples: samples[workout.uuid],
+                                       problem: progress[workout.uuid]?.samplesProblem)
+                } ?? .whole(workout)
                 return HistoryRun(
                     workout: workout,
                     executionID: execution?.id,
@@ -230,14 +289,16 @@ final class RunLoggerModel {
                     planName: execution?.plannedWorkoutName,
                     isLogged: loggedWorkoutUUIDs.contains(workout.uuid)
                         || pendingLog(forWorkout: workout) != nil,
-                    canChangeKind: execution != nil)
+                    canChangeKind: execution != nil,
+                    clip: clip,
+                    figures: figures)
             }
     }
 
     /// Re-files one run under another kind. Changes that run only: its plan, and the plan's other
     /// runs, keep theirs. Returns the error message, if any.
     func setRunKind(_ kind: RunKind, forWorkout workout: HealthKitManager.WorkoutSummary) -> String? {
-        guard let run = historyRuns().first(where: { $0.id == workout.uuid }), run.canChangeKind else {
+        guard let run = allHistoryRuns().first(where: { $0.id == workout.uuid }), run.canChangeKind else {
             return "This run wasn't started from a plan in this app, so there is nowhere to keep "
                 + "its kind."
         }
@@ -262,16 +323,27 @@ final class RunLoggerModel {
     }
 
     /// The run's route, read once and then kept. Never throws: a route that cannot be read comes
-    /// back as `.failed` with the reason, to be shown on the card.
+    /// back as `.failed` with the reason, to be shown on the card. Only the timer's part, for a run
+    /// whose Watch kept recording (`RunClip`).
     func route(for workout: HealthKitManager.WorkoutSummary) async -> RouteLoad {
         if let known = routes[workout.uuid] { return known }
         #if DEBUG
         if UITesting.historyFixture { return .noRoute }
         #endif
-        let loaded = await health.route(forWorkout: workout.uuid)
+        let clip = allHistoryRuns().first(where: { $0.id == workout.uuid })?.clip
+        let loaded = await health.route(forWorkout: workout.uuid, within: clip)
         routes[workout.uuid] = loaded
         return loaded
     }
+
+    /// Drawn card maps, so a card redrawn by scrolling, filtering or regrouping shows its map at
+    /// once instead of drawing it again. NSCache, because fifty full-width map images are worth
+    /// giving back under memory pressure; a map evicted is simply drawn again.
+    @ObservationIgnored private let mapImages = NSCache<NSString, UIImage>()
+
+    func mapImage(_ key: String) -> UIImage? { mapImages.object(forKey: key as NSString) }
+
+    func keepMapImage(_ image: UIImage, key: String) { mapImages.setObject(image, forKey: key as NSString) }
 
     /// Each History run's legs and analysis, by workout. Filled by `loadProgress()`.
     private(set) var progress: [UUID: RunProgress] = [:]
@@ -286,7 +358,8 @@ final class RunLoggerModel {
     /// describe a run differently from the export. Samples are read only for runs with legs:
     /// without legs there is no running time to analyze.
     func loadProgress() async {
-        let runs = historyRuns()
+        // Hidden runs too: their detail screens read the same figures.
+        let runs = allHistoryRuns()
         let snapshot = LoggerExportSnapshot.make(store: store)
         var loaded: [UUID: RunProgress] = [:]
         for run in runs {
@@ -294,11 +367,14 @@ final class RunLoggerModel {
             if let executionID = run.executionID {
                 entry.recorded = snapshot.recordedRun(forExecutionID: executionID.uuidString)
             }
-            if let recorded = entry.recorded {
+            // A clipped run needs its samples for its miles and heart rate, legs or not.
+            if entry.recorded != nil || run.clip != nil {
                 switch await workoutSamples(for: run.workout) {
                 case .success(let read):
                     entry.samples = read
-                    entry.analysis = AerobicAnalysis.analyze(recorded, samples: read)
+                    if let recorded = entry.recorded {
+                        entry.analysis = AerobicAnalysis.analyze(recorded, samples: read)
+                    }
                 case .failure(let problem):
                     entry.samplesProblem = problem.message
                 }

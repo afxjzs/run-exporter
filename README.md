@@ -512,7 +512,8 @@ kept on the `prototype/history-redesign` branch, never merged).
 - **This week** counts runs against a goal of three, with miles and time, over eight weeks of
   miles, each bar labeled by its week's Monday.
 - **All / Speed / Recovery / Endurance** filters both the charts and the cards. Under All, the
-  cards group **By week** (Monday to Sunday) or **By kind**.
+  cards group **By week** (Monday to Sunday, newest run first) or **By kind**. Every date
+  shows its weekday.
 - **Two charts**, swiped between: the longest run leg actually run (with total running minutes
   below), and efficiency — meters per heartbeat over the running, aerobic spec D16, withheld for a
   run with too little Watch heart rate (D8). Under three usable runs a chart says
@@ -523,6 +524,14 @@ kept on the `prototype/history-redesign` branch, never merged).
 - **A run's detail** starts with a map you can move, running pace, efficiency, running heart rate
   next to the whole workout's, the run's kind (changeable there, for that run only), and every leg
   with its time, distance, pace and heart rate start → end. The older sections follow.
+- **Hide from History**, on a run's detail, leaves a run out of the cards, totals and charts (a
+  demo, a test). **Hidden runs (N)** at the bottom of History lists them, each with
+  **Show in History**. Hidden runs stay in Health and in exports.
+- **A run whose Watch kept recording** after the phone's timer ended, by more than two minutes
+  (`RunClip`), is read only inside the timer: its map, miles, time and heart rate. The card says
+  "Watch kept recording …", and the detail's Apple Health section gives both lengths. This
+  happens when the phone's stop never reaches the Watch; since 2026-11-25 an undelivered stop is
+  sent again when the Watch reconnects, and Today says so until it is (`WatchStop`).
 
 Explanations sit behind an ⓘ button rather than on the page. Steps per minute per leg is not
 shown: whether Health's step samples are fine-grained enough to split by leg is unmeasured.

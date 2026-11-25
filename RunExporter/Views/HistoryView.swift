@@ -5,6 +5,7 @@ struct WorkoutDetailView: View {
     let logger: RunLoggerModel
 
     @Environment(LoggerDefaults.self) private var defaults
+    @Environment(\.dismiss) private var dismiss
     @State private var showLogSheet = false
     @State private var showRecoverySheet = false
 
@@ -26,7 +27,7 @@ struct WorkoutDetailView: View {
             RunDetailSections(workout: workout, logger: logger) { kindSection }
             classificationSection
 
-            Section("Apple Health") {
+            Section {
                 LabeledContent("Start", value: Display.dayAndTime(workout.startDate))
                 LabeledContent("Activity",
                                value: workout.recordedActivityType.displayName)
@@ -37,6 +38,10 @@ struct WorkoutDetailView: View {
                 LabeledContent("Peak HR", value: Display.heartRate(workout.peakHeartRate))
                 weatherRows
                 LabeledContent("Source", value: workout.sourceName)
+            } header: {
+                Text("Apple Health")
+            } footer: {
+                if let note = clipFooter { Text(note) }
             }
 
             intervalSection
@@ -44,6 +49,7 @@ struct WorkoutDetailView: View {
             linkIntervalsSection
             logSection
             recoverySection
+            hideSection
         }
         .navigationTitle(Display.relativeDay(workout.startDate))
         .navigationBarTitleDisplayMode(.inline)
@@ -99,7 +105,7 @@ struct WorkoutDetailView: View {
     /// keep theirs. A run with no timer session in this app has nowhere to keep one, and says so.
     @ViewBuilder
     private var kindSection: some View {
-        if let run = logger.historyRuns().first(where: { $0.id == workout.uuid }) {
+        if let run = logger.allHistoryRunsIncludingHidden().first(where: { $0.id == workout.uuid }) {
             Section {
                 if run.canChangeKind {
                     Picker("Kind", selection: Binding(
@@ -125,6 +131,44 @@ struct WorkoutDetailView: View {
                 Text(run.canChangeKind
                      ? "Changes this run only. History compares runs of the same kind."
                      : "This run wasn't started from a plan in this app, so it has no kind.")
+            }
+        }
+    }
+
+    /// Health's figures above are the Watch's whole recording; for a clipped run, say how they
+    /// differ from what History shows (`RunClip`).
+    private var clipFooter: String? {
+        guard let run = logger.allHistoryRunsIncludingHidden().first(where: { $0.id == workout.uuid }),
+              let clip = run.clip else { return nil }
+        return "The Watch kept recording after your run ended, so Health's record runs "
+            + Display.duration(workout.duration) + ". History counts only your timer's "
+            + Display.duration(clip.duration) + ": its map, miles, time and heart rate."
+    }
+
+    /// Leaves this run out of History, or brings it back. Hiding returns to History, where the
+    /// run is no longer listed.
+    @ViewBuilder
+    private var hideSection: some View {
+        if workout.activityType == .running {
+            Section {
+                if logger.isHiddenFromHistory(workout) {
+                    Button("Show in History") {
+                        if let error = logger.setHiddenFromHistory(false, workout: workout) {
+                            logger.errorMessage = error
+                        }
+                    }
+                } else {
+                    Button("Hide from History", role: .destructive) {
+                        if let error = logger.setHiddenFromHistory(true, workout: workout) {
+                            logger.errorMessage = error
+                        } else {
+                            dismiss()
+                        }
+                    }
+                }
+            } footer: {
+                Text("Hidden runs are left out of History's cards, totals and charts. They stay "
+                     + "in Apple Health and in exports.")
             }
         }
     }

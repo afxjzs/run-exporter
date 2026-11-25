@@ -73,8 +73,73 @@ struct HistoryRun: Identifiable {
     let isLogged: Bool
     /// False when the run has no timer session in this app, so there is nowhere to keep a kind.
     let canChangeKind: Bool
+    /// The phone's timer, when the Watch recorded well beyond it (`RunClip`). Nil for every
+    /// ordinary run, which is read whole.
+    let clip: DateInterval?
+    /// Miles, time and heart rate as History shows them: inside `clip` when there is one.
+    let figures: RunFigures
 
     var id: UUID { workout.uuid }
+}
+
+/// What History reads of a run whose Watch went on recording after the phone's timer ended.
+///
+/// The Watch ends its workout when the phone's stop *arrives*. On a real run the stop never
+/// arrived, and the Watch recorded for hours more (`WatchStop`). Health's record of that run
+/// is wrong and cannot be edited by this app, so History reads such a run only inside the timer.
+/// An ordinary run, whose Watch started and stopped within a couple of minutes of the timer, is
+/// read whole, exactly as before.
+enum RunClip {
+    /// Normal start and stop delays are seconds: the Watch starts a few seconds after the tap, and
+    /// a stop sent again on reconnect arrives when the Watch reconnects, which has taken under a
+    /// minute (measured once; the resend itself has not yet run on a device). Two minutes is beyond
+    /// both, so only a Watch that truly kept recording is clipped.
+    static let tolerance: TimeInterval = 120
+
+    /// The timer's part of the workout, or nil when the run should be read whole: no timer (a run
+    /// this app did not start, or one never stopped), or a Watch that kept to the timer.
+    static func window(workoutStart: Date, workoutEnd: Date,
+                       timerStart: Date?, timerEnd: Date?) -> DateInterval? {
+        guard let timerStart, let timerEnd, timerEnd > timerStart else { return nil }
+        let startsEarly = timerStart.timeIntervalSince(workoutStart) > tolerance
+        let endsLate = workoutEnd.timeIntervalSince(timerEnd) > tolerance
+        guard startsEarly || endsLate else { return nil }
+        let start = max(workoutStart, timerStart)
+        let end = min(workoutEnd, timerEnd)
+        guard end > start else { return nil }
+        return DateInterval(start: start, end: end)
+    }
+}
+
+/// A run's miles, time and average heart rate as History shows them.
+struct RunFigures {
+    let miles: Double?
+    let seconds: TimeInterval
+    let averageHeartRate: Double?
+    /// True while a clipped run's samples are still being read, so miles and heart rate are not
+    /// known yet. Shown as such, never as Health's whole-recording figures.
+    let reading: Bool
+    /// Why a clipped run's miles and heart rate are missing, when its samples could not be read.
+    let problem: String?
+
+    /// Health's own figures, for a run read whole.
+    static func whole(_ workout: HealthKitManager.WorkoutSummary) -> RunFigures {
+        RunFigures(miles: workout.distanceMiles, seconds: workout.duration,
+                   averageHeartRate: workout.averageHeartRate, reading: false, problem: nil)
+    }
+
+    /// The figures inside `clip`, from the run's own samples: nil samples means not read yet.
+    static func clipped(to clip: DateInterval, samples: WorkoutSamples?, problem: String?) -> RunFigures {
+        guard let samples else {
+            return RunFigures(miles: nil, seconds: clip.duration, averageHeartRate: nil,
+                              reading: problem == nil, problem: problem)
+        }
+        let meters = AerobicAnalysis.distance(in: [clip], samples: samples.distance)
+        let heartRate = AerobicAnalysis.heartRate(in: [clip], samples: samples.heartRate)
+        return RunFigures(miles: meters.map { $0 / AerobicAnalysis.metersPerMile },
+                          seconds: clip.duration, averageHeartRate: heartRate.average,
+                          reading: false, problem: nil)
+    }
 }
 
 /// What History shows: every run, or one kind.
@@ -136,8 +201,8 @@ enum HistoryWeeks {
             let inWeek = runs.filter { start(of: $0.workout.startDate) == weekStart }
             return Total(start: weekStart,
                          runs: inWeek.count,
-                         miles: inWeek.reduce(0) { $0 + ($1.workout.distanceMiles ?? 0) },
-                         seconds: inWeek.reduce(0) { $0 + $1.workout.duration })
+                         miles: inWeek.reduce(0) { $0 + ($1.figures.miles ?? 0) },
+                         seconds: inWeek.reduce(0) { $0 + $1.figures.seconds })
         }
     }
 
@@ -147,7 +212,7 @@ enum HistoryWeeks {
         if weekStart == thisWeek { return "This week" }
         if weekStart == adding(days: -7, to: thisWeek) { return "Last week" }
         let end = adding(days: 6, to: weekStart)
-        return shortDate.string(from: weekStart) + " – " + shortDate.string(from: end)
+        return day.string(from: weekStart) + " – " + day.string(from: end)
     }
 
     /// Calendar arithmetic on a Gregorian date. Nil would be a Foundation bug; substituting a date
@@ -159,9 +224,24 @@ enum HistoryWeeks {
         return result
     }
 
-    static let shortDate: DateFormatter = {
+    /// A date with its weekday — "Mon, Nov 23" — the way History writes every date.
+    static let day: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.setLocalizedDateFormatFromTemplate("EEEMMMd")
+        return formatter
+    }()
+
+    /// "Nov 23" alone, for a summary bar, whose weekday is written on a line of its own.
+    static let monthDay: DateFormatter = {
         let formatter = DateFormatter()
         formatter.setLocalizedDateFormatFromTemplate("MMMd")
+        return formatter
+    }()
+
+    /// "Mon".
+    static let weekday: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.setLocalizedDateFormatFromTemplate("EEE")
         return formatter
     }()
 }
@@ -175,12 +255,13 @@ enum HistoryGrouper {
         }
     }
 
-    /// Newest week first, and inside a week, Monday to Sunday — the order the days were run in.
+    /// Newest week first, and newest run first inside a week, so the list reads back in time
+    /// without changing direction at each week.
     static func byWeek(_ runs: [HistoryRun], now: Date, showsGoal: Bool) -> [HistoryGroup] {
         let weeks = Dictionary(grouping: runs) { HistoryWeeks.start(of: $0.workout.startDate) }
         return weeks.keys.sorted(by: >).map { weekStart in
-            let inWeek = (weeks[weekStart] ?? []).sorted { $0.workout.startDate < $1.workout.startDate }
-            let miles = inWeek.reduce(0) { $0 + ($1.workout.distanceMiles ?? 0) }
+            let inWeek = (weeks[weekStart] ?? []).sorted { $0.workout.startDate > $1.workout.startDate }
+            let miles = inWeek.reduce(0) { $0 + ($1.figures.miles ?? 0) }
             let distance = String(format: "%.1f mi", miles)
             let detail = showsGoal
                 ? "\(inWeek.count) of \(HistoryWeeks.runGoal) · " + distance

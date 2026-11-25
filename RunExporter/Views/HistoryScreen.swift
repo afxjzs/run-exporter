@@ -55,6 +55,7 @@ struct HistoryView: View {
                         .buttonStyle(.plain)
                     }
                 }
+                hiddenRunsLink
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 24)
@@ -84,6 +85,19 @@ struct HistoryView: View {
             .pickerStyle(.segmented)
             .frame(maxWidth: 220)
             .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+
+    /// The way back to runs hidden from History. Only there when some are.
+    @ViewBuilder
+    private var hiddenRunsLink: some View {
+        let hidden = logger.hiddenHistoryRuns()
+        if !hidden.isEmpty {
+            NavigationLink("Hidden runs (\(hidden.count))") {
+                HiddenRunsView(logger: logger)
+            }
+            .padding(.top, 16)
+            .frame(maxWidth: .infinity)
         }
     }
 
@@ -392,10 +406,24 @@ private struct HistorySummaryCard: View {
                 Text(Display.duration(week?.seconds ?? 0)).font(.title2.bold())
             }
             Chart(totals) { total in
-                BarMark(x: .value("Week", HistoryWeeks.shortDate.string(from: total.start)),
+                BarMark(x: .value("Week", HistoryWeeks.monthDay.string(from: total.start)),
                         y: .value("Miles", total.miles))
                     .foregroundStyle(total.start == week?.start ? Color.green : Color.gray.opacity(0.5))
                     .cornerRadius(4)
+            }
+            .chartXAxis {
+                // Each bar's Monday, weekday over date: "Mon, Nov 23" is too wide for eight bars.
+                AxisMarks { value in
+                    AxisValueLabel {
+                        if let label = value.as(String.self) {
+                            VStack(spacing: 0) {
+                                Text(weekdays[label] ?? "")
+                                Text(label)
+                            }
+                            .font(.caption2)
+                        }
+                    }
+                }
             }
             .chartYAxis(.hidden)
             .frame(height: 110)
@@ -409,6 +437,13 @@ private struct HistorySummaryCard: View {
 
     private func goalText(_ count: Int) -> String {
         "\(count) of \(HistoryWeeks.runGoal) runs"
+    }
+
+    /// Each bar's label to its weekday.
+    private var weekdays: [String: String] {
+        Dictionary(HistoryWeeks.totals(runs, now: now).map {
+            (HistoryWeeks.monthDay.string(from: $0.start), HistoryWeeks.weekday.string(from: $0.start))
+        }, uniquingKeysWith: { first, _ in first })
     }
 }
 
@@ -437,6 +472,11 @@ struct HistoryRunCard: View {
                 Text(statLine)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                if let clipNote = Self.clipNote(run) {
+                    Text(clipNote)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
             }
             .padding(12)
         }
@@ -450,19 +490,25 @@ struct HistoryRunCard: View {
     private var statLine: String {
         var parts: [String] = []
         if let plan = run.planName { parts.append(plan) }
-        parts.append(Display.miles(run.workout.distanceMiles))
-        parts.append(Display.duration(run.workout.duration))
-        if let heartRate = run.workout.averageHeartRate {
+        let figures = run.figures
+        parts.append(figures.reading ? "reading…" : Display.miles(figures.miles))
+        parts.append(Display.duration(figures.seconds))
+        if let heartRate = figures.averageHeartRate {
             parts.append(Display.heartRate(heartRate) + " avg")
         }
         return parts.joined(separator: " · ")
     }
 
-    static let day: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.setLocalizedDateFormatFromTemplate("EEEMMMd")
-        return formatter
-    }()
+    /// Said on the card, so a run read only inside its timer never passes for Health's record.
+    static func clipNote(_ run: HistoryRun) -> String? {
+        guard let clip = run.clip else { return nil }
+        let extra = run.workout.duration - clip.duration
+        var note = "Watch kept recording \(Display.duration(extra)) more · only your timer is counted"
+        if let problem = run.figures.problem { note += ". Miles and heart rate: " + problem }
+        return note
+    }
+
+    static var day: DateFormatter { HistoryWeeks.day }
 }
 
 /// A run's kind as a colored tag, or "No kind", or — for a stored value this build does not
@@ -519,11 +565,22 @@ struct RouteMapView: View {
             .frame(maxWidth: .infinity)
             .overlay { content }
             .clipped()
-            .task(id: workout.uuid) { await load() }
+            .task(id: mapKey) { await load() }
+    }
+
+    /// The cache key: one drawing per run, height and appearance.
+    private var mapKey: String {
+        "\(workout.uuid.uuidString)-\(Int(height))-\(colorScheme == .dark ? "dark" : "light")"
     }
 
     @ViewBuilder
     private var content: some View {
+        if let drawn = logger.mapImage(mapKey) {
+            Image(uiImage: drawn)
+                .resizable()
+                .scaledToFill()
+                .accessibilityHidden(true)
+        } else {
             switch phase {
             case .loading:
                 ProgressView()
@@ -543,9 +600,15 @@ struct RouteMapView: View {
                     .multilineTextAlignment(.center)
                     .padding(8)
             }
+        }
     }
 
     private func load() async {
+        let key = mapKey
+        if let drawn = logger.mapImage(key) {
+            phase = .drawn(drawn)
+            return
+        }
         switch await logger.route(for: workout) {
         case .noRoute:
             phase = .noRoute
@@ -553,9 +616,11 @@ struct RouteMapView: View {
             phase = .failed(reason)
         case .points(let points):
             do {
-                phase = .drawn(try await RouteSnapshot.draw(points,
-                                                            size: CGSize(width: 400, height: height),
-                                                            dark: colorScheme == .dark))
+                let drawn = try await RouteSnapshot.draw(points,
+                                                         size: CGSize(width: 400, height: height),
+                                                         dark: colorScheme == .dark)
+                logger.keepMapImage(drawn, key: key)
+                phase = .drawn(drawn)
             } catch {
                 phase = .failed("the map could not be drawn (\(error.localizedDescription)).")
             }
@@ -603,5 +668,49 @@ enum RouteSnapshot {
             UIColor.systemGreen.setFill()
             dot.fill()
         }
+    }
+}
+
+/// Runs hidden from History, each with the way to show it again.
+struct HiddenRunsView: View {
+    let logger: RunLoggerModel
+
+    var body: some View {
+        let hidden = logger.hiddenHistoryRuns()
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Hidden runs are left out of History's cards, totals and charts. They stay in "
+                     + "Apple Health and in exports.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                if hidden.isEmpty {
+                    Text("No hidden runs.").foregroundStyle(.secondary).padding(.vertical, 24)
+                }
+                ForEach(hidden) { run in
+                    NavigationLink {
+                        WorkoutDetailView(workout: run.workout, logger: logger)
+                    } label: {
+                        HistoryRunCard(run: run, logger: logger)
+                    }
+                    .buttonStyle(.plain)
+                    Button("Show in History") {
+                        if let error = logger.setHiddenFromHistory(false, workout: run.workout) {
+                            logger.errorMessage = error
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 24)
+        }
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle("Hidden runs")
+        .navigationBarTitleDisplayMode(.inline)
+        .alert("Something went wrong",
+               isPresented: Binding(get: { logger.errorMessage != nil },
+                                    set: { if !$0 { logger.errorMessage = nil } }),
+               actions: { Button("OK", role: .cancel) { logger.errorMessage = nil } },
+               message: { Text(logger.errorMessage ?? "") })
     }
 }

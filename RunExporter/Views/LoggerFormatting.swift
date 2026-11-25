@@ -61,9 +61,10 @@ enum Display {
         return String(format: "%.1f", value)
     }
 
+    /// "Mon, Nov 23": every date the app shows says its weekday (owner, 2026-11-25).
     static let dayFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "MMM d"
+        f.setLocalizedDateFormatFromTemplate("EEEMMMd")
         return f
     }()
 

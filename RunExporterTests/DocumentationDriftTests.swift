@@ -78,6 +78,15 @@ final class DocumentationDriftTests: XCTestCase {
               citedBy: ["README.md"]),
         .init(text: "By kind",
               citedBy: ["README.md"]),
+        // Added 2026-11-25: hiding a run, and a run read only inside its timer.
+        .init(text: "Hide from History",
+              citedBy: ["README.md"]),
+        .init(text: "Hidden runs",
+              citedBy: ["README.md"]),
+        .init(text: "Show in History",
+              citedBy: ["README.md"]),
+        .init(text: "Watch kept recording",
+              citedBy: ["README.md"]),
     ]
 
     // MARK: - Locating the repository
