@@ -556,8 +556,13 @@ struct ActiveWorkoutView: View {
     /// connected to it; otherwise there may be one the runner started by hand, which they must end.
     /// Worded as a request, because that is all the phone knows: it asked; the Watch saves.
     private var completionMessage: String {
-        if watchLink.lastRunAskedWatchToSave {
+        switch watchLink.stop.state {
+        case .owed:
+            return (watchLink.stop.undeliveredWarning ?? "") + "\n\nLog how it felt."
+        case .sending, .delivered:
             return "Your Watch was asked to save the workout. Log how it felt."
+        case .none:
+            break
         }
         return "If you recorded on your Apple Watch yourself, end that workout too, then log how it felt."
     }

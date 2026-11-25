@@ -85,10 +85,12 @@ final class WatchLink: NSObject {
 
     private(set) var runConnection: RunConnection = .off
 
-    /// True when the last run ended by asking the watch to save its workout. A request, not a
-    /// confirmation — the phone cannot see the watch save — and false for a run the watch was not
-    /// connected to at the finish, so the finish screen never implies a watch workout that is not there.
-    private(set) var lastRunAskedWatchToSave = false
+    /// The stop the last run owes the Watch, and whether it was delivered (`WatchStop`). Delivered
+    /// means it reached the Watch's session, not that the Watch saved: the phone cannot see that.
+    private(set) var stop = WatchStop()
+    /// Whether a Watch session was connected at any point in the current run. A run that lost the
+    /// Watch mid-run still has a Watch workout recording, which must be told to stop.
+    @ObservationIgnored private var runReachedWatch = false
 
     /// How long a launch may take before it is reported as failed. Measured 2026-09-29: the watch
     /// was running and mirrored 1.71 s after the tap, from a killed app. Before this, a launch that
@@ -128,7 +130,11 @@ final class WatchLink: NSObject {
     func beginRun(activityType: PlannedActivityType, anchor: @escaping (TimeInterval) -> PhaseAnchor?) {
         runActivityType = activityType
         anchorProvider = anchor
-        lastRunAskedWatchToSave = false
+        runReachedWatch = false
+        if let undelivered = stop.runStarted() {
+            log("The last run's \(Self.describe(undelivered)) never reached the watch; "
+                + "that Watch workout may still be recording", isError: true)
+        }
         // The last run's final status would otherwise open this run's screen with its heart rate.
         latestStatus = nil
         latestStatusReceivedAt = nil
@@ -155,24 +161,46 @@ final class WatchLink: NSObject {
     func finishRun(executionID: UUID?) {
         guard anchorProvider != nil else { return }
         endRun()
-        guard isConnected else {
-            // Said, not assumed: no watch workout exists to save, so the run has no watch data.
-            log("Run finished with the watch not connected; the watch saved nothing", isError: true)
-            return
+        if executionID == nil {
+            log("No execution id to tag the watch workout with; it will be saved untagged")
         }
-        send(.finishWorkout(executionID: executionID),
-             describe: executionID == nil
-                ? "No execution id to tag it with; asked the watch to save the workout untagged"
-                : "Asked the watch to save the workout")
-        lastRunAskedWatchToSave = true
+        stopRun(with: .save(executionID: executionID))
     }
 
     /// The run was abandoned: the watch discards its workout.
     func abandonRun() {
         guard anchorProvider != nil else { return }
         endRun()
-        if isConnected {
-            send(.endWorkout, describe: "Run abandoned; asked the watch to discard the workout")
+        stopRun(with: .discard)
+    }
+
+    private func stopRun(with message: WatchStop.Message) {
+        if let now = stop.runEnded(message, connected: isConnected, runReachedWatch: runReachedWatch) {
+            sendStop(now)
+        } else if case .owed = stop.state {
+            log("Run ended with the watch not connected; the \(Self.describe(message)) will be sent "
+                + "when it reconnects. Until then the Watch may still be recording", isError: true)
+        } else {
+            // Said, not assumed: this run never reached the Watch, so there is no Watch workout.
+            log("Run ended without ever reaching the watch; the watch recorded nothing", isError: true)
+        }
+    }
+
+    private func sendStop(_ message: WatchStop.Message) {
+        let wire: WatchLinkMessage
+        switch message {
+        case let .save(executionID): wire = .finishWorkout(executionID: executionID)
+        case .discard: wire = .endWorkout
+        }
+        send(wire, describe: "Asked the watch to \(Self.describe(message))") { [weak self] error in
+            self?.stop.sendFinished(message, error: error)
+        }
+    }
+
+    private static func describe(_ message: WatchStop.Message) -> String {
+        switch message {
+        case .save: return "save the workout"
+        case .discard: return "discard the workout"
         }
     }
 
@@ -225,11 +253,11 @@ final class WatchLink: NSObject {
         phaseSendNumber += 1
         let number = phaseSendNumber
         send(.phaseBegan(anchor), describe: "Phase sent: \(anchor.phase.rawValue)"
-             + (anchor.isPaused ? " (paused)" : "")) { [weak self] sent in
+             + (anchor.isPaused ? " (paused)" : "")) { [weak self] error in
             // Only the latest send decides: an older send finishing late must not clear, or set,
             // the flag for a newer phase.
             guard let self, number == self.phaseSendNumber else { return }
-            self.phaseUnsent = !sent
+            self.phaseUnsent = error != nil
         }
     }
 
@@ -324,7 +352,12 @@ final class WatchLink: NSObject {
         } else {
             log("Watch session mirrored here (not started by this launch of the app)")
         }
+        if let owed = stop.reconnected() {
+            log("The last run's stop had not reached the watch; sending it again")
+            sendStop(owed)
+        }
         guard anchorProvider != nil else { return }
+        runReachedWatch = true
         launchTimeout?.cancel()
         launchTimeout = nil
         runConnection = .connected
@@ -343,11 +376,12 @@ final class WatchLink: NSObject {
         }
     }
 
-    /// `sent` is told whether the message reached the watch's session; a failure is logged either way.
-    private func send(_ message: WatchLinkMessage, describe: String, sent: ((Bool) -> Void)? = nil) {
+    /// `sent` is told nil when the message reached the watch's session, else why not; a failure is
+    /// logged either way.
+    private func send(_ message: WatchLinkMessage, describe: String, sent: ((String?) -> Void)? = nil) {
         guard let session = mirroredSession else {
             log("\(describe): not sent, no watch session is connected", isError: true)
-            sent?(false)
+            sent?("no watch session is connected")
             return
         }
         let data: Data
@@ -355,17 +389,17 @@ final class WatchLink: NSObject {
             data = try WatchLinkCodec.encode(message)
         } catch {
             log("Could not encode a message: \(error.localizedDescription)", isError: true)
-            sent?(false)
+            sent?("could not encode the message: \(error.localizedDescription)")
             return
         }
         Task {
             do {
                 try await session.sendToRemoteWorkoutSession(data: data)
                 self.log(describe)
-                sent?(true)
+                sent?(nil)
             } catch {
                 self.log("\(describe): send failed: \(error.localizedDescription)", isError: true)
-                sent?(false)
+                sent?(error.localizedDescription)
             }
         }
     }

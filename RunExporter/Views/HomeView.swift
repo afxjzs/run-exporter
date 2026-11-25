@@ -7,6 +7,7 @@ struct HomeView: View {
     @Environment(LoggerStore.self) private var store
     @Environment(LoggerDefaults.self) private var defaults
     @Environment(AudioCueEngine.self) private var audio
+    @Environment(WatchLink.self) private var watchLink
 
     @Query(filter: #Predicate<PlannedWorkout> { $0.isNextWorkout },
            sort: \PlannedWorkout.updatedAt, order: .reverse)
@@ -25,6 +26,7 @@ struct HomeView: View {
 
     var body: some View {
         List {
+            undeliveredStopSection
             maintenanceSection
             nextWorkoutSection
             exportSection
@@ -71,6 +73,19 @@ struct HomeView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 Button("Got it") { logger.maintenanceNotice = nil }
+            }
+        }
+    }
+
+    /// The last run's stop never reached the Watch (`WatchStop`), so it may still be recording.
+    /// Not dismissible: it goes away when the stop is delivered, which is the only thing that ends it.
+    @ViewBuilder
+    private var undeliveredStopSection: some View {
+        if let warning = watchLink.stop.undeliveredWarning {
+            Section {
+                Label(warning, systemImage: "applewatch.radiowaves.left.and.right")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
             }
         }
     }
