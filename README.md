@@ -504,6 +504,29 @@ reasoning first.
    recorded too, but no longer asked for: the picker was hidden on 2026-10-01 and the log takes the
    most recently used pair by itself.
 
+### History
+
+Runs only, for the last 120 days (redesigned 2026-11-24; the prototype that settled the design is
+kept on the `prototype/history-redesign` branch, never merged).
+
+- **This week** counts runs against a goal of three, with miles and time, over eight weeks of
+  miles, each bar labeled by its week's Monday.
+- **All / Speed / Recovery / Endurance** filters both the charts and the cards. Under All, the
+  cards group **By week** (Monday to Sunday) or **By kind**.
+- **Two charts**, swiped between: the longest run leg actually run (with total running minutes
+  below), and efficiency — meters per heartbeat over the running, aerobic spec D16, withheld for a
+  run with too little Watch heart rate (D8). Under three usable runs a chart says
+  "Needs 3 … You have N." instead of drawing a line. Both read the export's own leg derivation
+  (`RecordedRun`) and `AerobicAnalysis`, so they cannot disagree with the export.
+- **Each card** shows the route as a still map fitted to it, the day, the kind, a **Not logged**
+  badge when there is no log, and plan, miles, time and average heart rate.
+- **A run's detail** starts with a map you can move, running pace, efficiency, running heart rate
+  next to the whole workout's, the run's kind (changeable there, for that run only), and every leg
+  with its time, distance, pace and heart rate start → end. The older sections follow.
+
+Explanations sit behind an ⓘ button rather than on the page. Steps per minute per leg is not
+shown: whether Health's step samples are fine-grained enough to split by leg is unmeasured.
+
 ### Open-interval runs
 
 A plan for running to a *signal* rather than to a clock: run until the thing you are watching for

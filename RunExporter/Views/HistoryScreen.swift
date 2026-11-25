@@ -156,8 +156,10 @@ private let chartMinimumRuns = 3
 
 /// A tappable ⓘ that shows or hides an explanation, so long text is there when wanted and out
 /// of the way otherwise.
-private struct InfoToggle: View {
+struct InfoToggle: View {
     @Binding var isShown: Bool
+    /// What it explains, for VoiceOver and the UI test: "About heart rate".
+    var subject = "this chart"
     var body: some View {
         Button {
             isShown.toggle()
@@ -165,7 +167,8 @@ private struct InfoToggle: View {
             Image(systemName: isShown ? "info.circle.fill" : "info.circle")
         }
         .buttonStyle(.borderless)
-        .accessibilityLabel(isShown ? "Hide explanation" : "What is this?")
+        .accessibilityLabel("About " + subject)
+        .accessibilityValue(isShown ? "shown" : "hidden")
     }
 }
 

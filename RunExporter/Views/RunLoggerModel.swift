@@ -297,6 +297,7 @@ final class RunLoggerModel {
             if let recorded = entry.recorded {
                 switch await workoutSamples(for: run.workout) {
                 case .success(let read):
+                    entry.samples = read
                     entry.analysis = AerobicAnalysis.analyze(recorded, samples: read)
                 case .failure(let problem):
                     entry.samplesProblem = problem.message

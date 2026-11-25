@@ -22,6 +22,14 @@ struct RunProgress {
     var analysis: (workout: AerobicAnalysis.Workout, legs: [String: AerobicAnalysis.Leg])?
     /// Why the samples could not be read. Shown, never folded into "not enough heart rate".
     var samplesProblem: String?
+    /// The run's own samples, kept for per-leg distance on the detail screen.
+    var samples: WorkoutSamples?
+
+    /// Distance covered in one leg (D14), nil without distance samples in it.
+    func meters(in leg: RecordedRun.Leg) -> Double? {
+        guard let samples else { return nil }
+        return AerobicAnalysis.distance(in: leg.activeWindows, samples: samples.distance)
+    }
 
     /// The longest run leg actually run, in minutes — a skipped or cut-short leg counts for what
     /// was run, not what was planned. Nil without run legs.

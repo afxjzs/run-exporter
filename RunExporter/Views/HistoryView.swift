@@ -23,7 +23,7 @@ struct WorkoutDetailView: View {
 
     var body: some View {
         List {
-            kindSection
+            RunDetailSections(workout: workout, logger: logger) { kindSection }
             classificationSection
 
             Section("Apple Health") {

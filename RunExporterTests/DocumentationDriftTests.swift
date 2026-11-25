@@ -71,6 +71,13 @@ final class DocumentationDriftTests: XCTestCase {
         // Added 2026-11-24 with the run kind, asked at Start of a plan that has none.
         .init(text: "What kind of run is this?",
               citedBy: ["README.md"]),
+        // Added 2026-11-24 with the History redesign.
+        .init(text: "Not logged",
+              citedBy: ["README.md"]),
+        .init(text: "By week",
+              citedBy: ["README.md"]),
+        .init(text: "By kind",
+              citedBy: ["README.md"]),
     ]
 
     // MARK: - Locating the repository

@@ -104,6 +104,31 @@ final class SmokeTests: XCTestCase {
             app.buttons["All"].tap()
         }
 
+        step("A run's detail: map, running figures, and every leg") {
+            card("6/1 × 4").tap()
+            expect(app.maps.firstMatch, "the run's map you can move")
+            expect(app.staticTexts["Running pace"], "running pace on the detail")
+            expect(app.staticTexts["Efficiency"], "efficiency on the detail")
+            expect(app.staticTexts["Heart rate"], "heart rate on the detail")
+            // Long explanations are behind an info button, not on the page.
+            let explanation = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@",
+                                                                   "Running counts the run legs only"))
+            expectAbsent(explanation.firstMatch, "the heart-rate explanation before it is asked for")
+            app.buttons["About heart rate"].tap()
+            expect(explanation.firstMatch, "the heart-rate explanation once asked for")
+            // 6/1 × 4: four run legs, each followed by a walk. A List builds rows as they scroll
+            // into view, so each leg exists only once the screen is scrolled to it — as a reader
+            // would.
+            let list = app.collectionViews.firstMatch
+            for (leg, what) in [("Run 1", "the first run leg"), ("Walk 1", "the walk after it"),
+                                ("Run 4", "the last run leg")] {
+                scroll(to: app.staticTexts[leg], in: list)
+                expect(app.staticTexts[leg], what)
+            }
+            snapshot("Run detail with its legs")
+            app.navigationBars.buttons.firstMatch.tap()
+        }
+
         step("A run's kind changes on its detail screen") {
             card("2/1 × 10").tap()
             let kind = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Kind")).firstMatch
@@ -420,6 +445,15 @@ final class SmokeTests: XCTestCase {
 
     private var aerobicTarget: XCUIElement {
         app.staticTexts["RPE 3–4 · conversational"]
+    }
+
+    /// Scrolls `container` up until `element` exists, at most `swipes` times. Not a retry: a row
+    /// below the screen does not exist until it is scrolled into view. The `expect` after it is
+    /// what fails when the row never appears.
+    private func scroll(to element: XCUIElement, in container: XCUIElement, swipes: Int = 6) {
+        for _ in 0..<swipes where !element.exists {
+            container.swipeUp()
+        }
     }
 
     /// A History run card whose text contains `text`. Each card reads as one element.
