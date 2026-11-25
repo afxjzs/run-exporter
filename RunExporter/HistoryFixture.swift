@@ -6,51 +6,63 @@ import CoreLocation
 ///
 /// Nothing here is real. Dates are placed relative to the current week so the groups the test
 /// checks ("This week", "Last week") always exist; routes are made-up out-and-back lines around a
-/// public park. Each shape the test looks for is used by one run only, so it finds one card.
+/// public park; heart rate and distance are generated. Each shape the test looks for is used by one
+/// run only, so it finds one card.
+///
+/// The legs go into the store as interval rows and the samples stand in for Health, so History's
+/// charts run through the real derivation (`RecordedRun`) and analysis (`AerobicAnalysis`).
 enum HistoryFixture {
 
     struct Run {
         let weeksAgo: Int
         /// 0 is Monday.
         let day: Int
-        let shape: String
+        let runMinutes: Int
+        let walkMinutes: Int
+        let rounds: Int
         let kind: RunKind?
         let logged: Bool
         let hasRoute: Bool
-        let miles: Double
-        let minutes: Double
-        let averageHeartRate: Double
+        /// False for a run the Watch recorded no heart rate for.
+        let hasHeartRate: Bool
+
+        var shape: String { "\(runMinutes)/\(walkMinutes) × \(rounds)" }
     }
 
+    /// Per kind: what the test needs. Recovery has three runs with legs and heart rate, so both
+    /// charts draw. Speed has three, one without heart rate, so efficiency has two. Endurance has
+    /// two, so neither chart has enough.
     static let runs: [Run] = [
-        Run(weeksAgo: 0, day: 0, shape: "1/2 × 8", kind: .speed, logged: true, hasRoute: true,
-            miles: 2.1, minutes: 29, averageHeartRate: 141),
-        Run(weeksAgo: 1, day: 0, shape: "1/2 × 8", kind: .speed, logged: true, hasRoute: true,
-            miles: 2.0, minutes: 29, averageHeartRate: 143),
-        Run(weeksAgo: 1, day: 2, shape: "3/1 × 6", kind: .recovery, logged: true, hasRoute: true,
-            miles: 2.4, minutes: 29, averageHeartRate: 134),
-        Run(weeksAgo: 1, day: 4, shape: "6/1 × 4", kind: .endurance, logged: false, hasRoute: true,
-            miles: 2.6, minutes: 33, averageHeartRate: 138),
-        Run(weeksAgo: 2, day: 1, shape: "1/2 × 8", kind: .speed, logged: true, hasRoute: false,
-            miles: 2.0, minutes: 29, averageHeartRate: 144),
-        Run(weeksAgo: 2, day: 3, shape: "2/1 × 10", kind: .recovery, logged: true, hasRoute: true,
-            miles: 2.5, minutes: 35, averageHeartRate: 133),
-        Run(weeksAgo: 2, day: 5, shape: "5/1 × 4", kind: .endurance, logged: true, hasRoute: true,
-            miles: 2.3, minutes: 29, averageHeartRate: 137),
+        Run(weeksAgo: 0, day: 0, runMinutes: 1, walkMinutes: 2, rounds: 8, kind: .speed,
+            logged: true, hasRoute: true, hasHeartRate: true),
+        Run(weeksAgo: 1, day: 0, runMinutes: 1, walkMinutes: 2, rounds: 8, kind: .speed,
+            logged: true, hasRoute: true, hasHeartRate: true),
+        Run(weeksAgo: 1, day: 2, runMinutes: 3, walkMinutes: 1, rounds: 6, kind: .recovery,
+            logged: true, hasRoute: true, hasHeartRate: true),
+        Run(weeksAgo: 1, day: 4, runMinutes: 6, walkMinutes: 1, rounds: 4, kind: .endurance,
+            logged: false, hasRoute: true, hasHeartRate: true),
+        Run(weeksAgo: 2, day: 1, runMinutes: 1, walkMinutes: 2, rounds: 8, kind: .speed,
+            logged: true, hasRoute: false, hasHeartRate: false),
+        Run(weeksAgo: 2, day: 3, runMinutes: 2, walkMinutes: 1, rounds: 10, kind: .recovery,
+            logged: true, hasRoute: true, hasHeartRate: true),
+        Run(weeksAgo: 2, day: 5, runMinutes: 5, walkMinutes: 1, rounds: 4, kind: .endurance,
+            logged: true, hasRoute: true, hasHeartRate: true),
         // Recorded before kinds existed: it has a timer session, so its kind can be set later.
-        Run(weeksAgo: 3, day: 0, shape: "4/1 × 5", kind: nil, logged: true, hasRoute: true,
-            miles: 2.2, minutes: 30, averageHeartRate: 139),
-        Run(weeksAgo: 4, day: 2, shape: "3/1 × 6", kind: .recovery, logged: true, hasRoute: true,
-            miles: 2.3, minutes: 29, averageHeartRate: 136),
+        Run(weeksAgo: 3, day: 0, runMinutes: 4, walkMinutes: 1, rounds: 5, kind: nil,
+            logged: true, hasRoute: true, hasHeartRate: true),
+        Run(weeksAgo: 4, day: 2, runMinutes: 3, walkMinutes: 1, rounds: 6, kind: .recovery,
+            logged: true, hasRoute: true, hasHeartRate: true),
     ]
 
     struct Seeded {
         let workouts: [HealthKitManager.WorkoutSummary]
         let routes: [UUID: RouteLoad]
+        let samples: [UUID: WorkoutSamples]
     }
 
-    /// Inserts each run's timer session (and its log, when logged) into `store`, and returns the
-    /// workouts and routes that stand in for Health. Nil and an error when the store refuses.
+    /// Inserts each run's timer session, legs and (when logged) log into `store`, and returns the
+    /// workouts, routes and samples that stand in for Health. Nil and an error when the store
+    /// refuses.
     @MainActor
     static func seed(into store: LoggerStore, now: Date) -> (Seeded?, String?) {
         guard let context = store.context else {
@@ -59,41 +71,84 @@ enum HistoryFixture {
         let thisWeek = HistoryWeeks.start(of: now)
         var workouts: [HealthKitManager.WorkoutSummary] = []
         var routes: [UUID: RouteLoad] = [:]
+        var samples: [UUID: WorkoutSamples] = [:]
 
         for (index, run) in runs.enumerated() {
             let day = HistoryWeeks.adding(days: run.day - 7 * run.weeksAgo, to: thisWeek)
             let start = day.addingTimeInterval(7 * 3_600)
-            let duration = run.minutes * 60
             let uuid = UUID()
 
             let execution = PendingWorkoutExecution(plannedWorkoutID: UUID(),
                                                     plannedWorkoutName: run.shape,
                                                     expectedActivityType: .running,
                                                     expectedDurationSeconds: nil,
-                                                    runIntervalSeconds: nil,
-                                                    walkIntervalSeconds: nil,
-                                                    plannedRepetitions: nil,
+                                                    runIntervalSeconds: run.runMinutes * 60,
+                                                    walkIntervalSeconds: run.walkMinutes * 60,
+                                                    plannedRepetitions: run.rounds,
                                                     status: .matched,
                                                     createdAt: start)
             execution.matchedHealthKitWorkoutUUID = uuid
             execution.runKind = run.kind?.rawValue
             context.insert(execution)
 
+            // Weeks further back are a little slower for the same heart rate, so the charts
+            // trend upward the way a fitter runner's would.
+            let fitness = Double(4 - run.weeksAgo) * 0.04
+            let runSpeed = (run.kind == .speed ? 3.0 : 2.5) + fitness
+            var legSamples = WorkoutSamples(heartRate: [], distance: [])
+            var cursor = start
+            var meters = 0.0
+            for round in 1...run.rounds {
+                for (phase, minutes) in [(WorkoutPhase.run, run.runMinutes), (.walk, run.walkMinutes)] {
+                    let end = cursor.addingTimeInterval(Double(minutes * 60))
+                    context.insert(WorkoutIntervalLog(executionID: execution.id,
+                                                      healthKitWorkoutUUID: uuid,
+                                                      sequenceIndex: (round - 1) * 2 + (phase == .run ? 0 : 1),
+                                                      phaseType: phase,
+                                                      repetitionNumber: round,
+                                                      plannedDurationSeconds: minutes * 60,
+                                                      actualDurationSeconds: Double(minutes * 60),
+                                                      startDate: cursor,
+                                                      endDate: end))
+                    let speed = phase == .run ? runSpeed : 1.4
+                    let (low, high): (Double, Double) = phase == .run ? (118, 152) : (150, 118)
+                    var t = cursor
+                    while t < end {
+                        let progress = t.timeIntervalSince(cursor) / Double(minutes * 60)
+                        if run.hasHeartRate {
+                            legSamples.heartRate.append(WorkoutSample(start: t, end: t,
+                                                                      value: low + (high - low) * progress))
+                        }
+                        let next = min(t.addingTimeInterval(5), end)
+                        let step = speed * next.timeIntervalSince(t)
+                        legSamples.distance.append(WorkoutSample(start: t, end: next, value: step))
+                        meters += step
+                        t = next
+                    }
+                    cursor = end
+                }
+            }
+            samples[uuid] = legSamples
+
             if run.logged {
                 context.insert(RunLog(healthKitWorkoutUUID: uuid,
                                       workoutStartDate: start,
-                                      workoutDistanceMiles: run.miles,
+                                      workoutDistanceMiles: meters / AerobicAnalysis.metersPerMile,
                                       workoutActivityType: PlannedActivityType.running.rawValue,
                                       executionID: execution.id,
                                       effortRPE: 4,
                                       personalHeatRating: 5))
             }
 
+            let duration = cursor.timeIntervalSince(start)
+            let heartRates = legSamples.heartRate.map(\.value)
             workouts.append(HealthKitManager.WorkoutSummary(
                 uuid: uuid, activityType: .running,
-                startDate: start, endDate: start.addingTimeInterval(duration), duration: duration,
-                distanceMiles: run.miles, averageHeartRate: run.averageHeartRate,
-                peakHeartRate: nil, temperatureFahrenheit: nil, humidityPercent: nil,
+                startDate: start, endDate: cursor, duration: duration,
+                distanceMiles: meters / AerobicAnalysis.metersPerMile,
+                averageHeartRate: heartRates.isEmpty ? nil
+                    : heartRates.reduce(0, +) / Double(heartRates.count),
+                peakHeartRate: heartRates.max(), temperatureFahrenheit: nil, humidityPercent: nil,
                 sourceName: "Invented", hasWeatherMetadata: false, isIndoor: false,
                 metadataKeys: [], isReclassifiedAsRunning: false, executionID: execution.id))
             routes[uuid] = run.hasRoute ? .points(outAndBack(variant: index)) : .noRoute
@@ -101,7 +156,8 @@ enum HistoryFixture {
 
         if let error = store.save() { return (nil, "The History fixture could not be saved: " + error) }
         // Newest first, as Health returns them.
-        return (Seeded(workouts: workouts.sorted { $0.startDate > $1.startDate }, routes: routes), nil)
+        return (Seeded(workouts: workouts.sorted { $0.startDate > $1.startDate },
+                       routes: routes, samples: samples), nil)
     }
 
     /// An invented out-and-back route: out along a few street-like legs, then the same way back.

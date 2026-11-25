@@ -224,6 +224,7 @@ final class RunLoggerModel {
                 let kind = stored.flatMap(RunKind.init(rawValue:))
                 return HistoryRun(
                     workout: workout,
+                    executionID: execution?.id,
                     kind: kind,
                     unknownKind: kind == nil ? stored : nil,
                     planName: execution?.plannedWorkoutName,
@@ -272,6 +273,64 @@ final class RunLoggerModel {
         return loaded
     }
 
+    /// Each History run's legs and analysis, by workout. Filled by `loadProgress()`.
+    private(set) var progress: [UUID: RunProgress] = [:]
+    /// Problems deriving runs' legs, stated under the charts rather than shown as a gap.
+    private(set) var progressNotice: String?
+    /// A workout's samples never change once it is saved, so each is read from Health once.
+    private var samples: [UUID: WorkoutSamples] = [:]
+
+    /// Reads every History run's legs and samples and analyzes it.
+    ///
+    /// Legs come from `LoggerExportSnapshot`, the export's own derivation, so a chart cannot
+    /// describe a run differently from the export. Samples are read only for runs with legs:
+    /// without legs there is no running time to analyze.
+    func loadProgress() async {
+        let runs = historyRuns()
+        let snapshot = LoggerExportSnapshot.make(store: store)
+        var loaded: [UUID: RunProgress] = [:]
+        for run in runs {
+            var entry = RunProgress()
+            if let executionID = run.executionID {
+                entry.recorded = snapshot.recordedRun(forExecutionID: executionID.uuidString)
+            }
+            if let recorded = entry.recorded {
+                switch await workoutSamples(for: run.workout) {
+                case .success(let read):
+                    entry.analysis = AerobicAnalysis.analyze(recorded, samples: read)
+                case .failure(let problem):
+                    entry.samplesProblem = problem.message
+                }
+            }
+            loaded[run.id] = entry
+        }
+        progress = loaded
+        let legProblems = snapshot.issues.filter { $0.category == "run_logger" }.map(\.message)
+        progressNotice = legProblems.isEmpty ? nil : legProblems.joined(separator: " ")
+    }
+
+    struct SamplesProblem: Error { let message: String }
+
+    private func workoutSamples(for workout: HealthKitManager.WorkoutSummary) async
+        -> Result<WorkoutSamples, SamplesProblem> {
+        if let known = samples[workout.uuid] { return .success(known) }
+        #if DEBUG
+        if UITesting.historyFixture {
+            return .failure(SamplesProblem(message: "The History fixture has no samples for this run."))
+        }
+        #endif
+        do {
+            guard let read = try await health.fetchWorkoutSamples(uuid: workout.uuid) else {
+                return .failure(SamplesProblem(message: "This workout is no longer in Health."))
+            }
+            samples[workout.uuid] = read
+            return .success(read)
+        } catch {
+            return .failure(SamplesProblem(message: "Heart rate and distance could not be read: "
+                + error.localizedDescription))
+        }
+    }
+
     #if DEBUG
     private var historyFixtureSeeded = false
 
@@ -286,6 +345,7 @@ final class RunLoggerModel {
             historyFixtureSeeded = true
             recentWorkouts = seeded.workouts
             routes = seeded.routes
+            samples = seeded.samples
         }
         reloadLoggedUUIDs()
         recomputeUnlogged()

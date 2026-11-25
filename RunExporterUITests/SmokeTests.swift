@@ -87,6 +87,23 @@ final class SmokeTests: XCTestCase {
             expect(app.staticTexts["Last week"], "back to weeks")
         }
 
+        step("Charts compare runs of one kind, and say when there are too few") {
+            // Recovery: three runs with legs and Watch heart rate, so both charts draw.
+            app.buttons["Recovery"].tap()
+            expect(app.staticTexts["Longest run leg · recovery runs"], "the longest-leg chart for recovery runs")
+            expect(app.staticTexts["Efficiency · recovery runs"], "the efficiency chart for recovery runs")
+            snapshot("Charts for recovery runs")
+            // Speed: one of its three runs has no Watch heart rate, so efficiency has two points.
+            app.buttons["Speed"].tap()
+            expect(app.staticTexts["Needs 3 speed runs with Watch heart rate. You have 2."],
+                   "efficiency saying how many more speed runs it needs")
+            // Endurance: only two runs, so neither chart has enough.
+            app.buttons["Endurance"].tap()
+            expect(app.staticTexts["Needs 3 endurance runs with recorded legs. You have 2."],
+                   "the longest-leg chart saying how many more endurance runs it needs")
+            app.buttons["All"].tap()
+        }
+
         step("A run's kind changes on its detail screen") {
             card("2/1 × 10").tap()
             let kind = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Kind")).firstMatch

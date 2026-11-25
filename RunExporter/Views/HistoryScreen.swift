@@ -28,6 +28,8 @@ struct HistoryView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HistorySummaryCard(runs: all, now: now)
                 controls
+                HistoryChartsRow(runs: shown, filter: filter, progress: logger.progress,
+                                 notice: logger.progressNotice)
                 if all.isEmpty {
                     Text(logger.isLoading ? "Reading Health…" : "No runs in the last 120 days.")
                         .foregroundStyle(.secondary)
@@ -61,6 +63,9 @@ struct HistoryView: View {
         .navigationTitle("History")
         .refreshable { await logger.refresh() }
         .task { if logger.recentWorkouts.isEmpty { await logger.refresh() } }
+        // Again whenever the set of runs changes. Samples are cached, so this reads Health only
+        // for runs it has not seen.
+        .task(id: logger.recentWorkouts.map(\.uuid)) { await logger.loadProgress() }
     }
 
     @ViewBuilder
@@ -85,6 +90,284 @@ struct HistoryView: View {
     private var emptyFilterText: String {
         guard case .kind(let kind) = filter else { return "" }
         return "No " + kind.displayName.lowercased() + " runs in the last 120 days."
+    }
+}
+
+/// The two "am I getting better" charts, side by side, swiped between. Both show only the runs the
+/// kind control shows, because a speed day and a recovery day are not comparable.
+private struct HistoryChartsRow: View {
+    let runs: [HistoryRun]
+    let filter: HistoryFilter
+    let progress: [UUID: RunProgress]
+    let notice: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 12) {
+                    LongestLegCard(runs: runs, filter: filter, progress: progress)
+                        .containerRelativeFrame(.horizontal) { width, _ in width * 0.88 }
+                    EfficiencyCard(runs: runs, filter: filter, progress: progress)
+                        .containerRelativeFrame(.horizontal) { width, _ in width * 0.88 }
+                }
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.viewAligned)
+            if let notice {
+                Text(notice).font(.caption).foregroundStyle(.orange)
+            }
+        }
+    }
+}
+
+/// "runs", or "recovery runs" when one kind is shown — for "Needs 3 … You have 2."
+private func kindWord(_ filter: HistoryFilter) -> String {
+    switch filter {
+    case .all: return "runs"
+    case .kind(let kind): return kind.displayName.lowercased() + " runs"
+    }
+}
+
+/// "all runs", or "recovery runs" — for a chart's title.
+private func kindTitle(_ filter: HistoryFilter) -> String {
+    filter == .all ? "all runs" : kindWord(filter)
+}
+
+/// A colored dot, then the text in the secondary color, for a chart legend.
+private struct LegendLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) {
+            configuration.icon.font(.system(size: 7))
+            configuration.title.foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// One point on a chart, oldest first.
+private struct ChartPoint: Identifiable {
+    let index: Int
+    let run: HistoryRun
+    let progress: RunProgress
+    var id: Int { index }
+}
+
+/// The charts need this many runs before a line means anything.
+private let chartMinimumRuns = 3
+
+/// A tappable ⓘ that shows or hides an explanation, so long text is there when wanted and out
+/// of the way otherwise.
+private struct InfoToggle: View {
+    @Binding var isShown: Bool
+    var body: some View {
+        Button {
+            isShown.toggle()
+        } label: {
+            Image(systemName: isShown ? "info.circle.fill" : "info.circle")
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel(isShown ? "Hide explanation" : "What is this?")
+    }
+}
+
+private struct LongestLegCard: View {
+    let runs: [HistoryRun]
+    let filter: HistoryFilter
+    let progress: [UUID: RunProgress]
+
+    @State private var showInfo = false
+    @State private var selected: Int?
+
+    var body: some View {
+        let points = runs.sorted { $0.workout.startDate < $1.workout.startDate }
+            .compactMap { run -> HistoryRun? in progress[run.id]?.longestLegMinutes == nil ? nil : run }
+            .enumerated()
+            .compactMap { index, run in progress[run.id].map { ChartPoint(index: index, run: run, progress: $0) } }
+        let missing = runs.count - points.count
+
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(title).font(.subheadline).foregroundStyle(.secondary)
+                InfoToggle(isShown: $showInfo)
+            }
+            if showInfo {
+                Text(explanation(missing: missing)).font(.caption).foregroundStyle(.secondary)
+            }
+            if points.count < chartMinimumRuns {
+                Text(needsText(points.count))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 140)
+                    .multilineTextAlignment(.center)
+            } else {
+                if let last = points.last?.progress.longestLegMinutes {
+                    Text(String(format: "%.1f min", last)).font(.title2.bold())
+                }
+                // Two charts, not two lines on one: running minutes (around 20) on the same axis
+                // as the longest leg (a few minutes) flattened the line that matters most.
+                Chart(points) { point in
+                    LineMark(x: .value("Run", point.index),
+                             y: .value("Longest leg", point.progress.longestLegMinutes ?? 0))
+                    PointMark(x: .value("Run", point.index),
+                              y: .value("Longest leg", point.progress.longestLegMinutes ?? 0))
+                }
+                .foregroundStyle(.green)
+                .chartXAxis(.hidden)
+                .chartXSelection(value: $selected)
+                .frame(height: 90)
+                Chart(points) { point in
+                    LineMark(x: .value("Run", point.index),
+                             y: .value("Running minutes", point.progress.runningMinutes ?? 0))
+                    PointMark(x: .value("Run", point.index),
+                              y: .value("Running minutes", point.progress.runningMinutes ?? 0))
+                }
+                .foregroundStyle(.blue)
+                .chartYScale(domain: .automatic(includesZero: false))
+                .chartXAxis(.hidden)
+                .chartXSelection(value: $selected)
+                .frame(height: 60)
+                HStack(spacing: 12) {
+                    Label("longest leg", systemImage: "circle.fill").foregroundStyle(.green)
+                    Label("running minutes", systemImage: "circle.fill").foregroundStyle(.blue)
+                }
+                .font(.caption)
+                .labelStyle(LegendLabelStyle())
+                Text(tip(points))
+                    .font(.caption)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(6)
+                    .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .padding(14)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var title: String { "Longest run leg · " + kindTitle(filter) }
+
+    private func needsText(_ have: Int) -> String {
+        "Needs \(chartMinimumRuns) " + kindWord(filter) + " with recorded legs. You have \(have)."
+    }
+
+    private func explanation(missing: Int) -> String {
+        var text = "Green is your longest unbroken run leg; blue is every minute you ran in that "
+            + "workout. A leg you skipped or cut short counts for what you actually ran."
+        if missing > 0 {
+            text += " \(missing) of these runs have no recorded legs and are left out."
+        }
+        return text
+    }
+
+    private func tip(_ points: [ChartPoint]) -> String {
+        guard let selected, let point = points.first(where: { $0.index == selected }) else {
+            return "Tap a point for that run"
+        }
+        let day = HistoryRunCard.day.string(from: point.run.workout.startDate)
+        let longest = String(format: "%.1f", point.progress.longestLegMinutes ?? 0)
+        let running = String(format: "%.0f", point.progress.runningMinutes ?? 0)
+        return day + " · longest leg " + longest + " min · " + running + " min running"
+    }
+}
+
+private struct EfficiencyCard: View {
+    let runs: [HistoryRun]
+    let filter: HistoryFilter
+    let progress: [UUID: RunProgress]
+
+    @State private var showInfo = false
+    @State private var selected: Int?
+
+    var body: some View {
+        let withEfficiency = runs.sorted { $0.workout.startDate < $1.workout.startDate }
+            .filter { progress[$0.id]?.efficiency != nil }
+        let points = withEfficiency.enumerated().compactMap { index, run in
+            progress[run.id].map { ChartPoint(index: index, run: run, progress: $0) }
+        }
+        let unreadable = runs.compactMap { progress[$0.id]?.samplesProblem }
+
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(title).font(.subheadline).foregroundStyle(.secondary)
+                InfoToggle(isShown: $showInfo)
+            }
+            if showInfo {
+                Text(explanation(left: runs.count - points.count))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if points.count < chartMinimumRuns {
+                Text(needsText(points.count))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 140)
+                    .multilineTextAlignment(.center)
+            } else {
+                if let last = points.last?.progress.efficiency {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(String(format: "%.2f", last)).font(.title2.bold())
+                        Text("m per heartbeat").foregroundStyle(.secondary)
+                    }
+                }
+                Chart(points) { point in
+                    LineMark(x: .value("Run", point.index),
+                             y: .value("Meters per beat", point.progress.efficiency ?? 0))
+                        .foregroundStyle(.orange)
+                    PointMark(x: .value("Run", point.index),
+                              y: .value("Meters per beat", point.progress.efficiency ?? 0))
+                        .foregroundStyle(.orange)
+                }
+                .chartXAxis(.hidden)
+                .chartYScale(domain: .automatic(includesZero: false))
+                .chartXSelection(value: $selected)
+                .frame(height: 140)
+                if filter == .all {
+                    Text("Mixing kinds. Pick one above to compare like with like.")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+                Text(tip(points))
+                    .font(.caption)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(6)
+                    .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 8))
+            }
+            if !unreadable.isEmpty {
+                Text(unreadableText(unreadable))
+                    .font(.caption).foregroundStyle(.orange)
+            }
+        }
+        .padding(14)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var title: String { "Efficiency · " + kindTitle(filter) }
+
+    private func needsText(_ have: Int) -> String {
+        "Needs \(chartMinimumRuns) " + kindWord(filter) + " with Watch heart rate. You have \(have)."
+    }
+
+    private func explanation(left: Int) -> String {
+        var text = "How far you travel for each heartbeat while running: running speed divided by "
+            + "running heart rate, walks left out. More ground for the same heartbeats means your "
+            + "heart is doing less work at that pace, so up is fitter. It only compares fairly "
+            + "between runs of the same kind."
+        if left > 0 {
+            text += " \(left) of these runs have too little Watch heart rate or no recorded legs, "
+                + "and are left out."
+        }
+        return text
+    }
+
+    private func unreadableText(_ problems: [String]) -> String {
+        let count = problems.count == 1 ? "1 run's" : "\(problems.count) runs'"
+        return "Heart rate for " + count + " couldn't be read: " + (problems.first ?? "")
+    }
+
+    private func tip(_ points: [ChartPoint]) -> String {
+        guard let selected, let point = points.first(where: { $0.index == selected }) else {
+            return "Tap a point for that run's pace and heart rate"
+        }
+        let day = HistoryRunCard.day.string(from: point.run.workout.startDate)
+        let value = String(format: "%.2f m/beat", point.progress.efficiency ?? 0)
+        return day + " · " + value + " · " + Display.pace(point.progress.runningPaceSecondsPerMile)
+            + " · " + Display.heartRate(point.progress.runningHeartRate) + " running"
     }
 }
 

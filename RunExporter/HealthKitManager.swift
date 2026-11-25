@@ -461,6 +461,12 @@ final class HealthKitManager {
     ///
     /// **Not yet verified on the device:** that this returns exactly the Watch's samples for this
     /// app's workouts and for older ones.
+    /// The same, for a workout known only by its UUID. Nil when it is no longer in Health.
+    func fetchWorkoutSamples(uuid: UUID) async throws -> WorkoutSamples? {
+        guard let workout = try await fetchHKWorkout(uuid: uuid) else { return nil }
+        return try await fetchWorkoutSamples(for: workout)
+    }
+
     func fetchWorkoutSamples(for workout: HKWorkout) async throws -> WorkoutSamples {
         let predicate = HKQuery.predicateForObjects(from: workout)
         let heartRate = try await associatedQuantities(.heartRate, predicate: predicate,

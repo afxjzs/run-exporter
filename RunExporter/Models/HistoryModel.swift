@@ -10,9 +10,49 @@ enum RouteLoad {
     case failed(String)
 }
 
+/// What one run's legs and samples say, for History's charts and the run's detail.
+///
+/// Built from the same derivation the export uses (`RecordedRun`, through
+/// `LoggerExportSnapshot`) and the same analysis (`AerobicAnalysis.analyze`), so a chart and the
+/// exported analysis cannot disagree about a run.
+struct RunProgress {
+    /// Nil when the run recorded no legs in this app, or they could not be read.
+    var recorded: RecordedRun?
+    /// Nil until the run's samples are read, and when they could not be.
+    var analysis: (workout: AerobicAnalysis.Workout, legs: [String: AerobicAnalysis.Leg])?
+    /// Why the samples could not be read. Shown, never folded into "not enough heart rate".
+    var samplesProblem: String?
+
+    /// The longest run leg actually run, in minutes — a skipped or cut-short leg counts for what
+    /// was run, not what was planned. Nil without run legs.
+    var longestLegMinutes: Double? {
+        recorded?.runLegs.map(\.activeSeconds).max().map { $0 / 60 }
+    }
+
+    var runningMinutes: Double? {
+        guard let recorded, recorded.runLegCount > 0 else { return nil }
+        return recorded.totalRunSeconds / 60
+    }
+
+    /// Meters per heartbeat over the running (D16), withheld when heart rate is too sparse (D8).
+    var efficiency: Double? {
+        guard let workout = analysis?.workout, !workout.insufficientHeartRate else { return nil }
+        return AerobicAnalysis.efficiency(workout.runningSpeed, workout.running.average)
+    }
+
+    var runningPaceSecondsPerMile: Double? { analysis?.workout.runningPaceSecondsPerMile }
+
+    var runningHeartRate: Double? {
+        guard let workout = analysis?.workout, !workout.insufficientHeartRate else { return nil }
+        return workout.running.average
+    }
+}
+
 /// One run as the History screen shows it.
 struct HistoryRun: Identifiable {
     let workout: HealthKitManager.WorkoutSummary
+    /// The timer session that recorded it, when this app started it.
+    let executionID: UUID?
     /// Nil when the run has no kind: recorded before kinds existed, or not started from a plan in
     /// this app. A stored kind this build does not know is `unknownKind`, never silently nil.
     let kind: RunKind?
